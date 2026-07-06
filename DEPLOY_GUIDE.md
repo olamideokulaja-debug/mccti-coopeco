@@ -263,6 +263,125 @@ The sidebar also carries Help & support (all roles) and Privacy & data (members
 and societies). To change a role’s sections, edit ROLE_NAV near the workspace map
 in `src/App.jsx`.
 
+## Payments (Paystack, test mode)
+Inbound payments run through Paystack. The cooperative registration fee and member
+wallet funding are wired; disbursements use bank rails, not card checkout. With no
+keys the app falls back to demo success so everything keeps working.
+To enable test mode: in Vercel add VITE_PAYSTACK_PUBLIC_KEY (pk_test_...) and
+PAYSTACK_SECRET_KEY (sk_test_...), redeploy, and set your Paystack webhook URL to
+https://YOUR-DOMAIN/api/paystack/webhook. Pay with a Paystack test card to confirm
+the popup -> server verify -> paid path, then switch to live keys. Endpoints live
+in api/paystack/ (verify, init, webhook); the secret key is server-only. Harden the
+webhook to raw-body signature verification before processing high-value live events.
+
+## Notifications (in-app + SMS/WhatsApp)
+Every role has a Notifications item in the sidebar with an unread badge. Events
+raise notifications automatically: member welcome on onboarding, LASMECO
+application received and every status change, new support ticket (to officers and
+leadership) and ticket updates back to the person who raised it, and cooperative
+approval/return back to the society. Notifications always appear in-app; when a
+phone number and a provider are configured they are also sent by SMS or WhatsApp
+via /api/notify. Configure Termii (TERMII_API_KEY, TERMII_SENDER_ID) or Twilio
+(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM, TWILIO_WHATSAPP_FROM). With no
+provider set, notifications are delivered in-app only. The notif: database policy
+is already in supabase_setup.sql.
+
+## Live SEKAT/QooP and BVN/NIN KYC
+The SEKAT and QooP syncs now pull from the live APIs when configured, and fall back
+to the representative sample otherwise. Set SEKAT_API_URL + SEKAT_API_KEY and
+QOOP_API_URL + QOOP_API_KEY in Vercel; the Integrations panel shows a "Live API"
+pill once a source returns data (otherwise "Sample feed"). The connectors expect
+the record shapes documented in api/sekat-sync.js and api/qoop-sync.js.
+
+Member onboarding verifies BVN and NIN through /api/kyc-verify. Set DOJAH_APP_ID +
+DOJAH_API_KEY for live verification (VerifyMe/Youverify can be added the same way);
+with no provider it does a format check only, so onboarding still works. KYC status
+(Verified / Partial / Unverified) flows into the member profile and the credit score.
+
+## Loan repayment tracking
+On disbursement, Sterling sets a tenor and the platform generates a reducing-balance
+amortisation schedule at 9%. The loan detail then shows the schedule (per-installment
+principal, interest, due date and Paid/Due/Overdue status), outstanding balance,
+next installment, and arrears. Repayments can be recorded by the borrower (card via
+Paystack, or demo) or by Sterling/an officer (manual); the loan moves to Repaying and
+then Completed automatically as it is paid down. If a loan falls into arrears, the
+recovery waterfall is shown and Sterling or leadership can record a default, applying
+the waterfall: borrower collateral (10%) -> cooperative guarantee (25%) -> Sterling
+guarantee (50%), with any shortfall flagged. Portfolio outstanding and arrears appear
+as KPIs on the leadership analytics and the financial partners' overviews.
+
+## Reporting & exports
+Leadership has a Reports & exports section; officers have a Reports section. CSV
+downloads cover the cooperative registry, members & analytics, the LASMECO portfolio
+(with outstanding and arrears), and escrow & distribution. Files open in Excel or
+Google Sheets and reflect live data at the moment of download. Leadership can also
+generate a printable Board Pack: an executive summary (KPIs, registration status,
+LASMECO pipeline, escrow and SPV distribution) that opens a print view — choose
+"Save as PDF". No extra services or keys are needed for reporting.
+
+## Public verification directory & loan calculator
+- Verify a cooperative: a public page (no login), reachable from the header "Verify
+  a co-op" link and the footer. Anyone can search by registration/tracking number or
+  name and see registration standing, CAP15 compliance and register source. It never
+  discloses members, bank or financial details. Note: in live Supabase mode, allow
+  anonymous read of cooperative standing (a public read policy or a dedicated public
+  endpoint) so logged-out visitors can search; it works out of the box in demo mode.
+- LASMECO repayment calculator: members get an indicative calculator on the LASMECO
+  finance page — enter amount and tenor to preview monthly repayment, total repayable,
+  interest and net-after-fees, using the same 9% reducing-balance model as real loans.
+
+## Risk & fraud monitoring
+Officers and leadership have a Risk & fraud section that heuristically flags: members
+sharing a phone number, the same name across multiple cooperatives, members with
+multiple active LASMECO applications, loans in arrears or default, and loan requests
+disproportionate to turnover. Flags are graded high/medium/low and are advisory (for
+human review, not an accusation). BVN/NIN numbers are never stored in the browser, so
+production-grade duplicate-identity detection should run server-side via the KYC
+provider; the heuristics here catch many patterns without holding sensitive numbers.
+
+## Governance service levels (SLAs)
+Leadership has a Service levels section tracking turnaround against targets:
+cooperative approvals (14 days), grievance resolution (3 days) and LASMECO
+application-to-disbursement (30 days). Each shows average time, percent within
+target, and how many are breaching, with a live list of cases past target so they
+can be actioned. Targets are configurable in SLA_TARGETS near the top of the SLA
+code in src/App.jsx.
+
+## Bulk CSV import
+Under Integrations, officers and leadership can migrate data from CSV. Choose
+Cooperatives or Members, paste CSV or upload a .csv file, Load template to see the
+expected headers, Preview to validate (rows without a name are skipped), then Import.
+Imported records are tagged "Bulk import"; members come in Unverified until KYC is
+run, and cooperatives pass through the normal approval flow. Check the Risk & fraud
+view and de-duplicate before large batches.
+
+## Document uploads (Supabase Storage)
+Societies can upload documents (by-laws, registration certificate, trustee IDs,
+financial statements) from their cooperative page; officers and leadership see and
+can Verify or Remove them during review. Files go to Supabase Storage when
+configured; in demo mode small files preview in-browser. To enable live storage,
+run supabase_setup.sql (it creates the public "coop-docs" bucket and access
+policies) or create a bucket named coop-docs in the Supabase dashboard. Max 5MB per
+file. Document metadata is stored under the doc: policy already in the SQL.
+
+## Automated esusu rotation
+A cooperative can start an esusu/ajo rotation: the platform fixes the member order
+and a monthly schedule, showing who is paid when (Paid / Due / Upcoming). The due
+payout pays the pool to the next member in turn and notifies them. In production a
+scheduled job (cron) processes each due payout automatically; in-app the society
+triggers the due payout. Movements are demo until payments are connected.
+
+## Multilingual foundation
+A language switcher in the header offers English, Yoruba, Igbo, Hausa and Nigerian
+Pidgin, and the choice persists. It uses a per-key translation table (I18N in
+src/App.jsx) with automatic English fallback, so untranslated strings stay in
+English rather than breaking. Currently the landing hero, navigation and primary
+calls-to-action are translated with PROVISIONAL copy, and a visible note says so.
+Important: have the Ministry's language team review and complete the translations
+before public launch — add reviewed strings to the I18N table (each key takes yo/ig/
+ha/pcm values). Governance and legal wording should not rely on machine translation.
+Note: two-factor login was intentionally not added (email + password retained).
+
 ## Environment variables
 See `.env.example`. For local testing copy it to `.env.local` and fill it in.
 - VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY - accounts and data (Stage 2).
