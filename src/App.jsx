@@ -682,11 +682,11 @@ function SekatPanel({ ctx, onSynced }) {
     </div>
   )
 }
-function OfficerWorkspace({ ctx }) {
+function OfficerWorkspace({ ctx, section }) {
   const [coops, reload] = useRegistry()
-  const [tab, setTab] = useState('queue'), [sel, setSel] = useState(null), [loanSel, setLoanSel] = useState(null)
+  const [sel, setSel] = useState(null), [loanSel, setLoanSel] = useState(null)
   const [loans, reloadLoans] = useLoans()
-  if (!coops) return <p className="muted-line">Loading registry…</p>
+  if (!coops) return <p className="muted-line">Loading registry\u2026</p>
   if (sel) return <CoopDetail coop={sel} ctx={ctx} onClose={() => { setSel(null); reload() }} onChanged={reload} />
   if (loanSel) return <LoanDetail loan={loanSel} ctx={ctx} onClose={() => { setLoanSel(null); reloadLoans() }} onChanged={reloadLoans} />
   const queue = coops.filter((c) => ['Filed', 'Under review', 'Returned'].includes(c.status))
@@ -694,15 +694,14 @@ function OfficerWorkspace({ ctx }) {
   const lasmecoQueue = (loans || []).filter((l) => l.status === 'Shortlisted')
   return (
     <div className="ws">
-      <StatCards coops={coops} />
-      <div className="tabs">{[['queue', 'Review queue'], ['all', 'All societies'], ['members', 'Members'], ['lasmeco', 'LASMECO'], ['offices', 'By area office'], ['audit', 'Audit log'], ['integrations', 'Integrations']].map(([id, l]) => (<button key={id} className={cx('tab', tab === id && 'on')} onClick={() => setTab(id)}>{l}</button>))}</div>
-      {tab === 'queue' && <CoopTable coops={queue} onOpen={setSel} />}
-      {tab === 'all' && <CoopTable coops={coops} onOpen={setSel} />}
-      {tab === 'members' && <MembersAnalytics />}
-      {tab === 'lasmeco' && (!loans ? <p className="muted-line">Loading…</p> : <><p className="muted-line">Applications awaiting cooperative validation and 25% guarantee. Open one to validate.</p><LoanTable loans={lasmecoQueue.length ? lasmecoQueue : loans} onOpen={setLoanSel} /></>)}
-      {tab === 'offices' && <div className="rtable-wrap"><table className="rtable"><thead><tr><th>Area office</th><th>Societies</th></tr></thead><tbody>{byOffice.map(([o, n]) => (<tr key={o}><td>{o}</td><td className="mono">{n}</td></tr>))}</tbody></table></div>}
-      {tab === 'audit' && <OfficerAuditLog />}
-      {tab === 'integrations' && <IntegrationsPanel ctx={ctx} onSynced={reload} />}
+      {section === 'overview' && <OfficerOverview coops={coops} />}
+      {section === 'queue' && <CoopTable coops={queue} onOpen={setSel} />}
+      {section === 'all' && <CoopTable coops={coops} onOpen={setSel} />}
+      {section === 'members' && <MembersAnalytics />}
+      {section === 'lasmeco' && (!loans ? <p className="muted-line">Loading\u2026</p> : <><p className="muted-line">Applications awaiting cooperative validation and 25% guarantee. Open one to validate.</p><LoanTable loans={lasmecoQueue.length ? lasmecoQueue : loans} onOpen={setLoanSel} /></>)}
+      {section === 'offices' && <div className="rtable-wrap"><table className="rtable"><thead><tr><th>Area office</th><th>Societies</th></tr></thead><tbody>{byOffice.map(([o, n]) => (<tr key={o}><td>{o}</td><td className="mono">{n}</td></tr>))}</tbody></table></div>}
+      {section === 'audit' && <OfficerAuditLog />}
+      {section === 'integrations' && <IntegrationsPanel ctx={ctx} onSynced={reload} />}
     </div>
   )
 }
@@ -713,17 +712,17 @@ function OfficerAuditLog() {
   if (!items.length) return <p className="muted-line">No activity yet.</p>
   return <div className="rtable-wrap"><table className="rtable"><thead><tr><th>When</th><th>Action</th><th>By</th><th>Society</th></tr></thead><tbody>{items.map((a, i) => (<tr key={i}><td className="mono">{fmtDate(a.at)}</td><td>{a.action}</td><td>{a.by}</td><td className="mono">{a.trackingId}</td></tr>))}</tbody></table></div>
 }
-function AuditorWorkspace({ ctx }) {
+function AuditorWorkspace({ ctx, section }) {
   const [coops, reload] = useRegistry()
   const [sel, setSel] = useState(null)
-  if (!coops) return <p className="muted-line">Loading returns…</p>
+  if (!coops) return <p className="muted-line">Loading returns\u2026</p>
   if (sel) return <CoopDetail coop={sel} ctx={ctx} onClose={() => { setSel(null); reload() }} onChanged={reload} />
   const withReturns = coops.filter((c) => c.returns)
   return (
     <div className="ws">
-      <div className="statgrid"><div className="stat"><span className="stat-fig">{withReturns.length}</span><span className="stat-lab">Returns filed</span></div><div className="stat"><span className="stat-fig">{coops.filter((c) => c.cap15 === 'Under audit').length}</span><span className="stat-lab">Awaiting examination</span></div><div className="stat"><span className="stat-fig">{coops.filter((c) => c.cap15 === 'Compliant').length}</span><span className="stat-lab">Signed off</span></div></div>
-      <h3 className="ws-h">Financial returns for examination</h3>
-      {withReturns.length ? <CoopTable coops={withReturns} onOpen={setSel} /> : <p className="muted-line">No returns have been filed yet.</p>}
+      {section === 'overview' && <AuditorOverview coops={coops} />}
+      {section === 'returns' && (withReturns.length ? <CoopTable coops={withReturns} onOpen={setSel} /> : <p className="muted-line">No returns have been filed yet.</p>)}
+      {section === 'all' && <CoopTable coops={coops} onOpen={setSel} />}
     </div>
   )
 }
@@ -760,6 +759,58 @@ function MiniArea({ points, color = CHART_C.green }) {
   const line = 'M' + xy.map((p) => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' L ')
   const area = line + ` L ${w} ${h} L 0 ${h} Z`
   return <svg viewBox={`0 0 ${w} ${h}`} className="miniarea" preserveAspectRatio="none"><path d={area} fill={color} opacity=".14" /><path d={line} fill="none" stroke={color} strokeWidth="2.5" vectorEffect="non-scaling-stroke" /></svg>
+}
+function OfficerOverview({ coops }) {
+  const status = [['Approved', CHART_C.green], ['Under review', CHART_C.gold], ['Filed', CHART_C.slate], ['Returned', CHART_C.red]].map(([s, c]) => ({ label: s, value: coops.filter((x) => x.status === s).length, color: c })).filter((d) => d.value)
+  const cap = [['Compliant', CHART_C.green], ['Under audit', CHART_C.slate], ['Returns due', CHART_C.gold]].map(([s, c]) => ({ label: s, value: coops.filter((x) => x.cap15 === s).length, color: c })).filter((d) => d.value)
+  const offices = AREA_OFFICES.map((o) => ({ label: o, value: coops.filter((c) => c.areaOffice === o).length, color: CHART_C.green })).filter((d) => d.value).sort((a, b) => b.value - a.value).slice(0, 6)
+  return (<div className="analytics"><StatCards coops={coops} /><div className="chart-grid">
+    <section className="chart-card"><h4>Registration status</h4><Donut data={status} centerTop={String(coops.length)} centerBottom="societies" /></section>
+    <section className="chart-card"><h4>CAP15 compliance</h4><Donut data={cap} centerTop={String(coops.filter((c) => c.cap15 === 'Compliant').length)} centerBottom="compliant" /></section>
+    <section className="chart-card"><h4>Registry source</h4><Donut data={[{ label: 'SEKAT', value: coops.filter((c) => c.source === 'SEKAT').length, color: CHART_C.teal }, { label: 'MCCTI', value: coops.filter((c) => c.source !== 'SEKAT').length, color: CHART_C.gold }].filter((d) => d.value)} centerTop={String(coops.length)} centerBottom="total" /></section>
+    <section className="chart-card wide"><h4>Societies by area office</h4><Bars data={offices} /></section>
+  </div></div>)
+}
+function AuditorOverview({ coops }) {
+  const cap = [['Compliant', CHART_C.green], ['Under audit', CHART_C.gold], ['Returns due', CHART_C.slate]].map(([s, c]) => ({ label: s, value: coops.filter((x) => x.cap15 === s).length, color: c })).filter((d) => d.value)
+  const withReturns = coops.filter((c) => c.returns).length
+  return (<div className="analytics">
+    <div className="statgrid"><div className="stat"><span className="stat-fig">{withReturns}</span><span className="stat-lab">Returns filed</span></div><div className="stat"><span className="stat-fig">{coops.filter((c) => c.cap15 === 'Under audit').length}</span><span className="stat-lab">Awaiting examination</span></div><div className="stat"><span className="stat-fig">{coops.filter((c) => c.cap15 === 'Compliant').length}</span><span className="stat-lab">Signed off</span></div><div className="stat"><span className="stat-fig">{coops.length}</span><span className="stat-lab">Societies</span></div></div>
+    <div className="chart-grid"><section className="chart-card"><h4>CAP15 compliance</h4><Donut data={cap} centerTop={String(coops.filter((c) => c.cap15 === 'Compliant').length)} centerBottom="compliant" /></section></div>
+  </div>)
+}
+function LoanStageOverview({ loans, cards }) {
+  const stages = ['Applied', 'In training', 'Shortlisted', 'Coop validated', 'Bank assessment', 'BOI approved', 'Disbursed'].map((s) => ({ label: s, value: loans.filter((l) => l.status === s).length, color: CHART_C.gold }))
+  const sectors = Array.from(new Set(loans.map((l) => l.sector))).map((s) => ({ label: s, value: loans.filter((l) => l.sector === s).length, color: CHART_C.teal }))
+  return (<div className="analytics">
+    <div className="statgrid">{cards(loans).map(([lab, val]) => (<div className="stat" key={lab}><span className="stat-fig">{val}</span><span className="stat-lab">{lab}</span></div>))}</div>
+    <div className="chart-grid"><section className="chart-card wide"><h4>Pipeline by stage</h4><Bars data={stages} /></section><section className="chart-card"><h4>By sector</h4><Bars data={sectors} /></section></div>
+  </div>)
+}
+function SocietyOverview({ mine }) {
+  const r = mine.returns
+  const finance = r ? [{ label: 'Income', value: r.income || 0, color: CHART_C.green }, { label: 'Expenses', value: r.expenses || 0, color: CHART_C.gold }, { label: 'Surplus', value: Math.max(0, r.surplus || 0), color: CHART_C.teal }] : []
+  return (<div className="analytics">
+    <div className="kpi-row">
+      <div className="kpi"><span className="kpi-fig">{Number(mine.members || 0).toLocaleString('en-NG')}</span><span className="kpi-lab">Members</span></div>
+      <div className="kpi"><span className="kpi-fig">{fmtNaira(mine.contributions)}</span><span className="kpi-lab">Contributions</span></div>
+      <div className="kpi"><span className="kpi-fig">{mine.cap15 || '\u2014'}</span><span className="kpi-lab">CAP15 status</span></div>
+      <div className="kpi"><span className="kpi-fig">{mine.returns ? 'Filed' : 'Due'}</span><span className="kpi-lab">Annual returns</span></div>
+    </div>
+    {finance.length ? <div className="chart-grid"><section className="chart-card wide"><h4>Latest annual returns</h4><Bars data={finance} unit="naira" /></section></div> : <p className="muted-line">File your annual returns to see your financial summary here.</p>}
+  </div>)
+}
+function MemberOverview({ mine, loans }) {
+  const s = scoreMember(mine)
+  return (<div className="analytics">
+    <div className="kpi-row">
+      <div className="kpi"><span className="kpi-fig">{s.score}</span><span className="kpi-lab">Credit score</span></div>
+      <div className="kpi"><span className="kpi-fig">{s.band}</span><span className="kpi-lab">Risk band</span></div>
+      <div className="kpi"><span className="kpi-fig">{fmtNaira(s.threshold)}</span><span className="kpi-lab">LASMECO indication</span></div>
+      <div className="kpi"><span className="kpi-fig">{loans.length}</span><span className="kpi-lab">Applications</span></div>
+    </div>
+    <div className="chart-grid"><section className="chart-card wide"><h4>Credit score</h4><CreditScoreCard m={mine} /></section></div>
+  </div>)
 }
 function AnalyticsDashboard() {
   const [coops, setCoops] = useState(null), [members, setMembers] = useState([]), [loans, setLoans] = useState([]), [wallets, setWallets] = useState([]), [tickets, setTickets] = useState([])
@@ -843,31 +894,27 @@ function ViewAsBar({ onViewAs }) {
     </div>
   )
 }
-function LeadershipOverview({ ctx, onViewAs }) {
+function LeadershipOverview({ ctx, section, onViewAs }) {
   const [coops, reload] = useRegistry()
-  const [tab, setTab] = useState('overview'), [sel, setSel] = useState(null)
-  if (!coops) return <p className="muted-line">Loading overview…</p>
+  const [sel, setSel] = useState(null)
+  if (!coops) return <p className="muted-line">Loading overview\u2026</p>
   if (sel) return <CoopDetail coop={sel} ctx={ctx} onClose={() => { setSel(null); reload() }} onChanged={reload} />
   const pending = coops.filter((c) => c.source !== 'SEKAT' && ['Filed', 'Under review', 'Returned'].includes(c.status))
   return (
     <div className="ws">
-      <ViewAsBar onViewAs={onViewAs} />
-      <StatCards coops={coops} />
-      <div className="tabs">{[['overview', 'Overview'], ['applications', 'Applications' + (pending.length ? ' (' + pending.length + ')' : '')], ['members', 'Members'], ['lasmeco', 'LASMECO'], ['viewas', 'View as'], ['integrations', 'Integrations']].map(([id, l]) => (<button key={id} className={cx('tab', tab === id && 'on')} onClick={() => setTab(id)}>{l}</button>))}</div>
-      {tab === 'overview' && <AnalyticsDashboard />}
-      {tab === 'applications' && (<><p className="muted-line">Review each application's documents, then approve or reject. Societies mirrored from SEKAT are managed in SEKAT.</p><CoopTable coops={pending.length ? pending : coops} onOpen={setSel} /></>)}
-      {tab === 'members' && <MembersAnalytics />}
-      {tab === 'lasmeco' && <LasmecoOverview ctx={ctx} />}
-      {tab === 'viewas' && <ViewAsSwitcher onViewAs={onViewAs} />}
-      {tab === 'integrations' && <IntegrationsPanel ctx={ctx} onSynced={reload} />}
-      <p className="dash-foot">Real-time oversight across the cooperative economy. Loan performance and fraud alerts arrive with LASMECO and the intelligence module.</p>
+      {section === 'overview' && <AnalyticsDashboard />}
+      {section === 'applications' && (<><p className="muted-line">Review each application's documents, then approve or reject. Societies mirrored from SEKAT are managed in SEKAT.</p><CoopTable coops={pending.length ? pending : coops} onOpen={setSel} /></>)}
+      {section === 'members' && <MembersAnalytics />}
+      {section === 'lasmeco' && <LasmecoOverview ctx={ctx} />}
+      {section === 'viewas' && <ViewAsSwitcher onViewAs={onViewAs} />}
+      {section === 'integrations' && <IntegrationsPanel ctx={ctx} onSynced={reload} />}
     </div>
   )
 }
-function SocietyWorkspace({ ctx }) {
+function SocietyWorkspace({ ctx, section }) {
   const [coops, reload] = useRegistry()
   const [mode, setMode] = useState('view') // view | register | returns
-  if (!coops) return <p className="muted-line">Loading…</p>
+  if (!coops) return <p className="muted-line">Loading\u2026</p>
   const mine = ctx.focusId ? coops.find((c) => c.trackingId === ctx.focusId) : coops.find((c) => c.createdBy === ctx.email)
   if (mode === 'register') return <RegistrationForm ctx={ctx} onCancel={() => setMode('view')} onDone={() => { setMode('view'); reload() }} />
   if (mode === 'returns' && mine) return <ReturnsForm coop={mine} ctx={ctx} onCancel={() => setMode('view')} onDone={() => { setMode('view'); reload() }} />
@@ -875,25 +922,28 @@ function SocietyWorkspace({ ctx }) {
     <div className="empty">
       <span className="empty-mark">&#9670;</span>
       <h3>Register your cooperative society</h3>
-      <p>File your society once. You receive a tracking ID, an officer reviews and approves it, and every step is recorded on the audit trail.</p>
+      <p>File your society once. You receive a tracking ID, MCCTI leadership reviews and approves it, and every step is recorded on the audit trail.</p>
       <button className="btn btn-gold" onClick={() => setMode('register')}>Register a society</button>
     </div>
   )
   return (
     <div className="ws">
-      {mine.source !== 'SEKAT' && mine.feeStatus !== 'Paid' && (
-        <div className="fee-banner"><span>Registration fee <strong>{fmtNaira(mine.registrationFee || COOP_FEES.registration)}</strong> to join the platform is outstanding.</span><button className="btn btn-gold btn-sm" onClick={async () => { await payCoopFee(mine.trackingId, ctx); reload() }}>Pay now (demo)</button></div>
-      )}
-      <div className="society-card">
-        <div className="society-top"><div><h3>{mine.name}</h3><p className="detail-sub">{mine.trackingId} &middot; {mine.areaOffice} area office &middot; {mine.sector}</p></div><div className="detail-chips"><StatusChip status={mine.status} /><StatusChip status={mine.cap15} kind="cap15" /></div></div>
-        <div className="society-figs"><div><span className="lf-lab">Members</span><span className="society-fig">{Number(mine.members || 0).toLocaleString('en-NG')}</span></div><div><span className="lf-lab">Contributions</span><span className="society-fig">{fmtNaira(mine.contributions)}</span></div><div><span className="lf-lab">Custodian</span><span className="society-fig sm">{mine.custodian || '—'}</span></div></div>
-        <div className="society-actions">
-          {mine.source === 'SEKAT' ? <span className="returned-flag" style={{ color: '#2E5C88' }}>Mirrored from SEKAT (read-only). Returns are filed in SEKAT.</span> : <button className="btn btn-gold btn-sm" onClick={() => setMode('returns')}>{mine.returns ? 'Re-file annual returns' : 'File annual returns'}</button>}
-          {mine.status === 'Returned' && <span className="returned-flag">Returned for correction. Review the trail and re-file.</span>}
+      {section === 'overview' && <SocietyOverview mine={mine} />}
+      {section === 'cooperative' && (<>
+        {mine.source !== 'SEKAT' && mine.feeStatus !== 'Paid' && (
+          <div className="fee-banner"><span>Registration fee <strong>{fmtNaira(mine.registrationFee || COOP_FEES.registration)}</strong> to join the platform is outstanding.</span><button className="btn btn-gold btn-sm" onClick={async () => { await payCoopFee(mine.trackingId, ctx); reload() }}>Pay now (demo)</button></div>
+        )}
+        <div className="society-card">
+          <div className="society-top"><div><h3>{mine.name}</h3><p className="detail-sub">{mine.trackingId} &middot; {mine.areaOffice} area office &middot; {mine.sector}</p></div><div className="detail-chips"><StatusChip status={mine.status} /><StatusChip status={mine.cap15} kind="cap15" /></div></div>
+          <div className="society-figs"><div><span className="lf-lab">Members</span><span className="society-fig">{Number(mine.members || 0).toLocaleString('en-NG')}</span></div><div><span className="lf-lab">Contributions</span><span className="society-fig">{fmtNaira(mine.contributions)}</span></div><div><span className="lf-lab">Custodian</span><span className="society-fig sm">{mine.custodian || '\u2014'}</span></div></div>
+          <div className="society-actions">
+            {mine.source === 'SEKAT' ? <span className="returned-flag" style={{ color: '#2E5C88' }}>Mirrored from SEKAT (read-only). Returns are filed in SEKAT.</span> : <button className="btn btn-gold btn-sm" onClick={() => setMode('returns')}>{mine.returns ? 'Re-file annual returns' : 'File annual returns'}</button>}
+            {mine.status === 'Returned' && <span className="returned-flag">Returned for correction. Review the trail and re-file.</span>}
+          </div>
         </div>
-      </div>
-      {mine.source !== 'SEKAT' && <div className="returns-box"><h4>Savings &amp; esusu</h4><CoopEsusu coop={mine} ctx={ctx} /></div>}
-      <div className="trail-box"><h4>Audit trail</h4><AuditTrail trackingId={mine.trackingId} refreshKey={coops.length} /></div>
+        <div className="trail-box"><h4>Audit trail</h4><AuditTrail trackingId={mine.trackingId} refreshKey={coops.length} /></div>
+      </>)}
+      {section === 'savings' && (mine.source !== 'SEKAT' ? <div className="returns-box"><h4>Savings &amp; esusu</h4><CoopEsusu coop={mine} ctx={ctx} /></div> : <p className="muted-line">Savings are managed in SEKAT for mirrored societies.</p>)}
     </div>
   )
 }
@@ -1118,12 +1168,12 @@ function MemberOnboardingForm({ ctx, coops, onDone, onCancel }) {
     </div>
   )
 }
-function MemberWorkspace({ ctx }) {
+function MemberWorkspace({ ctx, section }) {
   const [members, setMembers] = useState(null), [coops, setCoops] = useState([]), [loans, setLoans] = useState([])
   const [mode, setMode] = useState('view'), [sel, setSel] = useState(null)
   const reload = useCallback(() => { listMembers().then(setMembers); listCoops().then(setCoops); listLoans().then(setLoans) }, [])
   useEffect(() => { reload() }, [reload])
-  if (!members) return <p className="muted-line">Loading…</p>
+  if (!members) return <p className="muted-line">Loading\u2026</p>
   const mine = ctx.focusId ? members.find((m) => m.memberId === ctx.focusId) : members.find((m) => m.createdBy === ctx.email)
   const myLoans = mine ? loans.filter((l) => l.memberId === mine.memberId || (l.memberName === mine.name)) : []
   if (mode === 'onboard') return <MemberOnboardingForm ctx={ctx} coops={coops} onCancel={() => setMode('view')} onDone={() => { setMode('view'); reload() }} />
@@ -1134,14 +1184,16 @@ function MemberWorkspace({ ctx }) {
   )
   return (
     <div className="ws">
-      <div className="society-card">
-        <div className="society-top"><div><h3>{mine.name}</h3><p className="detail-sub">{mine.coop} &middot; {mine.sector}{mine.ref ? ' · ' + mine.ref : ''}</p></div><div className="detail-chips"><StatusChip status={mine.kyc?.status || 'Unverified'} kind="cap15" /><SourceBadge source={mine.source} /></div></div>
-        <div className="society-figs"><div><span className="lf-lab">Monthly turnover</span><span className="society-fig">{fmtNaira(mine.msme?.monthlyTurnover)}</span></div><div><span className="lf-lab">Employees</span><span className="society-fig">{mine.msme?.employees ?? 0}</span></div><div><span className="lf-lab">Years</span><span className="society-fig">{mine.msme?.yearsInOperation ?? 0}</span></div></div>
-        <div className="society-actions"><button className="btn btn-gold btn-sm" onClick={() => setMode('apply')}>Apply for LASMECO finance</button></div>
-      </div>
-      <div className="returns-box"><h4>Your credit score</h4><CreditScoreCard m={mine} /></div>
-      <div className="returns-box"><h4>Wallet &amp; savings</h4><MemberWallet member={mine} /></div>
-      <div className="trail-box"><h4>Your LASMECO applications</h4>{myLoans.length ? <LoanTable loans={myLoans} onOpen={setSel} /> : <p className="muted-line">No applications yet. Apply above; there are no upfront fees.</p>}</div>
+      {section === 'overview' && <MemberOverview mine={mine} loans={myLoans} />}
+      {section === 'wallet' && <div className="returns-box"><h4>Wallet &amp; savings</h4><MemberWallet member={mine} /></div>}
+      {section === 'finance' && (<>
+        <div className="society-card">
+          <div className="society-top"><div><h3>{mine.name}</h3><p className="detail-sub">{mine.coop} &middot; {mine.sector}{mine.ref ? ' \u00b7 ' + mine.ref : ''}</p></div><div className="detail-chips"><StatusChip status={mine.kyc?.status || 'Unverified'} kind="cap15" /><SourceBadge source={mine.source} /></div></div>
+          <div className="society-actions"><button className="btn btn-gold btn-sm" onClick={() => setMode('apply')}>Apply for LASMECO finance</button></div>
+        </div>
+        <div className="returns-box"><h4>Your credit score</h4><CreditScoreCard m={mine} /></div>
+        <div className="trail-box"><h4>Your LASMECO applications</h4>{myLoans.length ? <LoanTable loans={myLoans} onOpen={setSel} /> : <p className="muted-line">No applications yet. Apply above; there are no upfront fees.</p>}</div>
+      </>)}
     </div>
   )
 }
@@ -1330,43 +1382,44 @@ function LoanDetail({ loan, ctx, onClose, onChanged }) {
   )
 }
 function useLoans() { const [loans, setLoans] = useState(null); const reload = useCallback(() => listLoans().then(setLoans), []); useEffect(() => { reload() }, [reload]); return [loans, reload] }
-function AcceleratorWorkspace({ ctx }) {
-  const [loans, reload] = useLoans(); const [tab, setTab] = useState('queue'), [sel, setSel] = useState(null)
-  if (!loans) return <p className="muted-line">Loading pipeline…</p>
+function AcceleratorWorkspace({ ctx, section }) {
+  const [loans, reload] = useLoans(); const [sel, setSel] = useState(null)
+  if (!loans) return <p className="muted-line">Loading pipeline\u2026</p>
   if (sel) return <LoanDetail loan={sel} ctx={ctx} onClose={() => { setSel(null); reload() }} onChanged={reload} />
   const queue = loans.filter((l) => AP_STATUSES.includes(l.status))
   const by = (s) => loans.filter((l) => l.status === s).length
+  const cards = () => [['New applications', by('Applied')], ['In training', by('In training')], ['Shortlisted', by('Shortlisted')], ['Total in pipeline', loans.length]]
   return (
     <div className="ws">
-      <div className="statgrid"><div className="stat"><span className="stat-fig">{by('Applied')}</span><span className="stat-lab">New applications</span></div><div className="stat"><span className="stat-fig">{by('In training')}</span><span className="stat-lab">In training</span></div><div className="stat"><span className="stat-fig">{by('Shortlisted')}</span><span className="stat-lab">Shortlisted</span></div><div className="stat"><span className="stat-fig">{loans.length}</span><span className="stat-lab">Total in pipeline</span></div></div>
-      <div className="tabs">{[['queue', 'My pipeline'], ['all', 'All loans']].map(([id, l]) => (<button key={id} className={cx('tab', tab === id && 'on')} onClick={() => setTab(id)}>{l}</button>))}</div>
-      {tab === 'queue' ? <LoanTable loans={queue} onOpen={setSel} /> : <LoanTable loans={loans} onOpen={setSel} />}
+      {section === 'overview' && <LoanStageOverview loans={loans} cards={cards} />}
+      {section === 'queue' && <LoanTable loans={queue} onOpen={setSel} />}
+      {section === 'all' && <LoanTable loans={loans} onOpen={setSel} />}
     </div>
   )
 }
-function LoanRoleWorkspace({ ctx, statuses, cards }) {
-  const [loans, reload] = useLoans(); const [tab, setTab] = useState('queue'), [sel, setSel] = useState(null)
-  if (!loans) return <p className="muted-line">Loading loans…</p>
+function LoanRoleWorkspace({ ctx, section, statuses, cards }) {
+  const [loans, reload] = useLoans(); const [sel, setSel] = useState(null)
+  if (!loans) return <p className="muted-line">Loading loans\u2026</p>
   if (sel) return <LoanDetail loan={sel} ctx={ctx} onClose={() => { setSel(null); reload() }} onChanged={reload} />
   const queue = loans.filter((l) => statuses.includes(l.status))
   return (
     <div className="ws">
-      <div className="statgrid">{cards(loans).map(([lab, val]) => (<div className="stat" key={lab}><span className="stat-fig">{val}</span><span className="stat-lab">{lab}</span></div>))}</div>
-      <div className="tabs">{[['queue', 'My queue'], ['all', 'All loans']].map(([id, l]) => (<button key={id} className={cx('tab', tab === id && 'on')} onClick={() => setTab(id)}>{l}</button>))}</div>
-      {tab === 'queue' ? <LoanTable loans={queue} onOpen={setSel} /> : <LoanTable loans={loans} onOpen={setSel} />}
+      {section === 'overview' && <LoanStageOverview loans={loans} cards={cards} />}
+      {section === 'queue' && <LoanTable loans={queue} onOpen={setSel} />}
+      {section === 'all' && <LoanTable loans={loans} onOpen={setSel} />}
     </div>
   )
 }
-function SterlingWorkspace({ ctx }) {
+function SterlingWorkspace({ ctx, section }) {
   const cards = (loans) => { const d = loans.filter((l) => ['Disbursed', 'Repaying', 'Completed'].includes(l.status)); return [['Awaiting assessment', loans.filter((l) => l.status === 'Coop validated').length], ['To disburse', loans.filter((l) => l.status === 'BOI approved').length], ['Disbursed', d.length], ['Disbursed value', fmtNaira(d.reduce((a, l) => a + (l.amountApproved || 0), 0))]] }
-  return <LoanRoleWorkspace ctx={ctx} statuses={['Coop validated', 'BOI approved', 'Disbursed']} cards={cards} />
+  return <LoanRoleWorkspace ctx={ctx} section={section} statuses={['Coop validated', 'BOI approved', 'Disbursed']} cards={cards} />
 }
-function BoiWorkspace({ ctx }) {
+function BoiWorkspace({ ctx, section }) {
   const cards = (loans) => [['Awaiting approval', loans.filter((l) => l.status === 'Bank assessment').length], ['Approved', loans.filter((l) => l.status === 'BOI approved').length], ['Disbursed', loans.filter((l) => ['Disbursed', 'Repaying', 'Completed'].includes(l.status)).length], ['Applications', loans.length]]
-  return <LoanRoleWorkspace ctx={ctx} statuses={['Bank assessment', 'BOI approved']} cards={cards} />
+  return <LoanRoleWorkspace ctx={ctx} section={section} statuses={['Bank assessment', 'BOI approved']} cards={cards} />
 }
 const SPV_SPLIT = [['Lagos State (MCCTI)', 50], ['Asset Matrix MFB', 15], ['Imade / Catridge', 15], ['QooP', 10], ['SEKAT', 10]]
-function AssetMatrixWorkspace({ ctx }) {
+function AssetMatrixWorkspace({ ctx, section }) {
   const [coops, setCoops] = useState(null), [loans, setLoans] = useState([]), [wallets, setWallets] = useState([]), [last, setLast] = useState(null), [busy, setBusy] = useState(false)
   const reload = useCallback(() => { listCoops().then(setCoops); listLoans().then(setLoans); kvList('wallet:').then(setWallets); kvGet('escrow:last').then(setLast) }, [])
   useEffect(() => { reload() }, [reload])
@@ -1379,20 +1432,29 @@ function AssetMatrixWorkspace({ ctx }) {
   const funding = sumTxn('topup'), payouts = sumTxn('payout')
   const walletFees = Math.round(funding * 0.01)
   const accrued = regFees + returnsFees + portalFees + walletFees
+  const revenueDonut = [{ label: 'Registration & returns', value: regFees + returnsFees, color: CHART_C.gold }, { label: 'Disbursement portal', value: portalFees, color: CHART_C.green }, { label: 'Wallet fees', value: walletFees, color: CHART_C.teal }].filter((d) => d.value)
   const distribute = async () => { setBusy(true); const rec = { amount: accrued, at: new Date().toISOString(), by: ctx.name, split: SPV_SPLIT.map(([n, p]) => [n, Math.round(accrued * p / 100)]) }; await kvSet('escrow:last', rec); await addAudit({ trackingId: 'ESCROW', action: 'Revenue distributed on 50/15/15/10/10', by: ctx.name, role: 'assetmatrix', note: fmtNaira(accrued) }); setLast(rec); setBusy(false) }
   return (
     <div className="ws">
-      <div className="statgrid">
-        <div className="stat"><span className="stat-fig">{fmtNaira(accrued)}</span><span className="stat-lab">Escrow accrued</span></div>
-        <div className="stat"><span className="stat-fig">{fmtNaira(regFees + returnsFees)}</span><span className="stat-lab">Registration &amp; returns</span></div>
-        <div className="stat"><span className="stat-fig">{fmtNaira(portalFees)}</span><span className="stat-lab">Disbursement portal (2.5%)</span></div>
-        <div className="stat"><span className="stat-fig">{fmtNaira(walletFees)}</span><span className="stat-lab">Wallet fees (1%)</span></div>
-      </div>
-      <div className="dash-grid">
-        <section className="dash-card"><h3>Sharing formula distribution</h3>{SPV_SPLIT.map(([n, p]) => (<div className="status-row" key={n}><span>{n} ({p}%)</span><span className="mono">{fmtNaira(Math.round(accrued * p / 100))}</span></div>))}<div className="panel-actions"><button className="btn btn-gold btn-sm" onClick={distribute} disabled={busy}>{busy ? 'Recording\u2026' : 'Record distribution'}</button></div></section>
-        <section className="dash-card"><h3>Payments throughput</h3><div className="status-row"><span>Wallet funding processed</span><span className="mono">{fmtNaira(funding)}</span></div><div className="status-row"><span>Esusu payouts</span><span className="mono">{fmtNaira(payouts)}</span></div><div className="status-row"><span>LASMECO disbursed</span><span className="mono">{fmtNaira(disbursedValue)}</span></div><div className="status-row"><span>Active wallets</span><span className="mono">{wallets.length}</span></div>{last ? <p className="dash-card-sub" style={{ marginTop: '12px' }}>Last distribution: {fmtNaira(last.amount)} on {fmtDate(last.at)}</p> : null}</section>
-      </div>
-      <p className="dash-foot">Asset Matrix MFB holds the platform revenue escrow. Registration, returns, disbursement-portal and wallet fees accrue here and are distributed on the 50/15/15/10/10 formula. Live bank settlement connects through Paystack or Flutterwave. Not financial advice.</p>
+      {section === 'overview' && (<>
+        <div className="statgrid">
+          <div className="stat"><span className="stat-fig">{fmtNaira(accrued)}</span><span className="stat-lab">Escrow accrued</span></div>
+          <div className="stat"><span className="stat-fig">{fmtNaira(regFees + returnsFees)}</span><span className="stat-lab">Registration &amp; returns</span></div>
+          <div className="stat"><span className="stat-fig">{fmtNaira(portalFees)}</span><span className="stat-lab">Disbursement portal (2.5%)</span></div>
+          <div className="stat"><span className="stat-fig">{fmtNaira(walletFees)}</span><span className="stat-lab">Wallet fees (1%)</span></div>
+        </div>
+        <div className="chart-grid">
+          <section className="chart-card"><h4>Revenue by stream</h4>{revenueDonut.length ? <Donut data={revenueDonut} centerTop={fmtNaira(accrued)} centerBottom="accrued" /> : <p className="muted-line">No revenue accrued yet.</p>}</section>
+          <section className="chart-card wide"><h4>Payments throughput</h4><div className="status-row"><span>Wallet funding processed</span><span className="mono">{fmtNaira(funding)}</span></div><div className="status-row"><span>Esusu payouts</span><span className="mono">{fmtNaira(payouts)}</span></div><div className="status-row"><span>LASMECO disbursed</span><span className="mono">{fmtNaira(disbursedValue)}</span></div><div className="status-row"><span>Active wallets</span><span className="mono">{wallets.length}</span></div></section>
+        </div>
+      </>)}
+      {section === 'distribution' && (
+        <div className="dash-grid">
+          <section className="dash-card"><h3>Sharing formula distribution</h3>{SPV_SPLIT.map(([n, p]) => (<div className="status-row" key={n}><span>{n} ({p}%)</span><span className="mono">{fmtNaira(Math.round(accrued * p / 100))}</span></div>))}<div className="panel-actions"><button className="btn btn-gold btn-sm" onClick={distribute} disabled={busy}>{busy ? 'Recording\u2026' : 'Record distribution'}</button></div></section>
+          <section className="dash-card"><h3>Last distribution</h3>{last ? (<><p className="dash-card-sub">{fmtNaira(last.amount)} on {fmtDate(last.at)} by {last.by}</p>{(last.split || []).map(([n, v]) => (<div className="status-row" key={n}><span>{n}</span><span className="mono">{fmtNaira(v)}</span></div>))}</>) : <p className="muted-line">No distribution recorded yet.</p>}</section>
+        </div>
+      )}
+      <p className="dash-foot">Asset Matrix MFB holds the platform revenue escrow, distributed on the 50/15/15/10/10 formula. Live bank settlement connects through Paystack or Flutterwave. Not financial advice.</p>
     </div>
   )
 }
@@ -1624,6 +1686,17 @@ function SupportConcierge({ ctx }) {
     </div>
   )
 }
+const ROLE_NAV = {
+  society: [['overview', 'Overview'], ['cooperative', 'My cooperative'], ['savings', 'Savings & esusu']],
+  member: [['overview', 'Overview'], ['wallet', 'Wallet & savings'], ['finance', 'LASMECO finance']],
+  officer: [['overview', 'Overview'], ['queue', 'Review queue'], ['all', 'All societies'], ['members', 'Members'], ['lasmeco', 'LASMECO'], ['offices', 'Area offices'], ['audit', 'Audit log'], ['integrations', 'Integrations']],
+  auditor: [['overview', 'Overview'], ['returns', 'Returns to examine'], ['all', 'All societies']],
+  accelerator: [['overview', 'Overview'], ['queue', 'My pipeline'], ['all', 'All loans']],
+  sterling: [['overview', 'Overview'], ['queue', 'My queue'], ['all', 'All loans']],
+  boi: [['overview', 'Overview'], ['queue', 'My queue'], ['all', 'All loans']],
+  assetmatrix: [['overview', 'Overview'], ['distribution', 'Distribution']],
+  leadership: [['overview', 'Overview'], ['applications', 'Applications'], ['members', 'Members'], ['lasmeco', 'LASMECO'], ['viewas', 'View as'], ['integrations', 'Integrations']],
+}
 const WORKSPACES = { society: SocietyWorkspace, member: MemberWorkspace, officer: OfficerWorkspace, auditor: AuditorWorkspace, sterling: SterlingWorkspace, boi: BoiWorkspace, assetmatrix: AssetMatrixWorkspace, accelerator: AcceleratorWorkspace, leadership: LeadershipOverview }
 function SideIcon({ name }) {
   const p = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round' }
@@ -1634,13 +1707,16 @@ function SideIcon({ name }) {
   }
   return <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">{paths[name]}</svg>
 }
-function Sidebar({ role, profile, nav, setNav, onSignOut, onHome, canPrivacy }) {
-  const items = [['workspace', 'Workspace'], ['help', 'Help & support']]
-  if (canPrivacy) items.push(['privacy', 'Privacy & data'])
+function Sidebar({ role, profile, sections, section, setSection, onSignOut, onHome, canPrivacy }) {
   return (
     <aside className="side">
       <button className="side-brand" onClick={onHome}><span className="brand-mark" aria-hidden="true">&#9670;</span><span className="side-brand-name">MCCTI <em>CoopEco</em></span></button>
-      <nav className="side-nav" aria-label="Dashboard">{items.map(([id, label]) => (<button key={id} className={cx('side-item', nav === id && 'on')} onClick={() => setNav(id)}><SideIcon name={id} /><span>{label}</span></button>))}</nav>
+      <nav className="side-nav" aria-label="Sections">{sections.map(([id, label]) => (<button key={id} className={cx('side-item', section === id && 'on')} onClick={() => setSection(id)}><span className="side-dot" aria-hidden="true" /><span>{label}</span></button>))}</nav>
+      <div className="side-sep" />
+      <nav className="side-nav" aria-label="Support">
+        <button className={cx('side-item', section === 'help' && 'on')} onClick={() => setSection('help')}><SideIcon name="help" /><span>Help & support</span></button>
+        {canPrivacy && <button className={cx('side-item', section === 'privacy' && 'on')} onClick={() => setSection('privacy')}><SideIcon name="privacy" /><span>Privacy & data</span></button>}
+      </nav>
       <div className="side-foot">
         <div className="side-user"><Avatar name={profile.name} photo={profile.photo} size={34} /><div className="side-user-text"><span className="side-name">{profile.name}</span><span className="side-role">{roleTitle(role)}</span></div></div>
         <button className="side-signout" onClick={onSignOut}>Sign out</button>
@@ -1651,21 +1727,23 @@ function Sidebar({ role, profile, nav, setNav, onSignOut, onHome, canPrivacy }) 
 function Dashboard({ session, onSignOut, onHome }) {
   const p = session.profile
   const [viewAs, setViewAs] = useState(null)
-  const [nav, setNav] = useState('workspace')
   const eff = viewAs || { role: p.role, name: p.name, email: session.email, office: p.office, title: p.title }
   const ctx = { email: eff.email, uid: session.id, role: eff.role, name: eff.name, focusId: eff.focusId }
-  const Workspace = WORKSPACES[eff.role] || CapabilityPreview
+  const sections = ROLE_NAV[eff.role] || [['overview', 'Overview']]
+  const [section, setSection] = useState(sections[0][0])
+  useEffect(() => { setSection((ROLE_NAV[eff.role] || [['overview', 'Overview']])[0][0]) }, [eff.role])
   const canPrivacy = p.role === 'society' || p.role === 'member'
-  const content = nav === 'help'
+  const Workspace = WORKSPACES[eff.role] || CapabilityPreview
+  const content = section === 'help'
     ? <SupportConcierge ctx={ctx} />
-    : (nav === 'privacy' && canPrivacy)
+    : (section === 'privacy' && canPrivacy)
       ? <DataControls ctx={ctx} onDeleted={onSignOut} />
       : (eff.role === 'leadership' && !viewAs)
-        ? <LeadershipOverview ctx={ctx} onViewAs={setViewAs} />
-        : <Workspace ctx={ctx} />
+        ? <LeadershipOverview ctx={ctx} section={section} onViewAs={setViewAs} />
+        : <Workspace ctx={ctx} section={section} />
   return (
     <div className="shell">
-      <Sidebar role={p.role} profile={p} nav={nav} setNav={setNav} onSignOut={onSignOut} onHome={onHome} canPrivacy={canPrivacy} />
+      <Sidebar role={eff.role} profile={p} sections={sections} section={section} setSection={setSection} onSignOut={onSignOut} onHome={onHome} canPrivacy={canPrivacy} />
       <main className="shell-main"><div className="dash-inner">
         {viewAs && <div className="viewas-banner"><span>Viewing as <strong>{eff.name}</strong> &middot; {roleTitle(eff.role)}</span><button className="link-inline" onClick={() => setViewAs(null)}>Exit view</button></div>}
         <div className="dash-hero">
@@ -1878,6 +1956,9 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .side-item:hover{background:rgba(20,50,35,.05);color:var(--cream)}
 .side-item.on{background:rgba(28,138,79,.1);color:var(--green)}
 .side-item svg{flex-shrink:0}
+.side-dot{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.45;flex-shrink:0;margin:0 6px}
+.side-item.on .side-dot{opacity:1}
+.side-sep{height:1px;background:var(--line-soft);margin:4px 6px}
 .side-foot{margin-top:auto;display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--line-soft);padding-top:16px}
 .side-user{display:flex;align-items:center;gap:10px;min-width:0}
 .side-user-text{display:flex;flex-direction:column;min-width:0}

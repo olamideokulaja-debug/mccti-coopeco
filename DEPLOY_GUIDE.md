@@ -249,6 +249,20 @@ or a ticket. The database policy for tickets is already in `supabase_setup.sql`.
 To adjust fees in one place, edit COOP_FEES and the PRICING list near the top of
 `src/App.jsx`.
 
+## Sidebar navigation and per-role dashboards
+Every role’s section navigation now lives in the left sidebar (not horizontal
+tabs). Each role opens on an Overview dashboard with its own analytics:
+- Society: members, contributions, CAP15 status, and a returns chart.
+- Member: credit score, band and a score gauge.
+- Officer: registry stat cards with registration-status, CAP15 and area-office charts.
+- Auditor: returns and CAP15 compliance.
+- Accelerator / Sterling / Bank of Industry: loan stats with pipeline-by-stage and by-sector charts.
+- Asset Matrix: revenue-by-stream donut and payments throughput, plus a Distribution section.
+- Leadership: the full platform analytics (six KPIs and multiple charts).
+The sidebar also carries Help & support (all roles) and Privacy & data (members
+and societies). To change a role’s sections, edit ROLE_NAV near the workspace map
+in `src/App.jsx`.
+
 ## Environment variables
 See `.env.example`. For local testing copy it to `.env.local` and fill it in.
 - VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY - accounts and data (Stage 2).
