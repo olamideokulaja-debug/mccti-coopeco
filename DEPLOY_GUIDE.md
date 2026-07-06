@@ -1,4 +1,4 @@
-# MCCTI CoopEco - Deploy Guide (Stages 1 to 3)
+# MCCTI CoopEco - Deploy Guide (Stages 1 to 5)
 
 A real, deployable Vite + React project. You do not need to code. Follow one
 step at a time.
@@ -16,6 +16,23 @@ step at a time.
   In demo mode a few sample societies are seeded so the officer queue is not empty.
   It also connects to SEKAT one way: once linked, all society, profile and audit
   data flows from SEKAT into MCCTI as read-only mirrors, marked with a SEKAT badge.
+- Stage 4: the Member and MSME Analytics module (the QooP layer). QooP is treated
+  exactly like SEKAT, a one-way source (QooP into MCCTI): members and their MSME
+  profiles flow in as read-only mirrors with a QooP badge. Members onboard with
+  KYC and MSME details and receive an explainable, advisory credit score. The app
+  is GDPR-aligned (consent banner and sign-up consent, a privacy notice, and
+  Download my data and Delete my data controls). Leadership can switch across all
+  users with a "View as" tool.
+- Stage 5: LASMECO Financing and the Accelerator role. A new Accelerator Programme
+  login recruits and trains MSMEs and recommends a loan amount. The full pipeline
+  runs Applied to In training to Shortlisted (Accelerator), to Cooperative
+  validated with the 25% guarantee (officer), then across the three financial
+  partners: Sterling Bank does KYC and assessment and applies the 50% guarantee,
+  the Bank of Industry grants final approval and funds, and Sterling then disburses
+  to the beneficiary. Asset Matrix MFB runs the platform revenue escrow and
+  distributes it on the 50/15/15/10/10 formula. Each of the nine roles has its own
+  login, and several people can log into each organisation. Members apply from
+  their dashboard. Cooperatives now carry a join fee.
 
 ## Run it on your own computer (optional)
 1. Install Node.js (version 18 or newer) from nodejs.org.
@@ -74,8 +91,8 @@ visitor's own browser. To store real accounts:
 The registry lets officers and auditors review societies filed by other people, so
 those rows must be shared while each person's profile stays private. After the kv
 table exists, open the Supabase SQL editor, open a New query, paste the contents of
-the file `supabase_stage3.sql` included in this project, and click Run. You only do
-this once. In demo mode nothing is needed; it already works in your browser.
+the file `supabase_stage3.sql` (and then `supabase_stage4.sql` for members and
+integrations) included in this project, and click Run. You only do this once. In demo mode nothing is needed; it already works in your browser.
 
 Security note, flagged for human oversight: at this stage approval controls are
 enforced in the interface (a society cannot see the approve button; only officers
@@ -85,6 +102,24 @@ not legal advice.
 
 Tip: for quick testing without email links, in Supabase under Authentication,
 Providers, Email, you can turn off "Confirm email". Leave it on for production.
+
+## QooP integration (one-way)
+QooP is the source for member and MSME analytics and is handled just like SEKAT:
+data flows only from QooP into MCCTI. Synced members carry a QooP badge and are
+read-only. Officers and leadership can run a sync from the Integrations tab. To
+connect the live source, set QOOP_API_URL and QOOP_API_KEY (the endpoint is
+`api/qoop-sync.js`, which never writes back). Until then a representative sample
+is ingested so you can see the flow.
+
+## Credit scoring and GDPR
+Member credit scores are explainable and advisory. A cooperative officer reviews
+before a score affects LASMECO eligibility, so it is not a solely automated
+decision. The app includes a consent banner, a consent step at sign-up, a privacy
+notice (footer and consent banner), and Download my data and Delete my data
+controls in the member and society dashboards. Institutional cooperative records
+are retained under the Ministry's public task; personal member data is erasable.
+This supports GDPR and NDPR principles but is not legal advice; confirm the KYC
+provider terms and data-sharing agreements with your team before going live.
 
 ## SEKAT integration (one-way)
 SEKAT is the source of the legacy cooperative registry and audit records. In
@@ -106,6 +141,60 @@ and leadership can trigger a sync from the SEKAT sync panel in their dashboard.
 Compliance, flagged for human oversight: the data-flow direction, retention, and
 NDPR handling should be governed by the SEKAT integration and data-sharing
 agreement before live data is ingested. This is not legal advice.
+
+## The three financial partners (separate logins)
+LASMECO involves three distinct organisations, each with its own login. Several
+staff can log into each: anyone who signs up and picks that organisation's role
+(or is listed in the OFFICIALS map near the top of `src/App.jsx`) gets that
+workspace.
+- Sterling Bank (role: Sterling Bank). Receives validated applications, runs KYC
+  and assessment, applies the 50% guarantee, and disburses to the beneficiary once
+  the Bank of Industry has approved.
+- Bank of Industry (role: Bank of Industry). Provides the loan; grants final
+  approval and funding after Sterling's assessment. It does not disburse.
+- Asset Matrix MFB (role: Asset Matrix MFB). Holds the platform revenue escrow.
+  All fees accrue here and are distributed on the 50/15/15/10/10 formula (Lagos
+  State 50, Asset Matrix 15, Imade/Catridge 15, QooP 10, SEKAT 10). It records
+  distributions; live settlement connects through Paystack or Flutterwave.
+
+Example logins already recognised: sterling@lasmeco.ng, boi@lasmeco.ng,
+escrow@assetmatrix.ng (any password in demo). You can also just sign up and pick
+the role. In live mode each person creates their own account under that role.
+
+## Cooperative fees
+Joining the platform carries a one-time cooperative registration fee of 50,000
+Naira, shown as an outstanding banner on the society dashboard with a Pay button
+(a demo stub until Paystack or Flutterwave is connected). Annual returns filing is
+15,000 Naira per year, and CAP15 regulatory processing is 2.5% of surplus. These
+figures come from the platform revenue model and can be changed in COOP_FEES near
+the top of `src/App.jsx`. Consider waiving or reducing the join fee for societies
+in the Ikorodu, Epe, Badagry and Ibeju-Lekki priority corridors to drive inclusion.
+
+For LASMECO, there are no upfront fees to the borrower. On disbursement, a 200,000
+Naira Accelerator fee and a 1% BOI appraisal fee are deducted, and the borrower
+provides 10% cash collateral; the guarantee stack is 25% cooperative and 50%
+Sterling, at 9% fixed. The app shows the full breakdown at approval and disbursement.
+
+## Turn on the LASMECO pipeline (Stage 5, live mode only)
+After the Stage 3 and Stage 4 policies, run `supabase_stage5.sql` once in the SQL
+editor so the Accelerator, officer, financial partner and leadership can all see
+and act on the same loan pipeline. Not needed in demo mode.
+
+Payments: when you are ready to take real fee payments, add PAYSTACK_SECRET_KEY or
+FLUTTERWAVE_SECRET_KEY and we will wire the Pay buttons to live checkout.
+
+## Look and Leadership analytics
+The interface uses a neutral charcoal base with green and gold as accents, rather
+than a dominant green. To adjust the palette, edit the CSS variables in the :root
+block near the top of the styles in `src/App.jsx` (for example --green is the
+accent, --gold the secondary accent, --ink and --ink-2 the surfaces).
+
+The Leadership / Admin dashboard opens on an Overview of live analytics across the
+whole platform: KPI tiles (societies, members profiled, LASMECO disbursed, escrow
+accrued), donut charts for registration status, CAP15 compliance, registry source
+and KYC, bar charts for area offices, member credit bands, the LASMECO pipeline,
+applications by sector and the escrow distribution, and a six-month registrations
+trend. These update automatically from the registry, members, loans and escrow.
 
 ## Environment variables
 See `.env.example`. For local testing copy it to `.env.local` and fill it in.
