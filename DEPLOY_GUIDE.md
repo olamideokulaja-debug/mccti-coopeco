@@ -1,4 +1,4 @@
-# MCCTI CoopEco - Deploy Guide (Stages 1 to 6)
+# MCCTI CoopEco - Deploy Guide (final build, Stages 1 to 9)
 
 A real, deployable Vite + React project. You do not need to code. Follow one
 step at a time.
@@ -218,6 +218,36 @@ are demo transactions until Paystack or Flutterwave is connected via
 PAYSTACK_SECRET_KEY or FLUTTERWAVE_SECRET_KEY; the same keys will drive the
 cooperative fee payments. The database policies for wallets are already included
 in `supabase_setup.sql` (the wallet: rows), so no extra SQL step is needed.
+
+## Stage 7: Support & grievance redress
+Every signed-in user has a Help & support button in their dashboard. Members and
+partners get a help concierge (an optional AI assistant, an FAQ, and a Raise a
+ticket form) and can track their own tickets. Officers and leadership get a
+support desk: open/in-progress/escalated/resolved counts, the ticket queue, a
+threaded conversation, and actions to reply, resolve, or escalate to leadership.
+This implements the LASMECO grievance-redress mechanism. The AI concierge answers
+when ANTHROPIC_API_KEY is set on the server; otherwise it points people to the FAQ
+or a ticket. The database policy for tickets is already in `supabase_setup.sql`.
+
+## Final build: navigation, pricing and polish
+- Left sidebar: once signed in, the app uses a left navigation rail (Workspace,
+  Help & support, and Privacy & data for members and societies), with the person’s
+  identity and Sign out at the bottom. The government letterhead stays on top.
+- Pricing: the landing page has a Pricing section setting out the eight revenue
+  streams (registration, annual returns, CAP15 processing, LASMECO portal,
+  directory search, wallet, analytics subscriptions, and partner onboarding).
+- Escrow reconciliation: Asset Matrix now reconciles wallet payments too. Wallet
+  funding earns a 1% fee that accrues to the escrow alongside registration,
+  returns and disbursement-portal fees, and a Payments throughput panel shows
+  funding, esusu payouts and disbursed value.
+- Leadership analytics: two new KPIs (Payments processed and Open support tickets)
+  and a Support tickets chart, alongside the registry, compliance, member, LASMECO
+  and escrow analytics.
+- Polish: favicon and page title set to the Lagos seal and platform name, scroll
+  animations and count-ups, and consistent light-theme contrast throughout.
+
+To adjust fees in one place, edit COOP_FEES and the PRICING list near the top of
+`src/App.jsx`.
 
 ## Environment variables
 See `.env.example`. For local testing copy it to `.env.local` and fill it in.

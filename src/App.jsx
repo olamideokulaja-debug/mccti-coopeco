@@ -83,6 +83,7 @@ const SECTORS = ['Trade', 'Thrift & Credit', 'Artisan', 'Agriculture', 'Transpor
 const STATUS_CLASS = { 'Filed': 'st-filed', 'Under review': 'st-review', 'Approved': 'st-approved', 'Returned': 'st-returned' }
 const CAP15_CLASS = { 'Compliant': 'st-approved', 'Returns due': 'st-review', 'Under audit': 'st-filed' }
 const LOAN_STATUS_CLASS = { 'Applied': 'st-filed', 'In training': 'st-review', 'Shortlisted': 'st-review', 'Coop validated': 'st-review', 'Bank assessment': 'st-review', 'BOI approved': 'st-approved', 'Disbursed': 'st-approved', 'Repaying': 'st-approved', 'Completed': 'st-approved', 'Declined': 'st-returned' }
+const TICKET_STATUS_CLASS = { 'Open': 'st-review', 'In progress': 'st-filed', 'Resolved': 'st-approved', 'Escalated': 'st-returned' }
 
 const SEED_COOPS = [
   { name: 'Omoluabi Traders Multipurpose Coop', areaOffice: 'Ikeja', sector: 'Trade', status: 'Filed', cap15: 'Returns due', members: 212, contributions: 4800000, custodian: 'B. Ajomale', trustees: ['A. Ogun', 'K. Meadows'] },
@@ -274,7 +275,7 @@ function Avatar({ name, photo, size = 44 }) {
   if (photo) return <img className="avatar avatar-img" src={photo} alt="" style={{ width: size, height: size }} />
   return <span className="avatar" style={{ width: size, height: size, fontSize: size * 0.36 }}>{initials(name)}</span>
 }
-const StatusChip = ({ status, kind }) => <span className={cx('chip', (kind === 'cap15' ? CAP15_CLASS : kind === 'loan' ? LOAN_STATUS_CLASS : STATUS_CLASS)[status] || 'st-review')}>{status}</span>
+const StatusChip = ({ status, kind }) => <span className={cx('chip', (kind === 'cap15' ? CAP15_CLASS : kind === 'loan' ? LOAN_STATUS_CLASS : kind === 'ticket' ? TICKET_STATUS_CLASS : STATUS_CLASS)[status] || 'st-review')}>{status}</span>
 const SourceBadge = ({ source }) => source ? <span className={cx('src-badge', source === 'SEKAT' ? 'src-sekat' : 'src-mccti')}>{source}</span> : null
 
 /* --------------------------- live register ---------------------------- */
@@ -368,6 +369,16 @@ function LeaderCard({ l, i }) {
     </Reveal>
   )
 }
+const PRICING = [
+  { name: 'Cooperative registration', price: '\u20A650,000', unit: 'one-time', who: 'Cooperative societies', body: 'Join the platform and receive a tracking ID and a digital registry record.' },
+  { name: 'Annual returns filing', price: '\u20A615,000', unit: 'per year', who: 'Cooperative societies', body: 'File statutory annual financial returns for CAP15 supervision.' },
+  { name: 'CAP15 regulatory processing', price: '2.5%', unit: 'of surplus', who: 'Cooperative societies', body: 'Regulatory processing tied to declared operating surplus.' },
+  { name: 'LASMECO disbursement portal', price: '2.5%', unit: 'of disbursed funds', who: 'Financing pool', body: 'Portal and processing fee on loans disbursed through the platform.' },
+  { name: 'Directory & verification search', price: '\u20A62,000', unit: 'per lookup', who: 'Businesses & partners', body: 'Verify a cooperative\u2019s status and standing on demand.' },
+  { name: 'Digital wallet & payments', price: '1%', unit: 'per transaction', who: 'Members & societies', body: 'Wallet funding, savings and esusu movements via connected payment rails.' },
+  { name: 'Analytics & data subscriptions', price: 'Custom', unit: 'per agency', who: 'Agencies & partners', body: 'Aggregated, consented analytics on the cooperative economy.' },
+  { name: 'Accelerator & partner onboarding', price: 'Programme fee', unit: 'success-based', who: 'Accelerators & partners', body: 'Onboarding and success-based fees for programme partners.' },
+]
 function Landing({ area, setArea, onEnter }) {
   const current = AREA_LENS.find((a) => a.id === area) || AREA_LENS[0]
   return (
@@ -408,6 +419,10 @@ function Landing({ area, setArea, onEnter }) {
           <div className="arc-arrow" aria-hidden="true">&rarr;</div>
           <div className="arc-step"><span className="arc-n">03</span><h4>The return: self-funding IGR</h4><p>Eight revenue streams generate ₦655M in Year 1 and cross ₦1 billion by Year 3, at zero capital cost to the State, with full ownership retained by the Ministry.</p></div>
         </div>
+      </section>
+      <section className="pricing" id="pricing">
+        <div className="section-head"><p className="eyebrow"><span className="eb-dot" />Pricing</p><h2>Eight revenue streams, one self-funding platform</h2><p className="section-sub">Transparent, usage-based pricing that makes the platform self-funding from Year 1, at no capital cost to the State.</p></div>
+        <div className="price-grid">{PRICING.map((pr, i) => (<Reveal className="price-card" tag="article" key={pr.name} delay={i * 45}><div className="price-top"><span className="price-amt">{pr.price}</span><span className="price-unit">{pr.unit}</span></div><h3>{pr.name}</h3><p className="price-who">{pr.who}</p><p>{pr.body}</p></Reveal>))}</div>
       </section>
       <section className="personas" id="intelligence">
         <div className="section-head"><p className="eyebrow">Role-aware from the first screen</p><h2>Built for everyone who touches a cooperative</h2></div>
@@ -747,17 +762,19 @@ function MiniArea({ points, color = CHART_C.green }) {
   return <svg viewBox={`0 0 ${w} ${h}`} className="miniarea" preserveAspectRatio="none"><path d={area} fill={color} opacity=".14" /><path d={line} fill="none" stroke={color} strokeWidth="2.5" vectorEffect="non-scaling-stroke" /></svg>
 }
 function AnalyticsDashboard() {
-  const [coops, setCoops] = useState(null), [members, setMembers] = useState([]), [loans, setLoans] = useState([])
-  useEffect(() => { listCoops().then(setCoops); listMembers().then(setMembers); listLoans().then(setLoans) }, [])
-  if (!coops) return <p className="muted-line">Loading analytics…</p>
+  const [coops, setCoops] = useState(null), [members, setMembers] = useState([]), [loans, setLoans] = useState([]), [wallets, setWallets] = useState([]), [tickets, setTickets] = useState([])
+  useEffect(() => { listCoops().then(setCoops); listMembers().then(setMembers); listLoans().then(setLoans); kvList('wallet:').then(setWallets); listTickets().then(setTickets) }, [])
+  if (!coops) return <p className="muted-line">Loading analytics\u2026</p>
   const scored = members.map((m) => scoreMember(m))
   const disbursed = loans.filter((l) => ['Disbursed', 'Repaying', 'Completed'].includes(l.status))
   const disbursedValue = disbursed.reduce((a, l) => a + (l.amountApproved || 0), 0)
+  const funding = wallets.reduce((a, w) => a + (w.txns || []).filter((t) => t.type === 'topup').reduce((s, t) => s + (t.amount || 0), 0), 0)
   const regFees = coops.filter((c) => c.feeStatus === 'Paid').length * COOP_FEES.registration
   const returnsFees = coops.filter((c) => c.returns).length * COOP_FEES.annualReturns
   const portalFees = Math.round(disbursedValue * 0.025)
-  const accrued = regFees + returnsFees + portalFees
+  const accrued = regFees + returnsFees + portalFees + Math.round(funding * 0.01)
   const avgScore = scored.length ? Math.round(scored.reduce((a, s) => a + s.score, 0) / scored.length) : 0
+  const openTickets = tickets.filter((t) => t.status !== 'Resolved').length
 
   const statusData = [['Approved', CHART_C.green], ['Under review', CHART_C.gold], ['Filed', CHART_C.slate], ['Returned', CHART_C.red]].map(([s, c]) => ({ label: s, value: coops.filter((x) => x.status === s).length, color: c })).filter((d) => d.value)
   const cap15 = [['Compliant', CHART_C.green], ['Under audit', CHART_C.slate], ['Returns due', CHART_C.gold]].map(([s, c]) => ({ label: s, value: coops.filter((x) => x.cap15 === s).length, color: c })).filter((d) => d.value)
@@ -768,6 +785,7 @@ function AnalyticsDashboard() {
   const pipeline = ['Applied', 'In training', 'Shortlisted', 'Coop validated', 'Bank assessment', 'BOI approved', 'Disbursed'].map((s) => ({ label: s, value: loans.filter((l) => l.status === s).length, color: CHART_C.gold }))
   const sectors = Array.from(new Set(loans.map((l) => l.sector))).map((s) => ({ label: s, value: loans.filter((l) => l.sector === s).length, color: CHART_C.teal }))
   const split = SPV_SPLIT.map(([n, p], i) => ({ label: n, value: Math.round(accrued * p / 100), color: [CHART_C.green, CHART_C.gold, CHART_C.teal, CHART_C.plum, CHART_C.amber][i] }))
+  const ticketData = [['Open', CHART_C.gold], ['In progress', CHART_C.slate], ['Escalated', CHART_C.red], ['Resolved', CHART_C.green]].map(([s, c]) => ({ label: s, value: tickets.filter((t) => t.status === s).length, color: c })).filter((d) => d.value)
 
   const now = new Date(), months = []
   for (let i = 5; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); months.push({ key: d.getFullYear() + '-' + d.getMonth(), label: d.toLocaleString('en-GB', { month: 'short' }) }) }
@@ -781,6 +799,8 @@ function AnalyticsDashboard() {
         <div className="kpi"><span className="kpi-fig">{members.length}</span><span className="kpi-lab">Members profiled</span></div>
         <div className="kpi"><span className="kpi-fig">{fmtNaira(disbursedValue)}</span><span className="kpi-lab">LASMECO disbursed</span></div>
         <div className="kpi"><span className="kpi-fig">{fmtNaira(accrued)}</span><span className="kpi-lab">Escrow accrued</span></div>
+        <div className="kpi"><span className="kpi-fig">{fmtNaira(funding)}</span><span className="kpi-lab">Payments processed</span></div>
+        <div className="kpi"><span className="kpi-fig">{openTickets}</span><span className="kpi-lab">Open support tickets</span></div>
       </div>
       <div className="chart-grid">
         <section className="chart-card"><h4>Registration status</h4><Donut data={statusData} centerTop={String(coops.length)} centerBottom="societies" /></section>
@@ -792,6 +812,7 @@ function AnalyticsDashboard() {
         <section className="chart-card wide"><h4>LASMECO pipeline</h4><Bars data={pipeline} /></section>
         <section className="chart-card"><h4>Applications by sector</h4><Bars data={sectors} /></section>
         <section className="chart-card"><h4>Escrow distribution ({fmtNaira(accrued)})</h4><Bars data={split} unit="naira" /></section>
+        <section className="chart-card"><h4>Support tickets</h4>{ticketData.length ? <Donut data={ticketData} centerTop={String(tickets.length)} centerBottom="tickets" /> : <p className="muted-line">No tickets yet.</p>}</section>
         <section className="chart-card wide"><h4>Registrations, last 6 months ({trendTotal})</h4><MiniArea points={regTrend} /><div className="trend-x">{months.map((m) => <span key={m.key}>{m.label}</span>)}</div></section>
       </div>
       <p className="dash-foot">Live analytics across the cooperative economy. Figures update as societies register, members are profiled, and LASMECO loans move through the pipeline.</p>
@@ -1346,29 +1367,32 @@ function BoiWorkspace({ ctx }) {
 }
 const SPV_SPLIT = [['Lagos State (MCCTI)', 50], ['Asset Matrix MFB', 15], ['Imade / Catridge', 15], ['QooP', 10], ['SEKAT', 10]]
 function AssetMatrixWorkspace({ ctx }) {
-  const [coops, setCoops] = useState(null), [loans, setLoans] = useState([]), [last, setLast] = useState(null), [busy, setBusy] = useState(false)
-  const reload = useCallback(() => { listCoops().then(setCoops); listLoans().then(setLoans); kvGet('escrow:last').then(setLast) }, [])
+  const [coops, setCoops] = useState(null), [loans, setLoans] = useState([]), [wallets, setWallets] = useState([]), [last, setLast] = useState(null), [busy, setBusy] = useState(false)
+  const reload = useCallback(() => { listCoops().then(setCoops); listLoans().then(setLoans); kvList('wallet:').then(setWallets); kvGet('escrow:last').then(setLast) }, [])
   useEffect(() => { reload() }, [reload])
-  if (!coops) return <p className="muted-line">Loading escrow…</p>
+  if (!coops) return <p className="muted-line">Loading escrow\u2026</p>
   const regFees = coops.filter((c) => c.feeStatus === 'Paid').length * COOP_FEES.registration
   const returnsFees = coops.filter((c) => c.returns).length * COOP_FEES.annualReturns
   const disbursedValue = loans.filter((l) => ['Disbursed', 'Repaying', 'Completed'].includes(l.status)).reduce((a, l) => a + (l.amountApproved || 0), 0)
   const portalFees = Math.round(disbursedValue * 0.025)
-  const accrued = regFees + returnsFees + portalFees
+  const sumTxn = (type) => wallets.reduce((a, w) => a + (w.txns || []).filter((t) => t.type === type).reduce((s, t) => s + (t.amount || 0), 0), 0)
+  const funding = sumTxn('topup'), payouts = sumTxn('payout')
+  const walletFees = Math.round(funding * 0.01)
+  const accrued = regFees + returnsFees + portalFees + walletFees
   const distribute = async () => { setBusy(true); const rec = { amount: accrued, at: new Date().toISOString(), by: ctx.name, split: SPV_SPLIT.map(([n, p]) => [n, Math.round(accrued * p / 100)]) }; await kvSet('escrow:last', rec); await addAudit({ trackingId: 'ESCROW', action: 'Revenue distributed on 50/15/15/10/10', by: ctx.name, role: 'assetmatrix', note: fmtNaira(accrued) }); setLast(rec); setBusy(false) }
   return (
     <div className="ws">
       <div className="statgrid">
         <div className="stat"><span className="stat-fig">{fmtNaira(accrued)}</span><span className="stat-lab">Escrow accrued</span></div>
-        <div className="stat"><span className="stat-fig">{fmtNaira(regFees)}</span><span className="stat-lab">Registration fees</span></div>
-        <div className="stat"><span className="stat-fig">{fmtNaira(returnsFees)}</span><span className="stat-lab">Returns fees</span></div>
+        <div className="stat"><span className="stat-fig">{fmtNaira(regFees + returnsFees)}</span><span className="stat-lab">Registration &amp; returns</span></div>
         <div className="stat"><span className="stat-fig">{fmtNaira(portalFees)}</span><span className="stat-lab">Disbursement portal (2.5%)</span></div>
+        <div className="stat"><span className="stat-fig">{fmtNaira(walletFees)}</span><span className="stat-lab">Wallet fees (1%)</span></div>
       </div>
       <div className="dash-grid">
-        <section className="dash-card"><h3>Sharing formula distribution</h3>{SPV_SPLIT.map(([n, p]) => (<div className="status-row" key={n}><span>{n} ({p}%)</span><span className="mono">{fmtNaira(Math.round(accrued * p / 100))}</span></div>))}<div className="panel-actions"><button className="btn btn-gold btn-sm" onClick={distribute} disabled={busy}>{busy ? 'Recording…' : 'Record distribution'}</button></div></section>
-        <section className="dash-card"><h3>Last distribution</h3>{last ? (<><p className="dash-card-sub">{fmtNaira(last.amount)} on {fmtDate(last.at)} by {last.by}</p>{(last.split || []).map(([n, v]) => (<div className="status-row" key={n}><span>{n}</span><span className="mono">{fmtNaira(v)}</span></div>))}</>) : <p className="muted-line">No distribution recorded yet.</p>}</section>
+        <section className="dash-card"><h3>Sharing formula distribution</h3>{SPV_SPLIT.map(([n, p]) => (<div className="status-row" key={n}><span>{n} ({p}%)</span><span className="mono">{fmtNaira(Math.round(accrued * p / 100))}</span></div>))}<div className="panel-actions"><button className="btn btn-gold btn-sm" onClick={distribute} disabled={busy}>{busy ? 'Recording\u2026' : 'Record distribution'}</button></div></section>
+        <section className="dash-card"><h3>Payments throughput</h3><div className="status-row"><span>Wallet funding processed</span><span className="mono">{fmtNaira(funding)}</span></div><div className="status-row"><span>Esusu payouts</span><span className="mono">{fmtNaira(payouts)}</span></div><div className="status-row"><span>LASMECO disbursed</span><span className="mono">{fmtNaira(disbursedValue)}</span></div><div className="status-row"><span>Active wallets</span><span className="mono">{wallets.length}</span></div>{last ? <p className="dash-card-sub" style={{ marginTop: '12px' }}>Last distribution: {fmtNaira(last.amount)} on {fmtDate(last.at)}</p> : null}</section>
       </div>
-      <p className="dash-foot">Asset Matrix MFB holds the platform revenue escrow. All platform fees accrue here and are distributed on the 50/15/15/10/10 formula. Live bank settlement connects through Paystack or Flutterwave. Not financial advice.</p>
+      <p className="dash-foot">Asset Matrix MFB holds the platform revenue escrow. Registration, returns, disbursement-portal and wallet fees accrue here and are distributed on the 50/15/15/10/10 formula. Live bank settlement connects through Paystack or Flutterwave. Not financial advice.</p>
     </div>
   )
 }
@@ -1471,26 +1495,187 @@ function CoopEsusu({ coop, ctx }) {
     </div>
   )
 }
+/* =============================== STAGE 7 ===============================
+   Support & Grievance Redress. A help concierge with an FAQ, an optional AI
+   assistant (via the server-side proxy when a key is configured), and a
+   ticketing / grievance system: members and partners raise issues, the
+   Directorate triages, and leadership is the escalation panel.
+   ====================================================================== */
+const TICKET_CATS = ['Registration', 'Annual returns', 'LASMECO / finance', 'Wallet / payments', 'Data / privacy', 'Other']
+const FAQ = [
+  { q: 'How do I register my cooperative?', a: 'Sign in as a Cooperative Society and file your society. You receive a tracking ID; MCCTI leadership reviews the documents and approves or returns the application.' },
+  { q: 'What does it cost to join?', a: 'A one-time registration fee of \u20A650,000, plus \u20A615,000 per year for annual returns filing. LASMECO loans carry no upfront fee to the borrower.' },
+  { q: 'How do I apply for a LASMECO loan?', a: 'As a member, complete your profile and apply from your dashboard. An Accelerator prepares you, your cooperative is validated, Sterling Bank assesses and guarantees, the Bank of Industry approves and funds, and Sterling disburses.' },
+  { q: 'How do the wallet and esusu work?', a: 'Add funds to your wallet and save into your cooperative pool. The society disburses the pool to members in rotation (esusu / ajo).' },
+  { q: 'How is my data handled?', a: 'You consent to processing at sign-up, can download your data, and can erase your personal data at any time from your dashboard. See the Privacy notice.' },
+]
+function genTicketId() { return 'TK-' + String(new Date().getFullYear()).slice(2) + '-' + String(Math.floor(Math.random() * 100000)).padStart(5, '0') }
+async function listTickets() { return (await kvList('ticket:')).sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1)) }
+async function createTicket(rec, ctx) {
+  const id = genTicketId(), now = new Date().toISOString()
+  const t = { ticketId: id, status: 'Open', raisedBy: ctx.email, raisedByName: ctx.name, role: ctx.role, thread: [{ by: ctx.name, role: ctx.role, text: rec.message, at: now }], createdAt: now, updatedAt: now, ...rec }
+  await kvSet('ticket:' + id, t, ctx.uid); return t
+}
+async function updateTicket(id, patch, ctx, reply) {
+  const cur = await kvGet('ticket:' + id); if (!cur) return null
+  const now = new Date().toISOString()
+  const thread = reply ? [...(cur.thread || []), { by: ctx.name, role: ctx.role, text: reply, at: now }] : cur.thread
+  const next = { ...cur, ...patch, thread, updatedAt: now }
+  await kvSet('ticket:' + id, next, cur.user_id); return next
+}
+function AskConcierge() {
+  const [q, setQ] = useState(''), [a, setA] = useState(null), [busy, setBusy] = useState(false)
+  const ask = async () => {
+    if (!q.trim()) return; setBusy(true); setA(null)
+    let ans = ''
+    try {
+      const r = await fetch('/api/anthropic', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: q.trim() }] }) })
+      const d = await r.json().catch(() => ({}))
+      if (r.ok && d && d.content) ans = Array.isArray(d.content) ? d.content.map((x) => x.text || '').join('') : String(d.content)
+    } catch (e) { ans = '' }
+    setA(ans || 'The AI concierge activates once the Ministry connects its assistant key. In the meantime, browse the FAQ below or raise a ticket and the Directorate will respond.')
+    setBusy(false)
+  }
+  return (
+    <div className="concierge">
+      <div className="concierge-row"><input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && ask()} placeholder="Ask a question, e.g. how do I apply for LASMECO?" /><button className="btn btn-gold btn-sm" onClick={ask} disabled={busy}>{busy ? 'Asking\u2026' : 'Ask'}</button></div>
+      {a && <div className="concierge-ans">{a}</div>}
+    </div>
+  )
+}
+function RaiseTicketForm({ ctx, coop, onDone, onCancel }) {
+  const [f, setF] = useState({ subject: '', category: TICKET_CATS[0], message: '' })
+  const [busy, setBusy] = useState(false), [err, setErr] = useState('')
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value })
+  const submit = async () => { setErr(''); if (!f.subject.trim() || !f.message.trim()) { setErr('Add a subject and a message.'); return } setBusy(true); await createTicket({ subject: f.subject.trim(), category: f.category, message: f.message.trim(), coop: coop || '' }, ctx); setBusy(false); onDone() }
+  return (
+    <div className="panel">
+      <div className="panel-head"><h3>Raise a support ticket</h3><button className="link-back" onClick={onCancel}>Cancel</button></div>
+      <div className="form-grid">
+        <label className="field span2"><span>Subject</span><input value={f.subject} onChange={set('subject')} placeholder="Briefly, what is the issue?" /></label>
+        <label className="field"><span>Category</span><select value={f.category} onChange={set('category')}>{TICKET_CATS.map((c) => <option key={c}>{c}</option>)}</select></label>
+        <label className="field span2"><span>Message</span><textarea value={f.message} onChange={set('message')} rows={4} placeholder="Describe the issue or grievance in detail." /></label>
+      </div>
+      {err && <p className="auth-err">{err}</p>}
+      <div className="panel-actions"><button className="btn btn-gold" onClick={submit} disabled={busy}>{busy ? 'Submitting\u2026' : 'Submit ticket'}</button></div>
+      <p className="panel-note">Grievances are tracked and addressed by the Directorate within the programme\u2019s service timelines, and escalated to leadership where unresolved.</p>
+    </div>
+  )
+}
+function TicketDetail({ ticket, ctx, onClose, onChanged }) {
+  const [t, setT] = useState(ticket), [reply, setReply] = useState(''), [busy, setBusy] = useState(false)
+  const staff = ctx.role === 'officer' || ctx.role === 'leadership'
+  const act = async (patch, needReply) => {
+    if (needReply && !reply.trim()) { alert('Add a message.'); return }
+    setBusy(true); const n = await updateTicket(t.ticketId, patch, ctx, reply.trim()); setT(n); setReply(''); setBusy(false); onChanged && onChanged()
+  }
+  return (
+    <div className="detail">
+      <div className="detail-head"><div><h3>{t.subject}</h3><p className="detail-sub">{t.ticketId} &middot; {t.category} &middot; raised by {t.raisedByName}{t.coop ? ' \u00b7 ' + t.coop : ''}</p></div><button className="link-back" onClick={onClose}>&larr; Back</button></div>
+      <div className="detail-chips"><StatusChip status={t.status} kind="ticket" /></div>
+      <div className="thread">{(t.thread || []).map((m, i) => (<div className={cx('msg', (m.role === 'officer' || m.role === 'leadership') && 'staff')} key={i}><div className="msg-head"><strong>{m.by}</strong><span>{roleTitle(m.role)} &middot; {fmtDate(m.at)}</span></div><p>{m.text}</p></div>))}</div>
+      {t.status !== 'Resolved' && (
+        <div className="action-box">
+          <label className="field"><span>Reply</span><textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={3} placeholder="Add a reply or update." /></label>
+          <div className="action-row">
+            <button className="btn btn-gold btn-sm" disabled={busy} onClick={() => act({ status: staff && t.status === 'Open' ? 'In progress' : t.status }, true)}>Send reply</button>
+            {staff && <button className="btn btn-outline btn-sm" disabled={busy} onClick={() => act({ status: 'Resolved' }, false)}>Mark resolved</button>}
+            {ctx.role === 'officer' && <button className="btn btn-outline btn-sm" disabled={busy} onClick={() => act({ status: 'Escalated' }, true)}>Escalate to leadership</button>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+function SupportConcierge({ ctx }) {
+  const staff = ctx.role === 'officer' || ctx.role === 'leadership'
+  const [tickets, setTickets] = useState(null), [mode, setMode] = useState('home'), [sel, setSel] = useState(null)
+  const reload = useCallback(() => { listTickets().then(setTickets) }, [])
+  useEffect(() => { reload() }, [reload])
+  if (!tickets) return <p className="muted-line">Loading support\u2026</p>
+  if (sel) return <TicketDetail ticket={sel} ctx={ctx} onClose={() => { setSel(null); reload() }} onChanged={reload} />
+  if (mode === 'raise') return <RaiseTicketForm ctx={ctx} onCancel={() => setMode('home')} onDone={() => { setMode('home'); reload() }} />
+  const mine = tickets.filter((t) => t.raisedBy === ctx.email)
+  const open = tickets.filter((t) => t.status !== 'Resolved')
+  const rows = (list) => (
+    <div className="rtable-wrap"><table className="rtable"><thead><tr><th>Ticket</th><th>Subject</th><th>Category</th><th>Raised by</th><th>Status</th><th></th></tr></thead>
+      <tbody>{list.map((t) => (<tr key={t.ticketId}><td className="mono">{t.ticketId}</td><td className="td-name">{t.subject}</td><td>{t.category}</td><td>{t.raisedByName}</td><td><StatusChip status={t.status} kind="ticket" /></td><td><button className="btn-open" onClick={() => setSel(t)}>Open</button></td></tr>))}</tbody>
+    </table></div>
+  )
+  return (
+    <div className="ws">
+      <div className="section-head" style={{ maxWidth: 'none', marginBottom: '8px' }}><h2 style={{ fontSize: '24px' }}>{staff ? 'Support &amp; grievance desk' : 'Help &amp; support'}</h2></div>
+      <AskConcierge />
+      {staff ? (
+        <>
+          <div className="statgrid"><div className="stat"><span className="stat-fig">{tickets.filter((t) => t.status === 'Open').length}</span><span className="stat-lab">Open</span></div><div className="stat"><span className="stat-fig">{tickets.filter((t) => t.status === 'In progress').length}</span><span className="stat-lab">In progress</span></div><div className="stat"><span className="stat-fig">{tickets.filter((t) => t.status === 'Escalated').length}</span><span className="stat-lab">Escalated</span></div><div className="stat"><span className="stat-fig">{tickets.filter((t) => t.status === 'Resolved').length}</span><span className="stat-lab">Resolved</span></div></div>
+          <h4 className="wallet-h">Open tickets</h4>
+          {open.length ? rows(open) : <p className="muted-line">No open tickets.</p>}
+        </>
+      ) : (
+        <>
+          <div className="support-cta"><span>Can\u2019t find an answer? Raise a ticket and the Directorate will respond.</span><button className="btn btn-gold btn-sm" onClick={() => setMode('raise')}>Raise a ticket</button></div>
+          <h4 className="wallet-h">Frequently asked</h4>
+          <Accordion items={FAQ} />
+          <h4 className="wallet-h">My tickets</h4>
+          {mine.length ? rows(mine) : <p className="muted-line">You have no tickets yet.</p>}
+        </>
+      )}
+    </div>
+  )
+}
 const WORKSPACES = { society: SocietyWorkspace, member: MemberWorkspace, officer: OfficerWorkspace, auditor: AuditorWorkspace, sterling: SterlingWorkspace, boi: BoiWorkspace, assetmatrix: AssetMatrixWorkspace, accelerator: AcceleratorWorkspace, leadership: LeadershipOverview }
-function Dashboard({ session, onSignOut }) {
+function SideIcon({ name }) {
+  const p = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round' }
+  const paths = {
+    workspace: <><rect {...p} x="3" y="3" width="7" height="7" rx="1.5" /><rect {...p} x="14" y="3" width="7" height="7" rx="1.5" /><rect {...p} x="3" y="14" width="7" height="7" rx="1.5" /><rect {...p} x="14" y="14" width="7" height="7" rx="1.5" /></>,
+    help: <><circle {...p} cx="12" cy="12" r="9" /><path {...p} d="M9.5 9.2a2.5 2.5 0 1 1 3 2.4c-.8.3-1.5 1-1.5 2M12 17h.01" /></>,
+    privacy: <path {...p} d="M12 3l7 3v5c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6z" />,
+  }
+  return <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">{paths[name]}</svg>
+}
+function Sidebar({ role, profile, nav, setNav, onSignOut, onHome, canPrivacy }) {
+  const items = [['workspace', 'Workspace'], ['help', 'Help & support']]
+  if (canPrivacy) items.push(['privacy', 'Privacy & data'])
+  return (
+    <aside className="side">
+      <button className="side-brand" onClick={onHome}><span className="brand-mark" aria-hidden="true">&#9670;</span><span className="side-brand-name">MCCTI <em>CoopEco</em></span></button>
+      <nav className="side-nav" aria-label="Dashboard">{items.map(([id, label]) => (<button key={id} className={cx('side-item', nav === id && 'on')} onClick={() => setNav(id)}><SideIcon name={id} /><span>{label}</span></button>))}</nav>
+      <div className="side-foot">
+        <div className="side-user"><Avatar name={profile.name} photo={profile.photo} size={34} /><div className="side-user-text"><span className="side-name">{profile.name}</span><span className="side-role">{roleTitle(role)}</span></div></div>
+        <button className="side-signout" onClick={onSignOut}>Sign out</button>
+      </div>
+    </aside>
+  )
+}
+function Dashboard({ session, onSignOut, onHome }) {
   const p = session.profile
   const [viewAs, setViewAs] = useState(null)
+  const [nav, setNav] = useState('workspace')
   const eff = viewAs || { role: p.role, name: p.name, email: session.email, office: p.office, title: p.title }
   const ctx = { email: eff.email, uid: session.id, role: eff.role, name: eff.name, focusId: eff.focusId }
   const Workspace = WORKSPACES[eff.role] || CapabilityPreview
-  return (
-    <main className="dash"><div className="dash-inner">
-      {viewAs && <div className="viewas-banner"><span>Viewing as <strong>{eff.name}</strong> &middot; {roleTitle(eff.role)}</span><button className="link-inline" onClick={() => setViewAs(null)}>Exit view</button></div>}
-      <div className="dash-hero">
-        <Avatar name={eff.name} photo={p.photo} size={64} />
-        <div className="dash-hero-text"><p className="eyebrow"><span className="eb-dot" />{viewAs ? 'Impersonation view' : greeting()}</p><h1 className="dash-name">{eff.name}</h1><p className="dash-meta">{eff.title} &middot; {eff.office}</p></div>
-        <span className="dash-rolebadge">{roleTitle(eff.role)}</span>
-      </div>
-      {eff.role === 'leadership' && !viewAs
+  const canPrivacy = p.role === 'society' || p.role === 'member'
+  const content = nav === 'help'
+    ? <SupportConcierge ctx={ctx} />
+    : (nav === 'privacy' && canPrivacy)
+      ? <DataControls ctx={ctx} onDeleted={onSignOut} />
+      : (eff.role === 'leadership' && !viewAs)
         ? <LeadershipOverview ctx={ctx} onViewAs={setViewAs} />
-        : <Workspace ctx={ctx} />}
-      {!viewAs && (p.role === 'society' || p.role === 'member') && <div style={{ marginTop: '24px' }}><DataControls ctx={ctx} onDeleted={onSignOut} /></div>}
-    </div></main>
+        : <Workspace ctx={ctx} />
+  return (
+    <div className="shell">
+      <Sidebar role={p.role} profile={p} nav={nav} setNav={setNav} onSignOut={onSignOut} onHome={onHome} canPrivacy={canPrivacy} />
+      <main className="shell-main"><div className="dash-inner">
+        {viewAs && <div className="viewas-banner"><span>Viewing as <strong>{eff.name}</strong> &middot; {roleTitle(eff.role)}</span><button className="link-inline" onClick={() => setViewAs(null)}>Exit view</button></div>}
+        <div className="dash-hero">
+          <Avatar name={eff.name} photo={p.photo} size={64} />
+          <div className="dash-hero-text"><p className="eyebrow"><span className="eb-dot" />{viewAs ? 'Impersonation view' : greeting()}</p><h1 className="dash-name">{eff.name}</h1><p className="dash-meta">{eff.title} &middot; {eff.office}</p></div>
+          <span className="dash-rolebadge">{roleTitle(eff.role)}</span>
+        </div>
+        {content}
+      </div></main>
+    </div>
   )
 }
 
@@ -1507,29 +1692,34 @@ export default function App() {
   const onAuthed = (res) => { setSession(res); setView('dashboard') }
   const doSignOut = async () => { await signOutNow(); setSession(null); setView('landing') }
   const goHome = () => setView('landing')
+  const inApp = view === 'dashboard' && session
   return (
-    <div className="page">
+    <div className={cx('page', inApp && 'is-app')}>
       <style>{CSS}</style>
       <div className="letterhead">
         <div className="lh-left"><img className="lh-seal" src="/lagos-seal.png" alt="Lagos State coat of arms" /><div className="lh-text"><span className="lh-gov">Lagos State Government</span><span className="lh-min">Ministry of Commerce, Cooperatives, Trade &amp; Investment</span></div></div>
         <img className="lh-mccti" src="/mccti-logo.png" alt="MCCTI" />
       </div>
-      <header className="nav">
-        <button className="brand" onClick={goHome}><span className="brand-mark" aria-hidden="true">&#9670;</span><span className="brand-name">MCCTI <em>CoopEco</em></span></button>
-        <nav className="nav-links" aria-label="Primary">{view === 'landing' ? (<><a href="#modules">Modules</a><a href="#leadership">Leadership</a><a href="#about">About</a><a href="#arc">Platform</a><a href="#intelligence">Roles</a></>) : null}</nav>
-        {ready && session ? (
-          <div className="account"><button className="acct-btn" onClick={() => setView('dashboard')}><Avatar name={session.profile.name} photo={session.profile.photo} size={30} /><span className="acct-name">{session.profile.name.split(' ')[0]}</span></button><button className="signout" onClick={doSignOut}>Sign out</button></div>
-        ) : (<button className="btn btn-gold nav-cta" onClick={enter}>Enter platform</button>)}
-      </header>
+      {!inApp && (
+        <header className="nav">
+          <button className="brand" onClick={goHome}><span className="brand-mark" aria-hidden="true">&#9670;</span><span className="brand-name">MCCTI <em>CoopEco</em></span></button>
+          <nav className="nav-links" aria-label="Primary">{view === 'landing' ? (<><a href="#modules">Modules</a><a href="#pricing">Pricing</a><a href="#leadership">Leadership</a><a href="#about">About</a><a href="#arc">Platform</a></>) : null}</nav>
+          {ready && session ? (
+            <div className="account"><button className="acct-btn" onClick={() => setView('dashboard')}><Avatar name={session.profile.name} photo={session.profile.photo} size={30} /><span className="acct-name">{session.profile.name.split(' ')[0]}</span></button><button className="signout" onClick={doSignOut}>Sign out</button></div>
+          ) : (<button className="btn btn-gold nav-cta" onClick={enter}>Enter platform</button>)}
+        </header>
+      )}
       {view === 'landing' && <Landing area={area} setArea={setArea} onEnter={enter} />}
       {view === 'role' && <RolePage onPick={pickRole} onBack={goHome} />}
       {view === 'auth' && <AuthPage role={chosenRole} onDone={onAuthed} onBack={() => setView('role')} onPrivacy={() => setView('privacy')} />}
       {view === 'privacy' && <PrivacyNotice onBack={() => setView(session ? 'dashboard' : 'landing')} />}
-      {view === 'dashboard' && session && <Dashboard session={session} onSignOut={doSignOut} />}
-      <footer className="foot">
-        <div className="foot-top"><div className="foot-lockup"><img src="/lagos-seal.png" alt="Lagos State" /><img className="foot-mccti" src="/mccti-logo.png" alt="MCCTI" /><div className="foot-lockup-text"><span className="lh-gov">Lagos State Government</span><span className="lh-min">Ministry of Commerce, Cooperatives, Trade &amp; Investment</span></div></div>{!session && <button className="btn btn-gold" onClick={enter}>Enter platform</button>}</div>
-        <div className="foot-grid"><p>A Ministry-owned digital platform for the cooperative economy of Lagos State.</p><p className="foot-conf">&copy; Ministry of Commerce, Cooperatives, Trade &amp; Investment, Lagos State Government. <button className="link-inline" onClick={() => setView('privacy')}>Privacy notice</button></p></div>
-      </footer>
+      {inApp && <Dashboard session={session} onSignOut={doSignOut} onHome={goHome} />}
+      {!inApp && (
+        <footer className="foot">
+          <div className="foot-top"><div className="foot-lockup"><img src="/lagos-seal.png" alt="Lagos State" /><img className="foot-mccti" src="/mccti-logo.png" alt="MCCTI" /><div className="foot-lockup-text"><span className="lh-gov">Lagos State Government</span><span className="lh-min">Ministry of Commerce, Cooperatives, Trade &amp; Investment</span></div></div>{!session && <button className="btn btn-gold" onClick={enter}>Enter platform</button>}</div>
+          <div className="foot-grid"><p>A Ministry-owned digital platform for the cooperative economy of Lagos State.</p><p className="foot-conf">&copy; Ministry of Commerce, Cooperatives, Trade &amp; Investment, Lagos State Government. <button className="link-inline" onClick={() => setView('privacy')}>Privacy notice</button></p></div>
+        </footer>
+      )}
       <ConsentBanner onOpenPrivacy={() => setView('privacy')} />
     </div>
   )
@@ -1563,6 +1753,16 @@ html{scroll-behavior:smooth}section[id]{scroll-margin-top:84px}
 @media(prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}html{scroll-behavior:auto}}
 /* leadership */
 section.leaders{max-width:1200px;margin:0 auto;padding:64px 40px}
+section.pricing{max-width:1200px;margin:0 auto;padding:64px 40px}
+.price-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:36px}
+.price-card{background:var(--ink-2);border:1px solid var(--line-soft);border-radius:10px;padding:22px;display:flex;flex-direction:column;gap:8px;transition:transform .25s cubic-bezier(.2,.7,.2,1),box-shadow .25s ease,border-color .25s ease}
+.price-card:hover{transform:translateY(-4px);box-shadow:0 20px 40px -28px rgba(20,50,35,.4);border-color:var(--line)}
+.price-top{display:flex;align-items:baseline;gap:8px}
+.price-amt{font-family:var(--serif);font-size:26px;font-weight:600;color:var(--green)}
+.price-unit{font-family:var(--mono);font-size:11px;color:var(--sage-dim)}
+.price-card h3{font-size:16px;line-height:1.25;margin-top:4px}
+.price-who{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--gold)}
+.price-card>p:last-child{font-size:13px;line-height:1.55;color:var(--sage)}
 .leader-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:18px}
 .leader-grid.two{grid-template-columns:repeat(2,1fr);max-width:780px;margin-left:auto;margin-right:auto}
 .leader-group-lab{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-top:34px}
@@ -1669,6 +1869,25 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .auth-submit{margin-top:4px;width:100%}.auth-toggle{font-size:13px;color:var(--sage-dim);text-align:center}
 .auth-toggle button{background:none;border:none;color:var(--gold-soft);cursor:pointer;font-size:13px;font-weight:600;padding:0}.auth-toggle button:hover{text-decoration:underline}
 .dash{flex:1;padding:52px 40px 90px}.dash-inner{max-width:1080px;margin:0 auto;animation:rise .5s ease both}
+.shell{flex:1;display:flex;width:100%;align-items:stretch}
+.side{width:250px;flex-shrink:0;background:var(--ink-2);border-right:1px solid var(--line-soft);padding:22px 14px;display:flex;flex-direction:column;gap:22px;position:sticky;top:0;height:100vh;overflow-y:auto}
+.side-brand{display:flex;align-items:center;gap:10px;background:none;border:none;cursor:pointer;padding:6px 8px}
+.side-brand-name{font-family:var(--serif);color:var(--cream);font-size:18px;font-weight:600}.side-brand-name em{color:var(--gold-soft);font-style:italic;font-weight:500}
+.side-nav{display:flex;flex-direction:column;gap:4px}
+.side-item{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:8px;border:none;background:none;cursor:pointer;color:var(--sage);font-family:var(--sans);font-size:14px;font-weight:600;text-align:left;transition:background .18s ease,color .18s ease}
+.side-item:hover{background:rgba(20,50,35,.05);color:var(--cream)}
+.side-item.on{background:rgba(28,138,79,.1);color:var(--green)}
+.side-item svg{flex-shrink:0}
+.side-foot{margin-top:auto;display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--line-soft);padding-top:16px}
+.side-user{display:flex;align-items:center;gap:10px;min-width:0}
+.side-user-text{display:flex;flex-direction:column;min-width:0}
+.side-name{font-size:13.5px;font-weight:600;color:var(--cream);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.side-role{font-family:var(--mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--sage-dim)}
+.side-signout{background:none;border:1px solid var(--line);border-radius:6px;padding:9px 12px;color:var(--sage);font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:border-color .18s ease,color .18s ease}
+.side-signout:hover{border-color:var(--err);color:var(--err)}
+.shell-main{flex:1;min-width:0;padding:44px 40px 80px}
+.shell-main .dash-inner{margin:0;max-width:1120px}
+@media(max-width:860px){.shell{flex-direction:column}.side{width:100%;height:auto;position:sticky;top:0;z-index:30;flex-direction:row;align-items:center;gap:8px;padding:10px 14px;border-right:none;border-bottom:1px solid var(--line-soft)}.side-brand{display:none}.side-nav{flex-direction:row;flex:1;gap:4px;overflow-x:auto}.side-item{white-space:nowrap;padding:9px 12px}.side-foot{margin:0;flex-direction:row;border-top:none;padding-top:0;gap:8px}.side-user{display:none}.shell-main{padding:26px 18px 70px}}
 .dash-hero{display:flex;align-items:center;gap:20px;padding-bottom:30px;margin-bottom:30px;border-bottom:1px solid var(--line-soft)}
 .dash-hero-text{flex:1;min-width:0}.dash-hero-text .eyebrow{margin-bottom:8px}.dash-name{font-size:clamp(26px,3.4vw,38px);line-height:1.1}.dash-meta{font-size:14px;color:var(--sage-dim);margin-top:6px}
 .dash-rolebadge{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);border:1px solid var(--gold);border-radius:3px;padding:8px 14px;white-space:nowrap}
@@ -1755,6 +1974,20 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .txn-at{font-family:var(--mono);font-size:11px;color:var(--sage-dim);white-space:nowrap}
 .esusu-next{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--ink);border:1px solid var(--line-soft);border-radius:8px;padding:14px 16px}
 .esusu-next>span{font-size:13px;color:var(--sage-dim)}.esusu-next strong{color:var(--cream);font-family:var(--serif);font-size:16px;margin-right:auto}
+.dash-hero-right{display:flex;align-items:center;gap:14px;margin-left:auto}
+.help-btn{background:var(--ink-2);border:1px solid var(--line);border-radius:6px;padding:9px 15px;font-family:var(--sans);font-size:13px;font-weight:600;color:var(--green);cursor:pointer;transition:border-color .2s ease,background .2s ease}
+.help-btn:hover,.help-btn.on{border-color:var(--green);background:rgba(28,138,79,.06)}
+.concierge{background:var(--ink-2);border:1px solid var(--line-soft);border-radius:10px;padding:20px}
+.concierge-row{display:flex;gap:10px;flex-wrap:wrap}
+.concierge-row input{flex:1;min-width:240px;background:var(--ink);border:1px solid var(--line);border-radius:6px;padding:12px 14px;color:var(--cream);font-size:14px}
+.concierge-row input:focus{outline:none;border-color:var(--green)}
+.concierge-ans{margin-top:14px;padding:14px 16px;background:rgba(28,138,79,.06);border:1px solid var(--line-soft);border-radius:8px;font-size:14px;line-height:1.6;color:var(--sage)}
+.support-cta{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:var(--ink-2);border:1px solid var(--line-soft);border-radius:8px;padding:16px 18px;font-size:14px;color:var(--sage)}
+.thread{display:flex;flex-direction:column;gap:12px;margin:20px 0}
+.msg{background:var(--ink-2);border:1px solid var(--line-soft);border-radius:10px;padding:14px 16px;max-width:80%}
+.msg.staff{align-self:flex-end;background:rgba(28,138,79,.06);border-color:rgba(28,138,79,.2)}
+.msg-head{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}.msg-head strong{font-size:13.5px;color:var(--cream)}.msg-head span{font-family:var(--mono);font-size:10px;color:var(--sage-dim)}
+.msg p{font-size:14px;line-height:1.6;color:var(--sage)}
 .src-badge{font-family:var(--mono);font-size:9px;letter-spacing:.08em;padding:2px 6px;border-radius:2px;margin-left:8px;vertical-align:middle;text-transform:uppercase}
 .src-sekat{background:rgba(90,140,200,.16);color:#2E5C88}.src-mccti{background:rgba(198,161,91,.14);color:var(--gold-soft)}
 .ro-note{background:rgba(90,140,200,.08);border:1px solid rgba(90,140,200,.28);color:#2E5C88;border-radius:6px;padding:16px 18px;font-size:13px;line-height:1.55;margin-bottom:22px}
@@ -1812,7 +2045,7 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .switcher-lab{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--sage-dim)}
 .switcher-sel{flex:1;min-width:240px;background:var(--ink);border:1px solid var(--line);border-radius:5px;padding:11px 12px;color:var(--cream);font-size:14px;font-family:var(--sans);cursor:pointer}
 .switcher-sel:focus{outline:none;border-color:var(--green)}
-.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}
 .kpi{background:var(--ink-2);border:1px solid var(--line-soft);border-radius:8px;padding:20px}
 .kpi-fig{display:block;font-family:var(--serif);color:var(--cream);font-size:26px;font-weight:600;line-height:1.1}
 .kpi-lab{display:block;margin-top:6px;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--sage-dim)}
@@ -1837,6 +2070,6 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .miniarea{width:100%;height:90px;display:block}
 .trend-x{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--sage-dim);margin-top:2px}@keyframes draw{to{transform:scaleX(1)}}@keyframes fadeIn{from{opacity:0}to{opacity:1}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 @media(max-width:960px){.hero{grid-template-columns:1fr;padding-top:52px}.hero-watermark{display:none}.mod-grid{grid-template-columns:1fr 1fr}.persona-grid{grid-template-columns:1fr 1fr}.arc-steps{grid-template-columns:1fr}.arc-arrow{transform:rotate(90deg);justify-content:center;padding:2px 0}.foot-grid{grid-template-columns:1fr}.role-page-grid{grid-template-columns:1fr 1fr}.dash-grid{grid-template-columns:1fr}.statgrid{grid-template-columns:1fr 1fr}.viewas-cols{grid-template-columns:1fr}.kpi-row{grid-template-columns:1fr 1fr}.chart-grid{grid-template-columns:1fr}.chart-card.wide{grid-column:span 1}.bar-row{grid-template-columns:96px 1fr auto}}
-@media(max-width:680px){.letterhead{padding:9px 18px;gap:12px}.lh-min{display:none}.lh-seal{height:34px}.lh-mccti{height:32px}.nav{padding:13px 18px}.nav-links{display:none}.hero{padding:40px 18px 30px}section.lens,section.modules,section.arc,section.personas,section.quote,section.leaders,section.about{padding:56px 18px}.band{padding:22px 18px;gap:18px 26px}.mod-grid,.persona-grid,.leader-grid{grid-template-columns:1fr}.lens-figs{gap:26px}.flow{padding:40px 18px 70px}.role-page-grid{grid-template-columns:1fr}.dash{padding:36px 18px 70px}.dash-hero{flex-wrap:wrap}.foot-top,.foot-grid{padding-left:18px;padding-right:18px}.acct-name{display:none}.form-grid{grid-template-columns:1fr}.detail-grid{grid-template-columns:1fr}.consent{padding:14px 18px}}
+@media(max-width:680px){.letterhead{padding:9px 18px;gap:12px}.lh-min{display:none}.lh-seal{height:34px}.lh-mccti{height:32px}.nav{padding:13px 18px}.nav-links{display:none}.hero{padding:40px 18px 30px}section.lens,section.modules,section.arc,section.personas,section.quote,section.leaders,section.about,section.pricing{padding:56px 18px}.band{padding:22px 18px;gap:18px 26px}.mod-grid,.persona-grid,.leader-grid,.price-grid{grid-template-columns:1fr}.lens-figs{gap:26px}.flow{padding:40px 18px 70px}.role-page-grid{grid-template-columns:1fr}.dash{padding:36px 18px 70px}.dash-hero{flex-wrap:wrap}.foot-top,.foot-grid{padding-left:18px;padding-right:18px}.acct-name{display:none}.form-grid{grid-template-columns:1fr}.detail-grid{grid-template-columns:1fr}.consent{padding:14px 18px}}
 @media(prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}.underline::after{transform:scaleX(1)}}
 `

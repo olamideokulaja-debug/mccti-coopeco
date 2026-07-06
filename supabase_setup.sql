@@ -60,11 +60,11 @@ drop policy if exists "loans write"  on kv;
 drop policy if exists "loans update" on kv;
 
 create policy "loans read"   on kv for select to authenticated
-  using (key like 'loan:%' or key like 'escrow:%' or key like 'wallet:%');
+  using (key like 'loan:%' or key like 'escrow:%' or key like 'wallet:%' or key like 'ticket:%');
 create policy "loans write"  on kv for insert to authenticated
-  with check (key like 'loan:%' or key like 'escrow:%' or key like 'wallet:%');
+  with check (key like 'loan:%' or key like 'escrow:%' or key like 'wallet:%' or key like 'ticket:%');
 create policy "loans update" on kv for update to authenticated
-  using (key like 'loan:%' or key like 'escrow:%' or key like 'wallet:%');
+  using (key like 'loan:%' or key like 'escrow:%' or key like 'wallet:%' or key like 'ticket:%');
 
 -- Done. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel, redeploy,
 -- and the app will use this database instead of demo mode.
