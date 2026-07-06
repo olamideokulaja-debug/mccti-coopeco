@@ -1,4 +1,4 @@
-# MCCTI CoopEco - Deploy Guide (Stages 1 to 5)
+# MCCTI CoopEco - Deploy Guide (Stages 1 to 6)
 
 A real, deployable Vite + React project. You do not need to code. Follow one
 step at a time.
@@ -208,6 +208,16 @@ smooth-scroll to each section. Headline figures count up on scroll, sections fad
 in as they enter view, and cards lift on hover; all motion respects the visitor's
 reduced-motion setting. When you upload to GitHub, include the `public/` folder so
 the portraits ship with the site.
+
+## Stage 6: Digital Wallet & esusu
+Members now have a digital wallet (balance, add funds, and Save to cooperative)
+with a transaction history. Each cooperative has a savings pool with a rotating
+esusu / ajo: members save into the pool from their wallets, and the society (or
+leadership) disburses the pool to each member in turn. Wallet and pool movements
+are demo transactions until Paystack or Flutterwave is connected via
+PAYSTACK_SECRET_KEY or FLUTTERWAVE_SECRET_KEY; the same keys will drive the
+cooperative fee payments. The database policies for wallets are already included
+in `supabase_setup.sql` (the wallet: rows), so no extra SQL step is needed.
 
 ## Environment variables
 See `.env.example`. For local testing copy it to `.env.local` and fill it in.

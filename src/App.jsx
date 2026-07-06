@@ -338,9 +338,13 @@ function Accordion({ items }) {
       </div>))}</div>
   )
 }
-const LEADERS = [
-  { img: '/leader-hc.jpg', name: 'Mrs Folashade Ambrose-Medebem', role: 'Honourable Commissioner', body: 'Leads the Ministry of Commerce, Cooperatives, Trade and Investment, driving cooperative development, MSME growth and investment across Lagos State.' },
-  { img: '/leader-ps.jpg', name: 'Mr Babatunde Onigbanjo', role: 'Permanent Secretary', body: 'Oversees the administration of the Ministry and the delivery of its cooperative, trade and investment mandate across the area offices.' },
+const LEADERS_PRINCIPAL = [
+  { img: '/leader-gov.jpg', initials: 'BS', name: 'Mr Babajide Sanwo-Olu', role: 'Executive Governor', body: 'Governor of Lagos State, championing the cooperative economy and the \u20A610 billion LASMECO financing initiative for MSME growth and inclusion.' },
+  { img: '/leader-deputy.jpg', initials: 'OH', name: 'Dr Obafemi Hamzat', role: 'Deputy Governor', body: 'Deputy Governor of Lagos State, supporting the administration\u2019s economic empowerment and grassroots development agenda.' },
+]
+const LEADERS_MINISTRY = [
+  { img: '/leader-hc.jpg', initials: 'FA', name: 'Mrs Folashade Ambrose-Medebem', role: 'Honourable Commissioner', body: 'Leads the Ministry of Commerce, Cooperatives, Trade and Investment, driving cooperative development, MSME growth and investment across Lagos State.' },
+  { img: '/leader-ps.jpg', initials: 'BO', name: 'Mr Babatunde Onigbanjo', role: 'Permanent Secretary', body: 'Oversees the administration of the Ministry and the delivery of its cooperative, trade and investment mandate across the area offices.' },
   { img: '/leader-dir.jpg', initials: 'AA', name: 'Dr Adeyinka Adeyemi', role: 'Director of Cooperatives', body: 'Heads the Directorate of Cooperative Services, responsible for the registration, supervision and audit of cooperative societies State-wide.' },
 ]
 const ABOUT_ITEMS = [
@@ -350,6 +354,20 @@ const ABOUT_ITEMS = [
   { q: 'QooP analytics', a: 'QooP is the source of member and MSME analytics. Its KYC and enterprise data flows one way into CoopEco to power member profiles and explainable, advisory credit scoring for LASMECO.' },
   { q: 'The platform (CoopEco)', a: 'MCCTI CoopEco unifies the registry, member analytics, LASMECO financing, wallets and governance intelligence into a single Ministry-owned platform, with role-aware workspaces and live oversight for leadership.' },
 ]
+function LeaderPhoto({ l }) {
+  const [err, setErr] = useState(false)
+  return (l.img && !err)
+    ? <img src={l.img} alt={l.name} loading="lazy" onError={() => setErr(true)} />
+    : <span className="leader-mono">{l.initials}</span>
+}
+function LeaderCard({ l, i }) {
+  return (
+    <Reveal className="leader-card" delay={i * 80} tag="article">
+      <div className="leader-photo"><LeaderPhoto l={l} /><span className="leader-ring" aria-hidden="true" /></div>
+      <div className="leader-body"><span className="leader-role">{l.role}</span><h3>{l.name}</h3><p>{l.body}</p></div>
+    </Reveal>
+  )
+}
 function Landing({ area, setArea, onEnter }) {
   const current = AREA_LENS.find((a) => a.id === area) || AREA_LENS[0]
   return (
@@ -396,12 +414,11 @@ function Landing({ area, setArea, onEnter }) {
         <div className="persona-grid">{PERSONAS.map(([t, d]) => (<div className="persona" key={t}><span className="persona-t">{t}</span><span className="persona-d">{d}</span></div>))}</div>
       </section>
       <section className="leaders" id="leadership">
-        <div className="section-head"><p className="eyebrow"><span className="eb-dot" />Leadership</p><h2>Stewards of the cooperative economy</h2><p className="section-sub">The Ministry’s leadership provides the policy direction, oversight and governance behind MCCTI CoopEco.</p></div>
-        <div className="leader-grid">{LEADERS.map((l, i) => (
-          <Reveal className="leader-card" key={l.name} delay={i * 90} tag="article">
-            <div className="leader-photo">{l.img ? <img src={l.img} alt={l.name} loading="lazy" /> : <span className="leader-mono">{l.initials}</span>}<span className="leader-ring" aria-hidden="true" /></div>
-            <div className="leader-body"><span className="leader-role">{l.role}</span><h3>{l.name}</h3><p>{l.body}</p></div>
-          </Reveal>))}</div>
+        <div className="section-head"><p className="eyebrow"><span className="eb-dot" />Leadership</p><h2>Stewards of the cooperative economy</h2><p className="section-sub">The State and Ministry leadership provide the policy direction, oversight and governance behind MCCTI CoopEco.</p></div>
+        <p className="leader-group-lab">Executive leadership</p>
+        <div className="leader-grid two">{LEADERS_PRINCIPAL.map((l, i) => <LeaderCard l={l} i={i} key={l.name} />)}</div>
+        <p className="leader-group-lab">Ministry leadership</p>
+        <div className="leader-grid">{LEADERS_MINISTRY.map((l, i) => <LeaderCard l={l} i={i} key={l.name} />)}</div>
       </section>
       <section className="about" id="about">
         <div className="section-head"><p className="eyebrow"><span className="eb-dot" />About</p><h2>What sits behind the platform</h2><p className="section-sub">The institutions and programmes that MCCTI CoopEco brings together.</p></div>
@@ -850,10 +867,11 @@ function SocietyWorkspace({ ctx }) {
         <div className="society-top"><div><h3>{mine.name}</h3><p className="detail-sub">{mine.trackingId} &middot; {mine.areaOffice} area office &middot; {mine.sector}</p></div><div className="detail-chips"><StatusChip status={mine.status} /><StatusChip status={mine.cap15} kind="cap15" /></div></div>
         <div className="society-figs"><div><span className="lf-lab">Members</span><span className="society-fig">{Number(mine.members || 0).toLocaleString('en-NG')}</span></div><div><span className="lf-lab">Contributions</span><span className="society-fig">{fmtNaira(mine.contributions)}</span></div><div><span className="lf-lab">Custodian</span><span className="society-fig sm">{mine.custodian || '—'}</span></div></div>
         <div className="society-actions">
-          {mine.source === 'SEKAT' ? <span className="returned-flag" style={{ color: '#9DC0E8' }}>Mirrored from SEKAT (read-only). Returns are filed in SEKAT.</span> : <button className="btn btn-gold btn-sm" onClick={() => setMode('returns')}>{mine.returns ? 'Re-file annual returns' : 'File annual returns'}</button>}
+          {mine.source === 'SEKAT' ? <span className="returned-flag" style={{ color: '#2E5C88' }}>Mirrored from SEKAT (read-only). Returns are filed in SEKAT.</span> : <button className="btn btn-gold btn-sm" onClick={() => setMode('returns')}>{mine.returns ? 'Re-file annual returns' : 'File annual returns'}</button>}
           {mine.status === 'Returned' && <span className="returned-flag">Returned for correction. Review the trail and re-file.</span>}
         </div>
       </div>
+      {mine.source !== 'SEKAT' && <div className="returns-box"><h4>Savings &amp; esusu</h4><CoopEsusu coop={mine} ctx={ctx} /></div>}
       <div className="trail-box"><h4>Audit trail</h4><AuditTrail trackingId={mine.trackingId} refreshKey={coops.length} /></div>
     </div>
   )
@@ -1101,6 +1119,7 @@ function MemberWorkspace({ ctx }) {
         <div className="society-actions"><button className="btn btn-gold btn-sm" onClick={() => setMode('apply')}>Apply for LASMECO finance</button></div>
       </div>
       <div className="returns-box"><h4>Your credit score</h4><CreditScoreCard m={mine} /></div>
+      <div className="returns-box"><h4>Wallet &amp; savings</h4><MemberWallet member={mine} /></div>
       <div className="trail-box"><h4>Your LASMECO applications</h4>{myLoans.length ? <LoanTable loans={myLoans} onOpen={setSel} /> : <p className="muted-line">No applications yet. Apply above; there are no upfront fees.</p>}</div>
     </div>
   )
@@ -1370,6 +1389,88 @@ function LasmecoOverview({ ctx }) {
 }
 
 
+/* =============================== STAGE 6 ===============================
+   Digital Wallet & Payments. Member wallets, cooperative savings pools and a
+   rotating esusu / ajo, with transactions. Payments run through a stub that
+   uses Paystack or Flutterwave when their keys are configured.
+   ====================================================================== */
+async function getWallet(id) { return (await kvGet('wallet:' + id)) || { id, balance: 0, txns: [] } }
+async function walletTxn(id, type, amount, note, by) {
+  const w = await getWallet(id); const amt = Number(amount) || 0
+  const credit = ['credit', 'payout', 'topup', 'contribution-in'].includes(type)
+  const bal = Math.max(0, (w.balance || 0) + (credit ? amt : -amt))
+  const txn = { tid: 'T' + Date.now() + Math.floor(Math.random() * 1000), type, amount: amt, note: note || '', by: by || '', at: new Date().toISOString() }
+  const next = { id, balance: bal, txns: [txn, ...(w.txns || [])].slice(0, 60), esusu: w.esusu }
+  await kvSet('wallet:' + id, next); return next
+}
+async function walletTransfer(from, to, amount, note, by) { await walletTxn(from, 'debit', amount, note, by); return walletTxn(to, 'credit', amount, note, by) }
+const mWallet = (memberId) => 'M:' + memberId
+const cWallet = (coopId) => 'C:' + coopId
+
+function TxnList({ txns }) {
+  if (!txns?.length) return <p className="muted-line">No transactions yet.</p>
+  const label = { topup: 'Added funds', credit: 'Received', debit: 'Sent', payout: 'Esusu payout', 'contribution-in': 'Contribution', 'fee': 'Fee paid' }
+  return (
+    <div className="txns">{txns.map((t) => (
+      <div className="txn" key={t.tid}>
+        <span className={cx('txn-dir', ['topup', 'credit', 'payout', 'contribution-in'].includes(t.type) ? 'in' : 'out')}>{['topup', 'credit', 'payout', 'contribution-in'].includes(t.type) ? '+' : '\u2212'}{fmtNaira(t.amount)}</span>
+        <span className="txn-mid"><strong>{label[t.type] || t.type}</strong>{t.note ? ' \u00b7 ' + t.note : ''}</span>
+        <span className="txn-at">{fmtDate(t.at)}</span>
+      </div>))}</div>
+  )
+}
+function MemberWallet({ member }) {
+  const [w, setW] = useState(null), [amt, setAmt] = useState(''), [busy, setBusy] = useState(false), [coops, setCoops] = useState([])
+  const id = mWallet(member.memberId)
+  const reload = useCallback(() => { getWallet(id).then(setW); listCoops().then(setCoops) }, [id])
+  useEffect(() => { reload() }, [reload])
+  if (!w) return <p className="muted-line">Loading wallet\u2026</p>
+  const coop = coops.find((c) => c.name === member.coop)
+  const topup = async () => { const a = Number(amt) || 0; if (a <= 0) return; setBusy(true); await walletTxn(id, 'topup', a, 'Card top-up', member.name); await reload(); setAmt(''); setBusy(false) }
+  const save = async () => { const a = Number(amt) || 0; if (a <= 0) { alert('Enter an amount.'); return } if (a > w.balance) { alert('Insufficient wallet balance. Add funds first.'); return } if (!coop) { alert('Your cooperative is not on the platform yet.'); return } setBusy(true); await walletTransfer(id, cWallet(coop.trackingId), a, 'Savings to ' + coop.name, member.name); await reload(); setAmt(''); setBusy(false) }
+  return (
+    <div className="wallet">
+      <div className="wallet-top"><div><span className="wallet-lab">Wallet balance</span><span className="wallet-bal">{fmtNaira(w.balance)}</span></div><span className="wallet-chip">Digital wallet</span></div>
+      <div className="wallet-actions">
+        <input type="number" value={amt} onChange={(e) => setAmt(e.target.value)} placeholder="Amount (\u20A6)" />
+        <button className="btn btn-gold btn-sm" onClick={topup} disabled={busy}>Add funds</button>
+        <button className="btn btn-outline btn-sm" onClick={save} disabled={busy}>Save to cooperative</button>
+      </div>
+      <p className="panel-note">Top-ups and transfers are demo movements until Paystack or Flutterwave is connected. Savings move into your cooperative\u2019s pool.</p>
+      <h4 className="wallet-h">Recent transactions</h4>
+      <TxnList txns={w.txns} />
+    </div>
+  )
+}
+function CoopEsusu({ coop, ctx }) {
+  const [w, setW] = useState(null), [members, setMembers] = useState([]), [busy, setBusy] = useState(false)
+  const id = cWallet(coop.trackingId)
+  const reload = useCallback(() => { getWallet(id).then(setW); listMembers().then(setMembers) }, [id])
+  useEffect(() => { reload() }, [reload])
+  if (!w) return <p className="muted-line">Loading savings\u2026</p>
+  const roster = members.filter((m) => m.coop === coop.name)
+  const nextIdx = (w.esusu?.next || 0) % Math.max(1, roster.length)
+  const nextMember = roster[nextIdx]
+  const disburse = async () => {
+    if (!roster.length) { alert('No members to pay out to yet.'); return }
+    if (w.balance <= 0) { alert('The savings pool is empty.'); return }
+    setBusy(true)
+    const payout = w.balance
+    await walletTxn(id, 'debit', payout, 'Esusu payout to ' + nextMember.name, ctx.name)
+    await walletTxn(mWallet(nextMember.memberId), 'payout', payout, 'Esusu payout from ' + coop.name, ctx.name)
+    const cur = await getWallet(id); await kvSet('wallet:' + id, { ...cur, esusu: { next: nextIdx + 1 } })
+    await reload(); setBusy(false)
+  }
+  return (
+    <div className="wallet">
+      <div className="wallet-top"><div><span className="wallet-lab">Cooperative savings pool (esusu / ajo)</span><span className="wallet-bal">{fmtNaira(w.balance)}</span></div><span className="wallet-chip">{roster.length} members</span></div>
+      <div className="esusu-next"><span>Next payout goes to</span><strong>{nextMember ? nextMember.name : '\u2014'}</strong>{ctx.role === 'society' || ctx.role === 'leadership' ? <button className="btn btn-gold btn-sm" onClick={disburse} disabled={busy}>{busy ? 'Paying\u2026' : 'Disburse to next member'}</button> : null}</div>
+      <p className="panel-note">Members save into the pool from their wallets. Esusu pays the pool to each member in rotation. Demo movements until payments are connected.</p>
+      <h4 className="wallet-h">Pool activity</h4>
+      <TxnList txns={w.txns} />
+    </div>
+  )
+}
 const WORKSPACES = { society: SocietyWorkspace, member: MemberWorkspace, officer: OfficerWorkspace, auditor: AuditorWorkspace, sterling: SterlingWorkspace, boi: BoiWorkspace, assetmatrix: AssetMatrixWorkspace, accelerator: AcceleratorWorkspace, leadership: LeadershipOverview }
 function Dashboard({ session, onSignOut }) {
   const p = session.profile
@@ -1435,7 +1536,7 @@ export default function App() {
 }
 
 const CSS = `
-:root{--ink:#F5F7F3;--ink-2:#FFFFFF;--green:#1C8A4F;--green-panel:#EAF3EC;--line:rgba(20,50,35,.13);--line-soft:rgba(20,50,35,.07);--gold:#B0842F;--gold-soft:#C29A52;--cream:#17241C;--cream-ink:#17241C;--sage:#48524B;--sage-dim:#78837C;--err:#C0533A;--serif:'Lora',Georgia,'Times New Roman',serif;--sans:'Inter',system-ui,-apple-system,sans-serif;--mono:'IBM Plex Mono',ui-monospace,monospace}
+:root{--ink:#F5F7F3;--ink-2:#FFFFFF;--green:#1C8A4F;--green-panel:#EAF3EC;--line:rgba(20,50,35,.13);--line-soft:rgba(20,50,35,.07);--gold:#8A681E;--gold-soft:#93701F;--cream:#17241C;--cream-ink:#17241C;--sage:#48524B;--sage-dim:#78837C;--err:#C0533A;--serif:'Lora',Georgia,'Times New Roman',serif;--sans:'Inter',system-ui,-apple-system,sans-serif;--mono:'IBM Plex Mono',ui-monospace,monospace}
 *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0}
 .page{background:radial-gradient(1100px 560px at 85% -12%,rgba(28,138,79,.07),transparent 60%),radial-gradient(900px 500px at -5% 15%,rgba(176,132,47,.05),transparent 55%),var(--ink);color:var(--sage);font-family:var(--sans);-webkit-font-smoothing:antialiased;min-height:100vh;overflow-x:hidden;display:flex;flex-direction:column}
 .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);margin:0 0 16px;display:flex;align-items:center;gap:9px}
@@ -1462,7 +1563,9 @@ html{scroll-behavior:smooth}section[id]{scroll-margin-top:84px}
 @media(prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}html{scroll-behavior:auto}}
 /* leadership */
 section.leaders{max-width:1200px;margin:0 auto;padding:64px 40px}
-.leader-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:36px}
+.leader-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:18px}
+.leader-grid.two{grid-template-columns:repeat(2,1fr);max-width:780px;margin-left:auto;margin-right:auto}
+.leader-group-lab{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-top:34px}
 .leader-card{background:var(--ink-2);border:1px solid var(--line-soft);border-radius:12px;overflow:hidden;transition:transform .3s cubic-bezier(.2,.7,.2,1),box-shadow .3s ease,border-color .3s ease}
 .leader-card:hover{transform:translateY(-6px);box-shadow:0 26px 50px -30px rgba(20,50,35,.5);border-color:var(--line)}
 .leader-photo{position:relative;aspect-ratio:1/1;background:linear-gradient(160deg,var(--green-panel),#dfeee2);overflow:hidden}
@@ -1635,9 +1738,26 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .returned-flag{color:var(--err);font-size:13px}
 .fee-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:rgba(198,161,91,.08);border:1px solid var(--line);border-radius:6px;padding:14px 18px;font-size:14px;color:var(--sage)}
 .fee-banner strong{color:var(--cream)}
+.wallet{display:flex;flex-direction:column;gap:16px}
+.wallet-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.wallet-lab{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--sage-dim)}
+.wallet-bal{display:block;font-family:var(--serif);font-size:34px;font-weight:600;color:var(--cream);margin-top:4px}
+.wallet-chip{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--green);background:rgba(28,138,79,.12);padding:4px 8px;border-radius:2px;white-space:nowrap;height:fit-content}
+.wallet-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.wallet-actions input{background:var(--ink);border:1px solid var(--line);border-radius:5px;padding:10px 12px;color:var(--cream);font-size:14px;max-width:170px}
+.wallet-actions input:focus{outline:none;border-color:var(--green)}
+.wallet-h{font-size:13px;margin-top:2px}
+.txns{display:flex;flex-direction:column}
+.txn{display:grid;grid-template-columns:120px 1fr auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line-soft);font-size:13px}
+.txn:last-child{border-bottom:none}
+.txn-dir{font-family:var(--mono);font-weight:600}.txn-dir.in{color:var(--green)}.txn-dir.out{color:var(--err)}
+.txn-mid{color:var(--sage)}.txn-mid strong{color:var(--cream);font-weight:600}
+.txn-at{font-family:var(--mono);font-size:11px;color:var(--sage-dim);white-space:nowrap}
+.esusu-next{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--ink);border:1px solid var(--line-soft);border-radius:8px;padding:14px 16px}
+.esusu-next>span{font-size:13px;color:var(--sage-dim)}.esusu-next strong{color:var(--cream);font-family:var(--serif);font-size:16px;margin-right:auto}
 .src-badge{font-family:var(--mono);font-size:9px;letter-spacing:.08em;padding:2px 6px;border-radius:2px;margin-left:8px;vertical-align:middle;text-transform:uppercase}
-.src-sekat{background:rgba(90,140,200,.16);color:#9DC0E8}.src-mccti{background:rgba(198,161,91,.14);color:var(--gold-soft)}
-.ro-note{background:rgba(90,140,200,.08);border:1px solid rgba(90,140,200,.28);color:#B9D2EC;border-radius:6px;padding:16px 18px;font-size:13px;line-height:1.55;margin-bottom:22px}
+.src-sekat{background:rgba(90,140,200,.16);color:#2E5C88}.src-mccti{background:rgba(198,161,91,.14);color:var(--gold-soft)}
+.ro-note{background:rgba(90,140,200,.08);border:1px solid rgba(90,140,200,.28);color:#2E5C88;border-radius:6px;padding:16px 18px;font-size:13px;line-height:1.55;margin-bottom:22px}
 .sekat{background:var(--ink-2);border:1px solid var(--line-soft);border-radius:8px;padding:28px;display:flex;flex-direction:column;gap:20px;max-width:660px}
 .sekat-flow{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
 .node{flex:1;min-width:150px;background:var(--ink);border:1px solid var(--line-soft);border-radius:6px;padding:18px;display:flex;flex-direction:column;gap:6px;font-family:var(--serif);font-weight:600;font-size:16px;color:var(--cream)}
@@ -1665,7 +1785,7 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .privacy-row h4{font-size:16px;margin-bottom:6px}.privacy-row p{font-size:14px;line-height:1.6;color:var(--sage)}
 .data-controls .dc-actions{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
 .dc-confirm{display:flex;align-items:center;gap:12px;font-size:13px;color:var(--err);flex-wrap:wrap}
-.viewas-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;background:rgba(90,140,200,.1);border:1px solid rgba(90,140,200,.3);color:#C7DBF0;border-radius:6px;padding:12px 18px;margin-bottom:22px;font-size:14px}
+.viewas-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;background:rgba(90,140,200,.1);border:1px solid rgba(90,140,200,.3);color:#2E5C88;border-radius:6px;padding:12px 18px;margin-bottom:22px;font-size:14px}
 .score-card{display:flex;flex-direction:column;gap:20px}
 .score-head{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
 .score-num{display:flex;align-items:baseline;gap:8px}
