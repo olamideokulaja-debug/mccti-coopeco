@@ -40,10 +40,10 @@ const REGISTER = [
 const MODULES = [
   { n: '01', title: 'Cooperative Registry & Governance', lens: 'SEKAT layer', ai: false, body: 'Online registration with a tracking ID, by-laws and trustees, area-office assignment, annual returns and CAP15 supervision, with officer review and a timestamped audit trail on every action.' },
   { n: '02', title: 'Member & MSME Analytics', lens: 'QooP layer', ai: true, body: 'Member onboarding and KYC, enterprise profiling across turnover, employment, sector and cash flow, and an AI credit score that sets a lending threshold and risk band.' },
-  { n: '03', title: 'LASMECO Financing', lens: 'Access to finance', ai: false, body: 'The seven-step journey from intent to disbursement. Loans up to \u20A610,000,000 at 9% per annum, eligibility gated on cooperative membership and platform compliance, human approval at disbursement.' },
+  { n: '03', title: 'LASMECO Financing', lens: 'Access to finance', ai: false, body: 'The seven-step journey from intent to disbursement. Loans up to ₦10,000,000 at 9% per annum, eligibility gated on cooperative membership and platform compliance, human approval at disbursement.' },
   { n: '04', title: 'Digital Wallet & Payments', lens: 'No-cash by design', ai: false, body: 'Member savings and contributions, esusu and ajo cycles digitised, transfers, withdrawals and escrow, settled through Paystack and Flutterwave. Every flow traceable, no cash handling.' },
   { n: '05', title: 'Marketplace & Directory', lens: 'Commerce and search', ai: false, body: 'A searchable cooperative directory with premium listings and a coop-merchant marketplace, opening government-linked commerce to societies across all 57 LGAs and LCDAs.' },
-  { n: '06', title: 'Governance Intelligence', lens: 'For leadership', ai: true, body: 'Real-time dashboards for the Director, Permanent Secretary, Honourable Commissioner and Governor\u2019s office. Cooperative activity, loan performance, MSME health per LGA and fraud alerts.' },
+  { n: '06', title: 'Governance Intelligence', lens: 'For leadership', ai: true, body: 'Real-time dashboards for the Director, Permanent Secretary, Honourable Commissioner and Governor’s office. Cooperative activity, loan performance, MSME health per LGA and fraud alerts.' },
 ]
 const ROLES = [
   { id: 'society', icon: 'society', title: 'Cooperative Society', desc: 'Register, file returns, manage members and contributions.', defaultTitle: 'Society Administrator' },
@@ -106,7 +106,7 @@ const initials = (n) => (n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(
 const deriveName = (email) => ((email || '').split('@')[0] || 'Member').split(/[._-]+/).filter(Boolean).map((s) => s[0].toUpperCase() + s.slice(1)).join(' ')
 function greeting() { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' }
 const roleTitle = (id) => (ROLES.find((r) => r.id === id) || {}).title || id
-const fmtNaira = (n) => '\u20A6' + Number(n || 0).toLocaleString('en-NG')
+const fmtNaira = (n) => '₦' + Number(n || 0).toLocaleString('en-NG')
 const fmtDate = (iso) => { try { return new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) } catch { return iso } }
 function genTrackingId() { const yy = String(new Date().getFullYear()).slice(2); const n = String(Math.floor(Math.random() * 1000000)).padStart(6, '0'); return 'LAG-CS-' + yy + '-' + n }
 const cx = (...a) => a.filter(Boolean).join(' ')
@@ -305,6 +305,51 @@ function LiveRegister({ areaId }) {
 }
 
 /* ----------------------------- landing -------------------------------- */
+/* ---------------------- interactive building blocks ------------------- */
+function useInView(threshold = 0.15) {
+  const ref = useRef(null), [inView, setInView] = useState(false)
+  useEffect(() => {
+    const el = ref.current; if (!el) return
+    const ob = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setInView(true); ob.disconnect() } }, { threshold })
+    ob.observe(el); return () => ob.disconnect()
+  }, [threshold])
+  return [ref, inView]
+}
+function Reveal({ children, className = '', delay = 0, tag: Tag = 'div' }) {
+  const [ref, inView] = useInView()
+  return <Tag ref={ref} className={cx('reveal', inView && 'in', className)} style={delay ? { transitionDelay: delay + 'ms' } : undefined}>{children}</Tag>
+}
+function CountUp({ end, suffix = '', dur = 1500 }) {
+  const [ref, inView] = useInView(0.4), [val, setVal] = useState(0)
+  useEffect(() => {
+    if (!inView) return; let raf; const t0 = performance.now()
+    const tick = (t) => { const p = Math.min(1, (t - t0) / dur); const e = 1 - Math.pow(1 - p, 3); setVal(Math.round(end * e)); if (p < 1) raf = requestAnimationFrame(tick) }
+    raf = requestAnimationFrame(tick); return () => cancelAnimationFrame(raf)
+  }, [inView, end, dur])
+  return <span ref={ref}>{val.toLocaleString('en-NG')}{suffix}</span>
+}
+function Accordion({ items }) {
+  const [open, setOpen] = useState(0)
+  return (
+    <div className="acc">{items.map((it, i) => (
+      <div className={cx('acc-item', open === i && 'open')} key={i}>
+        <button className="acc-head" onClick={() => setOpen(open === i ? -1 : i)} aria-expanded={open === i}><span>{it.q}</span><span className="acc-ic" aria-hidden="true" /></button>
+        <div className="acc-panel"><div className="acc-inner">{it.a}</div></div>
+      </div>))}</div>
+  )
+}
+const LEADERS = [
+  { img: '/leader-hc.jpg', name: 'Mrs Folashade Ambrose-Medebem', role: 'Honourable Commissioner', body: 'Leads the Ministry of Commerce, Cooperatives, Trade and Investment, driving cooperative development, MSME growth and investment across Lagos State.' },
+  { img: '/leader-ps.jpg', name: 'Mr Babatunde Onigbanjo', role: 'Permanent Secretary', body: 'Oversees the administration of the Ministry and the delivery of its cooperative, trade and investment mandate across the area offices.' },
+  { img: '/leader-dir.jpg', initials: 'AA', name: 'Dr Adeyinka Adeyemi', role: 'Director of Cooperatives', body: 'Heads the Directorate of Cooperative Services, responsible for the registration, supervision and audit of cooperative societies State-wide.' },
+]
+const ABOUT_ITEMS = [
+  { q: 'The Ministry (MCCTI)', a: 'The Ministry of Commerce, Cooperatives, Trade and Investment formulates policy that stimulates business growth, cooperative development and investment in Lagos State. Through its Directorate of Cooperative Services it registers, supervises and audits cooperative societies across the State’s area offices.' },
+  { q: 'LASMECO', a: 'The Lagos State Access to Finance for SMEs through Cooperatives programme provides single-digit (9%) loans of up to ₦10 million to cooperative-based MSMEs, without conventional collateral, delivered with the Bank of Industry and Sterling Bank through a layered guarantee structure and sector Accelerators.' },
+  { q: 'SEKAT registry', a: 'SEKAT is the source of the legacy cooperative registry and audit records. In CoopEco, data flows one way from SEKAT into the platform, giving a single consolidated registry that officers and leadership can see.' },
+  { q: 'QooP analytics', a: 'QooP is the source of member and MSME analytics. Its KYC and enterprise data flows one way into CoopEco to power member profiles and explainable, advisory credit scoring for LASMECO.' },
+  { q: 'The platform (CoopEco)', a: 'MCCTI CoopEco unifies the registry, member analytics, LASMECO financing, wallets and governance intelligence into a single Ministry-owned platform, with role-aware workspaces and live oversight for leadership.' },
+]
 function Landing({ area, setArea, onEnter }) {
   const current = AREA_LENS.find((a) => a.id === area) || AREA_LENS[0]
   return (
@@ -321,8 +366,8 @@ function Landing({ area, setArea, onEnter }) {
         <LiveRegister areaId={area} />
       </section>
       <section className="band" aria-label="Headline figures">
-        {[['13,000', 'Registered cooperatives'], ['150,000+', 'MSME members'], ['97%', 'MSMEs currently informal'], ['8', 'Platform revenue streams']].map(([f, l]) => (<div className="band-item" key={l}><span className="band-fig">{f}</span><span className="band-lab">{l}</span></div>))}
-        <div className="band-item"><span className="band-fig">\u20A6655M<span className="band-arrow"> &rarr; </span>\u20A61B+</span><span className="band-lab">Year 1 to Year 3</span></div>
+        {[[13000, '', 'Registered cooperatives'], [150000, '+', 'MSME members'], [97, '%', 'MSMEs currently informal'], [8, '', 'Platform revenue streams']].map(([n, suf, l]) => (<div className="band-item" key={l}><span className="band-fig"><CountUp end={n} suffix={suf} /></span><span className="band-lab">{l}</span></div>))}
+        <div className="band-item"><span className="band-fig">₦655M<span className="band-arrow"> &rarr; </span>₦1B+</span><span className="band-lab">Year 1 to Year 3</span></div>
       </section>
       <section className="lens" id="lens">
         <div className="section-head"><p className="eyebrow">Area office lens</p><h2>See the cooperative economy, office by office</h2><p className="section-sub">Switch between a State-wide view and any of the 21 cooperative area offices. The underserved Ikorodu, Epe, Badagry and Ibeju-Lekki corridors are where formalisation has furthest to travel.</p></div>
@@ -337,18 +382,30 @@ function Landing({ area, setArea, onEnter }) {
         <div className="mod-grid">{MODULES.map((m) => (<article className="mod-card" key={m.n}><div className="mod-top"><span className="mod-n">{m.n}</span><span className="mod-lens">{m.lens}</span></div><h3>{m.title}</h3><p>{m.body}</p>{m.ai && <span className="mod-ai">Summarised by MCCTI CoopEco</span>}</article>))}</div>
       </section>
       <section className="arc" id="arc">
-        <div className="section-head"><p className="eyebrow">From fragmentation to \u20A61 billion</p><h2>How the platform changes the arithmetic</h2></div>
+        <div className="section-head"><p className="eyebrow">From fragmentation to ₦1 billion</p><h2>How the platform changes the arithmetic</h2></div>
         <div className="arc-steps">
           <div className="arc-step"><span className="arc-n">01</span><h4>The problem: fragmentation</h4><p>The registry, the analytics layer and LASMECO operate in isolation. Data is duplicated, revenue is uncollected, fraud goes undetected, and Government cannot see its own economy.</p></div>
           <div className="arc-arrow" aria-hidden="true">&rarr;</div>
           <div className="arc-step"><span className="arc-n">02</span><h4>The solution: one unified platform</h4><p>Registry, KYC, analytics, wallets, disbursement and dashboards in a single Ministry-owned system. KYC at onboarding, timestamped trails, escrow flows, finance as the reward for compliance.</p></div>
           <div className="arc-arrow" aria-hidden="true">&rarr;</div>
-          <div className="arc-step"><span className="arc-n">03</span><h4>The return: self-funding IGR</h4><p>Eight revenue streams generate \u20A6655M in Year 1 and cross \u20A61 billion by Year 3, at zero capital cost to the State, with full ownership retained by the Ministry.</p></div>
+          <div className="arc-step"><span className="arc-n">03</span><h4>The return: self-funding IGR</h4><p>Eight revenue streams generate ₦655M in Year 1 and cross ₦1 billion by Year 3, at zero capital cost to the State, with full ownership retained by the Ministry.</p></div>
         </div>
       </section>
       <section className="personas" id="intelligence">
         <div className="section-head"><p className="eyebrow">Role-aware from the first screen</p><h2>Built for everyone who touches a cooperative</h2></div>
         <div className="persona-grid">{PERSONAS.map(([t, d]) => (<div className="persona" key={t}><span className="persona-t">{t}</span><span className="persona-d">{d}</span></div>))}</div>
+      </section>
+      <section className="leaders" id="leadership">
+        <div className="section-head"><p className="eyebrow"><span className="eb-dot" />Leadership</p><h2>Stewards of the cooperative economy</h2><p className="section-sub">The Ministry’s leadership provides the policy direction, oversight and governance behind MCCTI CoopEco.</p></div>
+        <div className="leader-grid">{LEADERS.map((l, i) => (
+          <Reveal className="leader-card" key={l.name} delay={i * 90} tag="article">
+            <div className="leader-photo">{l.img ? <img src={l.img} alt={l.name} loading="lazy" /> : <span className="leader-mono">{l.initials}</span>}<span className="leader-ring" aria-hidden="true" /></div>
+            <div className="leader-body"><span className="leader-role">{l.role}</span><h3>{l.name}</h3><p>{l.body}</p></div>
+          </Reveal>))}</div>
+      </section>
+      <section className="about" id="about">
+        <div className="section-head"><p className="eyebrow"><span className="eb-dot" />About</p><h2>What sits behind the platform</h2><p className="section-sub">The institutions and programmes that MCCTI CoopEco brings together.</p></div>
+        <Accordion items={ABOUT_ITEMS} />
       </section>
       <section className="quote"><img className="quote-seal" src="/lagos-seal.png" alt="" aria-hidden="true" /><blockquote><p>&ldquo;This engagement marks a fundamental reset of the cooperative digitalisation agenda in Lagos State: one registry, one member record, one governance framework, owned by the Ministry.&rdquo;</p><cite>Directorate of Cooperative Services, MCCTI</cite></blockquote></section>
     </main>
@@ -391,7 +448,7 @@ function AuthPage({ role, onDone, onBack, onPrivacy }) {
         <label className="field"><span>Password</span><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 6 characters" onKeyDown={(e) => e.key === 'Enter' && submit()} /></label>
         {err && <p className="auth-err">{err}</p>}
         {mode === 'create' && <label className="consent-check"><input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} /><span>I consent to the processing of my data for cooperative administration, as described in the <button type="button" className="link-inline" onClick={onPrivacy}>Privacy notice</button>.</span></label>}
-        <button className="btn btn-gold auth-submit" onClick={submit} disabled={busy}>{busy ? 'Please wait\u2026' : (mode === 'create' ? 'Create account' : 'Sign in')}</button>
+        <button className="btn btn-gold auth-submit" onClick={submit} disabled={busy}>{busy ? 'Please wait…' : (mode === 'create' ? 'Create account' : 'Sign in')}</button>
         <p className="auth-toggle">{mode === 'create' ? 'Already have an account?' : 'New to the platform?'}{' '}<button onClick={() => { setErr(''); setMode(mode === 'create' ? 'signin' : 'create') }}>{mode === 'create' ? 'Sign in' : 'Create one'}</button></p>
       </div>
     </div></main>
@@ -432,11 +489,11 @@ function RegistrationForm({ ctx, onDone, onCancel }) {
         <label className="field"><span>Custodian / secretary</span><input value={f.custodian} onChange={set('custodian')} placeholder="Full name" /></label>
         <label className="field"><span>Trustees (comma separated)</span><input value={f.trustees} onChange={set('trustees')} placeholder="Name one, Name two" /></label>
         <label className="field"><span>Registered members</span><input type="number" value={f.members} onChange={set('members')} placeholder="0" /></label>
-        <label className="field"><span>Total contributions (\u20A6)</span><input type="number" value={f.contributions} onChange={set('contributions')} placeholder="0" /></label>
+        <label className="field"><span>Total contributions (₦)</span><input type="number" value={f.contributions} onChange={set('contributions')} placeholder="0" /></label>
         <label className="field span2"><span>By-laws summary</span><textarea value={f.bylaws} onChange={set('bylaws')} placeholder="Objectives, governance structure, meeting cycle, admission and exit rules." rows={4} /></label>
       </div>
       {err && <p className="auth-err">{err}</p>}
-      <div className="panel-actions"><button className="btn btn-gold" onClick={submit} disabled={busy}>{busy ? 'Filing\u2026' : 'File registration'}</button></div>
+      <div className="panel-actions"><button className="btn btn-gold" onClick={submit} disabled={busy}>{busy ? 'Filing…' : 'File registration'}</button></div>
       <p className="panel-note">Compliance: registration is filed under the Lagos CAP15 Cooperative Law. Approval requires officer sign-off. This is not legal advice.</p>
     </div>
   )
@@ -456,15 +513,15 @@ function ReturnsForm({ coop, ctx, onDone, onCancel }) {
       <div className="panel-head"><h3>File annual returns</h3><button className="link-back" onClick={onCancel}>Cancel</button></div>
       <p className="panel-sub">{coop.name} &middot; {coop.trackingId}</p>
       <div className="form-grid">
-        <label className="field"><span>Total income (\u20A6)</span><input type="number" value={f.income} onChange={set('income')} placeholder="0" /></label>
-        <label className="field"><span>Total expenses (\u20A6)</span><input type="number" value={f.expenses} onChange={set('expenses')} placeholder="0" /></label>
-        <label className="field"><span>Balance sheet total (\u20A6)</span><input type="number" value={f.balanceSheet} onChange={set('balanceSheet')} placeholder="0" /></label>
-        <label className="field"><span>Disposal of surplus (\u20A6)</span><input type="number" value={f.disposalOfSurplus} onChange={set('disposalOfSurplus')} placeholder="0" /></label>
+        <label className="field"><span>Total income (₦)</span><input type="number" value={f.income} onChange={set('income')} placeholder="0" /></label>
+        <label className="field"><span>Total expenses (₦)</span><input type="number" value={f.expenses} onChange={set('expenses')} placeholder="0" /></label>
+        <label className="field"><span>Balance sheet total (₦)</span><input type="number" value={f.balanceSheet} onChange={set('balanceSheet')} placeholder="0" /></label>
+        <label className="field"><span>Disposal of surplus (₦)</span><input type="number" value={f.disposalOfSurplus} onChange={set('disposalOfSurplus')} placeholder="0" /></label>
         <div className="field span2 computed"><span>Surplus / (deficit), computed</span><strong className={surplus < 0 ? 'neg' : ''}>{fmtNaira(surplus)}</strong></div>
         <label className="field span2"><span>Additional information</span><textarea value={f.notes} onChange={set('notes')} rows={3} placeholder="Trial balance notes, disclosures, any qualifications." /></label>
       </div>
       {err && <p className="auth-err">{err}</p>}
-      <div className="panel-actions"><button className="btn btn-gold" onClick={submit} disabled={busy}>{busy ? 'Filing\u2026' : 'Submit returns for audit'}</button></div>
+      <div className="panel-actions"><button className="btn btn-gold" onClick={submit} disabled={busy}>{busy ? 'Filing…' : 'Submit returns for audit'}</button></div>
       <p className="panel-note">Annual returns filing fee: {fmtNaira(COOP_FEES.annualReturns)} per year. CAP15 regulatory processing at 2.5% of surplus applies. This is not legal advice.</p>
     </div>
   )
@@ -474,7 +531,7 @@ function ReturnsForm({ coop, ctx, onDone, onCancel }) {
 function AuditTrail({ trackingId, refreshKey }) {
   const [items, setItems] = useState(null)
   useEffect(() => { let live = true; listAudit(trackingId).then((r) => live && setItems(r)); return () => { live = false } }, [trackingId, refreshKey])
-  if (!items) return <p className="muted-line">Loading trail\u2026</p>
+  if (!items) return <p className="muted-line">Loading trail…</p>
   if (!items.length) return <p className="muted-line">No entries yet.</p>
   return (
     <ul className="timeline">
@@ -486,7 +543,8 @@ function AuditTrail({ trackingId, refreshKey }) {
 }
 function CoopDetail({ coop, ctx, onClose, onChanged }) {
   const [note, setNote] = useState(''), [busy, setBusy] = useState(false), [c, setC] = useState(coop), [rk, setRk] = useState(0)
-  const canOfficer = ctx.role === 'officer' || ctx.role === 'leadership'
+  const canExamine = ctx.role === 'officer' || ctx.role === 'leadership'
+  const canDecide = ctx.role === 'leadership'
   const canAudit = ctx.role === 'auditor' || ctx.role === 'officer'
   const act = async (patch, action, needNote) => {
     if (needNote && !note.trim()) { alert('Add a note explaining the decision.'); return }
@@ -496,16 +554,16 @@ function CoopDetail({ coop, ctx, onClose, onChanged }) {
   return (
     <div className="detail">
       <div className="detail-head">
-        <div><h3>{c.name}</h3><p className="detail-sub">{c.trackingId}{c.regNo ? ' \u00b7 Reg. ' + c.regNo : ''} &middot; {c.areaOffice} area office &middot; {c.sector}</p></div>
+        <div><h3>{c.name}</h3><p className="detail-sub">{c.trackingId}{c.regNo ? ' · Reg. ' + c.regNo : ''} &middot; {c.areaOffice} area office &middot; {c.sector}</p></div>
         <button className="link-back" onClick={onClose}>&larr; Back to list</button>
       </div>
       <div className="detail-chips"><StatusChip status={c.status} /><StatusChip status={c.cap15} kind="cap15" /><SourceBadge source={c.source} /></div>
       <div className="detail-grid">
-        <div className="field-ro"><span>Custodian</span><strong>{c.custodian || '\u2014'}</strong></div>
-        <div className="field-ro"><span>Trustees</span><strong>{(c.trustees || []).join(', ') || '\u2014'}</strong></div>
+        <div className="field-ro"><span>Custodian</span><strong>{c.custodian || '—'}</strong></div>
+        <div className="field-ro"><span>Trustees</span><strong>{(c.trustees || []).join(', ') || '—'}</strong></div>
         <div className="field-ro"><span>Members</span><strong>{Number(c.members || 0).toLocaleString('en-NG')}</strong></div>
         <div className="field-ro"><span>Contributions</span><strong>{fmtNaira(c.contributions)}</strong></div>
-        {c.bank && <div className="field-ro span2"><span>Bank information</span><strong>{c.bank.name}{c.bank.accountName ? ' \u00b7 ' + c.bank.accountName : ''}{c.bank.accountNumber ? ' \u00b7 ' + c.bank.accountNumber : ''}</strong></div>}
+        {c.bank && <div className="field-ro span2"><span>Bank information</span><strong>{c.bank.name}{c.bank.accountName ? ' · ' + c.bank.accountName : ''}{c.bank.accountNumber ? ' · ' + c.bank.accountNumber : ''}</strong></div>}
         <div className="field-ro span2"><span>By-laws</span><strong className="normal">{c.bylaws || 'Not supplied'}</strong></div>
       </div>
 
@@ -524,21 +582,22 @@ function CoopDetail({ coop, ctx, onClose, onChanged }) {
           {c.returns.comparativeAnalysis?.length ? (<div className="comp-analysis"><span className="ca-lab">Comparative analysis of operating surplus</span><div className="ca-rows">{c.returns.comparativeAnalysis.map((r) => (<span key={r.year} className="ca-row">{r.year}: <strong>{fmtNaira(r.surplus)}</strong></span>))}</div></div>) : null}
           {c.returns.notes && <p className="returns-notes">{c.returns.notes}</p>}
           <p className="muted-line">Filed by {c.returns.filedBy} on {fmtDate(c.returns.filedAt)}</p>
-          {(c.returns.examinedBy || c.returns.approvedBy) && <p className="muted-line">Examined by {c.returns.examinedBy || '\u2014'} &middot; Approved by {c.returns.approvedBy || '\u2014'}{c.returns.signature ? ' \u00b7 Signature ' + c.returns.signature : ''}</p>}
+          {(c.returns.examinedBy || c.returns.approvedBy) && <p className="muted-line">Examined by {c.returns.examinedBy || '—'} &middot; Approved by {c.returns.approvedBy || '—'}{c.returns.signature ? ' · Signature ' + c.returns.signature : ''}</p>}
         </div>
       )}
 
       {c.source === 'SEKAT' && <div className="ro-note">This society is mirrored from SEKAT (read-only). Registration and audit changes are made in SEKAT and flow into MCCTI on the next sync. Data moves one way, SEKAT into MCCTI.</div>}
 
-      {c.source !== 'SEKAT' && (canOfficer || canAudit) && c.status !== 'Approved' && (
+      {c.source !== 'SEKAT' && (canExamine || canDecide || canAudit) && c.status !== 'Approved' && (
         <div className="action-box">
-          <label className="field"><span>Officer note (required for returns and sign-off)</span><textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Findings, conditions, or reason for the decision." /></label>
+          <label className="field"><span>Decision note (required to approve, reject or sign off)</span><textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Findings from the document review, conditions, or the reason for the decision." /></label>
           <div className="action-row">
-            {canOfficer && c.status === 'Filed' && <button className="btn btn-gold btn-sm" disabled={busy} onClick={() => act({ status: 'Under review' }, 'Begin examination')}>Begin examination</button>}
-            {canOfficer && c.status === 'Under review' && <button className="btn btn-gold btn-sm" disabled={busy} onClick={() => act({ status: 'Approved' }, 'Approved and signed off', true)}>Approve &amp; sign off</button>}
-            {canOfficer && (c.status === 'Under review' || c.status === 'Filed') && <button className="btn btn-outline btn-sm" disabled={busy} onClick={() => act({ status: 'Returned' }, 'Returned for correction', true)}>Return for correction</button>}
+            {canExamine && c.status === 'Filed' && <button className="btn btn-gold btn-sm" disabled={busy} onClick={() => act({ status: 'Under review' }, 'Begin examination')}>Begin examination</button>}
+            {canDecide && (c.status === 'Filed' || c.status === 'Under review') && <button className="btn btn-gold btn-sm" disabled={busy} onClick={() => act({ status: 'Approved' }, 'Application approved by leadership', true)}>Approve &amp; sign off</button>}
+            {canDecide && (c.status === 'Filed' || c.status === 'Under review' || c.status === 'Returned') && <button className="btn btn-outline btn-sm" disabled={busy} onClick={() => act({ status: 'Returned' }, 'Application rejected / returned by leadership', true)}>Reject / return</button>}
             {canAudit && c.returns && c.cap15 === 'Under audit' && <button className="btn btn-outline btn-sm" disabled={busy} onClick={examineReturns}>Examine returns &amp; sign off</button>}
           </div>
+          {canExamine && !canDecide && <p className="panel-note">You can examine and record findings. Final approval or rejection of the application is made by MCCTI leadership after reviewing all documents.</p>}
         </div>
       )}
 
@@ -586,7 +645,7 @@ function SekatPanel({ ctx, onSynced }) {
         <div className="status-row"><span>Last sync</span><span className="mono">{info?.lastSync ? fmtDate(info.lastSync) : 'Never'}</span></div>
         <div className="status-row"><span>Societies ingested</span><span className="mono">{info?.count ?? 0}</span></div>
       </div>
-      <button className="btn btn-gold btn-sm" onClick={run} disabled={busy}>{busy ? 'Syncing\u2026' : 'Run SEKAT sync'}</button>
+      <button className="btn btn-gold btn-sm" onClick={run} disabled={busy}>{busy ? 'Syncing…' : 'Run SEKAT sync'}</button>
       <p className="panel-note">Data flows one way, from SEKAT into MCCTI. Synced societies are read-only here. Connect the live SEKAT source by setting SEKAT_API_URL and SEKAT_API_KEY in the environment; until then this ingests a representative sample that mirrors the SEKAT dataset (registration, custodian, trustees, bank and full audit inputs with examination, approval and signature). Compliance: data flow, retention and NDPR handling to be governed by the SEKAT integration agreement. This is not legal advice.</p>
     </div>
   )
@@ -595,7 +654,7 @@ function OfficerWorkspace({ ctx }) {
   const [coops, reload] = useRegistry()
   const [tab, setTab] = useState('queue'), [sel, setSel] = useState(null), [loanSel, setLoanSel] = useState(null)
   const [loans, reloadLoans] = useLoans()
-  if (!coops) return <p className="muted-line">Loading registry\u2026</p>
+  if (!coops) return <p className="muted-line">Loading registry…</p>
   if (sel) return <CoopDetail coop={sel} ctx={ctx} onClose={() => { setSel(null); reload() }} onChanged={reload} />
   if (loanSel) return <LoanDetail loan={loanSel} ctx={ctx} onClose={() => { setLoanSel(null); reloadLoans() }} onChanged={reloadLoans} />
   const queue = coops.filter((c) => ['Filed', 'Under review', 'Returned'].includes(c.status))
@@ -608,7 +667,7 @@ function OfficerWorkspace({ ctx }) {
       {tab === 'queue' && <CoopTable coops={queue} onOpen={setSel} />}
       {tab === 'all' && <CoopTable coops={coops} onOpen={setSel} />}
       {tab === 'members' && <MembersAnalytics />}
-      {tab === 'lasmeco' && (!loans ? <p className="muted-line">Loading\u2026</p> : <><p className="muted-line">Applications awaiting cooperative validation and 25% guarantee. Open one to validate.</p><LoanTable loans={lasmecoQueue.length ? lasmecoQueue : loans} onOpen={setLoanSel} /></>)}
+      {tab === 'lasmeco' && (!loans ? <p className="muted-line">Loading…</p> : <><p className="muted-line">Applications awaiting cooperative validation and 25% guarantee. Open one to validate.</p><LoanTable loans={lasmecoQueue.length ? lasmecoQueue : loans} onOpen={setLoanSel} /></>)}
       {tab === 'offices' && <div className="rtable-wrap"><table className="rtable"><thead><tr><th>Area office</th><th>Societies</th></tr></thead><tbody>{byOffice.map(([o, n]) => (<tr key={o}><td>{o}</td><td className="mono">{n}</td></tr>))}</tbody></table></div>}
       {tab === 'audit' && <OfficerAuditLog />}
       {tab === 'integrations' && <IntegrationsPanel ctx={ctx} onSynced={reload} />}
@@ -618,14 +677,14 @@ function OfficerWorkspace({ ctx }) {
 function OfficerAuditLog() {
   const [items, setItems] = useState(null)
   useEffect(() => { listAudit().then((r) => setItems(r.slice(0, 40))) }, [])
-  if (!items) return <p className="muted-line">Loading\u2026</p>
+  if (!items) return <p className="muted-line">Loading…</p>
   if (!items.length) return <p className="muted-line">No activity yet.</p>
   return <div className="rtable-wrap"><table className="rtable"><thead><tr><th>When</th><th>Action</th><th>By</th><th>Society</th></tr></thead><tbody>{items.map((a, i) => (<tr key={i}><td className="mono">{fmtDate(a.at)}</td><td>{a.action}</td><td>{a.by}</td><td className="mono">{a.trackingId}</td></tr>))}</tbody></table></div>
 }
 function AuditorWorkspace({ ctx }) {
   const [coops, reload] = useRegistry()
   const [sel, setSel] = useState(null)
-  if (!coops) return <p className="muted-line">Loading returns\u2026</p>
+  if (!coops) return <p className="muted-line">Loading returns…</p>
   if (sel) return <CoopDetail coop={sel} ctx={ctx} onClose={() => { setSel(null); reload() }} onChanged={reload} />
   const withReturns = coops.filter((c) => c.returns)
   return (
@@ -673,7 +732,7 @@ function MiniArea({ points, color = CHART_C.green }) {
 function AnalyticsDashboard() {
   const [coops, setCoops] = useState(null), [members, setMembers] = useState([]), [loans, setLoans] = useState([])
   useEffect(() => { listCoops().then(setCoops); listMembers().then(setMembers); listLoans().then(setLoans) }, [])
-  if (!coops) return <p className="muted-line">Loading analytics\u2026</p>
+  if (!coops) return <p className="muted-line">Loading analytics…</p>
   const scored = members.map((m) => scoreMember(m))
   const disbursed = loans.filter((l) => ['Disbursed', 'Repaying', 'Completed'].includes(l.status))
   const disbursedValue = disbursed.reduce((a, l) => a + (l.amountApproved || 0), 0)
@@ -722,16 +781,43 @@ function AnalyticsDashboard() {
     </div>
   )
 }
+function ViewAsBar({ onViewAs }) {
+  const [coops, setCoops] = useState([]), [members, setMembers] = useState([])
+  useEffect(() => { listCoops().then(setCoops); listMembers().then(setMembers) }, [])
+  const titles = { officer: 'Cooperative Officer', auditor: 'Auditor', accelerator: 'Accelerator Programme', sterling: 'Sterling Bank', boi: 'Bank of Industry', assetmatrix: 'Asset Matrix MFB' }
+  const pick = (e) => {
+    const v = e.target.value; e.target.value = ''
+    if (!v) return
+    const [kind, id] = v.split('::')
+    if (kind === 'role') onViewAs({ role: id, name: titles[id], office: 'Workspace preview', title: titles[id] })
+    else if (kind === 'coop') { const c = coops.find((x) => x.trackingId === id); if (c) onViewAs({ role: 'society', name: c.name, email: c.createdBy, focusId: c.trackingId, office: c.areaOffice + ' area office', title: 'Cooperative Society' }) }
+    else if (kind === 'member') { const m = members.find((x) => x.memberId === id); if (m) onViewAs({ role: 'member', name: m.name, focusId: m.memberId, office: m.coop, title: 'Member' }) }
+  }
+  return (
+    <div className="switcher">
+      <span className="switcher-lab">Open a workspace as</span>
+      <select className="switcher-sel" onChange={pick} defaultValue="">
+        <option value="" disabled>Select a role, society or member…</option>
+        <optgroup label="Roles">{Object.entries(titles).map(([id, l]) => <option key={id} value={'role::' + id}>{l}</option>)}</optgroup>
+        <optgroup label="Cooperative societies">{coops.map((c) => <option key={c.trackingId} value={'coop::' + c.trackingId}>{c.name}</option>)}</optgroup>
+        <optgroup label="Members">{members.map((m) => <option key={m.memberId} value={'member::' + m.memberId}>{m.name}</option>)}</optgroup>
+      </select>
+    </div>
+  )
+}
 function LeadershipOverview({ ctx, onViewAs }) {
   const [coops, reload] = useRegistry()
-  const [tab, setTab] = useState('overview')
-  if (!coops) return <p className="muted-line">Loading overview\u2026</p>
-  const byOffice = AREA_OFFICES.map((o) => [o, coops.filter((c) => c.areaOffice === o).length]).filter(([, n]) => n)
+  const [tab, setTab] = useState('overview'), [sel, setSel] = useState(null)
+  if (!coops) return <p className="muted-line">Loading overview…</p>
+  if (sel) return <CoopDetail coop={sel} ctx={ctx} onClose={() => { setSel(null); reload() }} onChanged={reload} />
+  const pending = coops.filter((c) => c.source !== 'SEKAT' && ['Filed', 'Under review', 'Returned'].includes(c.status))
   return (
     <div className="ws">
+      <ViewAsBar onViewAs={onViewAs} />
       <StatCards coops={coops} />
-      <div className="tabs">{[['overview', 'Overview'], ['members', 'Members'], ['lasmeco', 'LASMECO'], ['viewas', 'View as'], ['integrations', 'Integrations']].map(([id, l]) => (<button key={id} className={cx('tab', tab === id && 'on')} onClick={() => setTab(id)}>{l}</button>))}</div>
+      <div className="tabs">{[['overview', 'Overview'], ['applications', 'Applications' + (pending.length ? ' (' + pending.length + ')' : '')], ['members', 'Members'], ['lasmeco', 'LASMECO'], ['viewas', 'View as'], ['integrations', 'Integrations']].map(([id, l]) => (<button key={id} className={cx('tab', tab === id && 'on')} onClick={() => setTab(id)}>{l}</button>))}</div>
       {tab === 'overview' && <AnalyticsDashboard />}
+      {tab === 'applications' && (<><p className="muted-line">Review each application's documents, then approve or reject. Societies mirrored from SEKAT are managed in SEKAT.</p><CoopTable coops={pending.length ? pending : coops} onOpen={setSel} /></>)}
       {tab === 'members' && <MembersAnalytics />}
       {tab === 'lasmeco' && <LasmecoOverview ctx={ctx} />}
       {tab === 'viewas' && <ViewAsSwitcher onViewAs={onViewAs} />}
@@ -743,7 +829,7 @@ function LeadershipOverview({ ctx, onViewAs }) {
 function SocietyWorkspace({ ctx }) {
   const [coops, reload] = useRegistry()
   const [mode, setMode] = useState('view') // view | register | returns
-  if (!coops) return <p className="muted-line">Loading\u2026</p>
+  if (!coops) return <p className="muted-line">Loading…</p>
   const mine = ctx.focusId ? coops.find((c) => c.trackingId === ctx.focusId) : coops.find((c) => c.createdBy === ctx.email)
   if (mode === 'register') return <RegistrationForm ctx={ctx} onCancel={() => setMode('view')} onDone={() => { setMode('view'); reload() }} />
   if (mode === 'returns' && mine) return <ReturnsForm coop={mine} ctx={ctx} onCancel={() => setMode('view')} onDone={() => { setMode('view'); reload() }} />
@@ -762,7 +848,7 @@ function SocietyWorkspace({ ctx }) {
       )}
       <div className="society-card">
         <div className="society-top"><div><h3>{mine.name}</h3><p className="detail-sub">{mine.trackingId} &middot; {mine.areaOffice} area office &middot; {mine.sector}</p></div><div className="detail-chips"><StatusChip status={mine.status} /><StatusChip status={mine.cap15} kind="cap15" /></div></div>
-        <div className="society-figs"><div><span className="lf-lab">Members</span><span className="society-fig">{Number(mine.members || 0).toLocaleString('en-NG')}</span></div><div><span className="lf-lab">Contributions</span><span className="society-fig">{fmtNaira(mine.contributions)}</span></div><div><span className="lf-lab">Custodian</span><span className="society-fig sm">{mine.custodian || '\u2014'}</span></div></div>
+        <div className="society-figs"><div><span className="lf-lab">Members</span><span className="society-fig">{Number(mine.members || 0).toLocaleString('en-NG')}</span></div><div><span className="lf-lab">Contributions</span><span className="society-fig">{fmtNaira(mine.contributions)}</span></div><div><span className="lf-lab">Custodian</span><span className="society-fig sm">{mine.custodian || '—'}</span></div></div>
         <div className="society-actions">
           {mine.source === 'SEKAT' ? <span className="returned-flag" style={{ color: '#9DC0E8' }}>Mirrored from SEKAT (read-only). Returns are filed in SEKAT.</span> : <button className="btn btn-gold btn-sm" onClick={() => setMode('returns')}>{mine.returns ? 'Re-file annual returns' : 'File annual returns'}</button>}
           {mine.status === 'Returned' && <span className="returned-flag">Returned for correction. Review the trail and re-file.</span>}
@@ -874,7 +960,7 @@ function PrivacyNotice({ onBack }) {
     ['Automated decisions', 'Credit scoring is explainable and advisory only. A cooperative officer reviews before any decision that affects access to LASMECO finance. You may request that review.'],
     ['Your rights', 'Access, rectification, erasure, portability, restriction and objection. Use Download my data and Delete my data in your dashboard, or contact the Ministry.'],
     ['Sharing and transfers', 'Data flows one way from SEKAT and QooP into MCCTI. It is not sold. Any transfer is governed by the relevant data-sharing agreement and NDPR.'],
-    ['Retention', 'Institutional cooperative records are retained under the Ministry\u2019s public task. Personal member data is kept only as long as needed and then erased.'],
+    ['Retention', 'Institutional cooperative records are retained under the Ministry’s public task. Personal member data is kept only as long as needed and then erased.'],
   ]
   return (
     <main className="flow"><div className="flow-inner">
@@ -897,10 +983,10 @@ function DataControls({ ctx, onDeleted }) {
       <div className="dc-actions">
         <button className="btn btn-outline btn-sm" onClick={doExport}>Download my data</button>
         {!confirm ? <button className="btn btn-outline btn-sm" onClick={() => setConfirm(true)}>Delete my data</button> : (
-          <span className="dc-confirm">Erase personal data and account?<button className="btn btn-outline btn-sm" onClick={doDelete} disabled={busy}>{busy ? 'Erasing\u2026' : 'Confirm'}</button><button className="link-inline" onClick={() => setConfirm(false)}>Cancel</button></span>
+          <span className="dc-confirm">Erase personal data and account?<button className="btn btn-outline btn-sm" onClick={doDelete} disabled={busy}>{busy ? 'Erasing…' : 'Confirm'}</button><button className="link-inline" onClick={() => setConfirm(false)}>Cancel</button></span>
         )}
       </div>
-      <p className="panel-note">Institutional cooperative records are retained under the Ministry\u2019s public task. Personal member data is erased. This is not legal advice.</p>
+      <p className="panel-note">Institutional cooperative records are retained under the Ministry’s public task. Personal member data is erased. This is not legal advice.</p>
     </section>
   )
 }
@@ -915,7 +1001,7 @@ function QoopPanel({ ctx, onSynced }) {
     <div className="sekat">
       <div className="sekat-flow"><div className="node src qoop">QooP<span>Member &amp; MSME analytics source</span></div><div className="flow-arrow">&rarr;<span>one-way</span></div><div className="node dst">MCCTI CoopEco<span>Unified analytics</span></div></div>
       <div className="sekat-status"><div className="status-row"><span>Connection</span><span className="pill muted">Sample feed{hasSupabase ? '' : ' (demo)'}</span></div><div className="status-row"><span>Last sync</span><span className="mono">{info?.lastSync ? fmtDate(info.lastSync) : 'Never'}</span></div><div className="status-row"><span>Members ingested</span><span className="mono">{info?.count ?? 0}</span></div></div>
-      <button className="btn btn-gold btn-sm" onClick={run} disabled={busy}>{busy ? 'Syncing\u2026' : 'Run QooP sync'}</button>
+      <button className="btn btn-gold btn-sm" onClick={run} disabled={busy}>{busy ? 'Syncing…' : 'Run QooP sync'}</button>
       <p className="panel-note">Data flows one way, from QooP into MCCTI. Synced members are read-only here. Connect the live source with QOOP_API_URL and QOOP_API_KEY; until then this ingests a representative sample mirroring the QooP dataset (KYC, turnover, employees, cash flow, sector). Compliance: KYC and NDPR/GDPR handling governed by the QooP data-sharing agreement. This is not legal advice.</p>
     </div>
   )
@@ -939,12 +1025,12 @@ function CreditScoreCard({ m }) {
 function MemberDetail({ m, onClose }) {
   return (
     <div className="detail">
-      <div className="detail-head"><div><h3>{m.name}</h3><p className="detail-sub">{m.coop} &middot; {m.sector}{m.ref ? ' \u00b7 ' + m.ref : ''}</p></div><button className="link-back" onClick={onClose}>&larr; Back to list</button></div>
+      <div className="detail-head"><div><h3>{m.name}</h3><p className="detail-sub">{m.coop} &middot; {m.sector}{m.ref ? ' · ' + m.ref : ''}</p></div><button className="link-back" onClick={onClose}>&larr; Back to list</button></div>
       <div className="detail-chips"><StatusChip status={m.kyc?.status || 'Unverified'} kind="cap15" /><SourceBadge source={m.source} /></div>
       {m.source === 'QOOP' && <div className="ro-note" style={{ marginTop: '16px' }}>Mirrored from QooP (read-only). KYC and MSME data are maintained in QooP and flow into MCCTI one way.</div>}
       <div className="detail-grid" style={{ marginTop: '20px' }}>
-        <div className="field-ro"><span>Phone</span><strong>{m.phone || '\u2014'}</strong></div>
-        <div className="field-ro"><span>Gender</span><strong>{m.gender || '\u2014'}</strong></div>
+        <div className="field-ro"><span>Phone</span><strong>{m.phone || '—'}</strong></div>
+        <div className="field-ro"><span>Gender</span><strong>{m.gender || '—'}</strong></div>
         <div className="field-ro"><span>Employees</span><strong>{m.msme?.employees ?? 0}</strong></div>
         <div className="field-ro"><span>Years in operation</span><strong>{m.msme?.yearsInOperation ?? 0}</strong></div>
         <div className="field-ro"><span>Monthly turnover</span><strong>{fmtNaira(m.msme?.monthlyTurnover)}</strong></div>
@@ -980,15 +1066,15 @@ function MemberOnboardingForm({ ctx, coops, onDone, onCancel }) {
         <label className="field"><span>Gender</span><select value={f.gender} onChange={set('gender')}>{GENDERS.map((g) => <option key={g}>{g}</option>)}</select></label>
         <label className="field"><span>BVN (KYC)</span><input value={f.bvn} onChange={set('bvn')} placeholder="11 digits" /></label>
         <label className="field"><span>NIN (KYC)</span><input value={f.nin} onChange={set('nin')} placeholder="11 digits" /></label>
-        <label className="field"><span>Monthly turnover (\u20A6)</span><input type="number" value={f.monthlyTurnover} onChange={set('monthlyTurnover')} placeholder="0" /></label>
+        <label className="field"><span>Monthly turnover (₦)</span><input type="number" value={f.monthlyTurnover} onChange={set('monthlyTurnover')} placeholder="0" /></label>
         <label className="field"><span>Employees</span><input type="number" value={f.employees} onChange={set('employees')} placeholder="0" /></label>
-        <label className="field"><span>Monthly cash flow (\u20A6)</span><input type="number" value={f.cashFlow} onChange={set('cashFlow')} placeholder="0" /></label>
+        <label className="field"><span>Monthly cash flow (₦)</span><input type="number" value={f.cashFlow} onChange={set('cashFlow')} placeholder="0" /></label>
         <label className="field"><span>Customer base</span><input type="number" value={f.customerBase} onChange={set('customerBase')} placeholder="0" /></label>
         <label className="field"><span>Years in operation</span><input type="number" value={f.yearsInOperation} onChange={set('yearsInOperation')} placeholder="0" /></label>
       </div>
       <label className="consent-check"><input type="checkbox" checked={f.consent} onChange={set('consent')} /><span>I consent to the processing of my KYC and MSME data for cooperative administration and credit assessment. I understand a score is advisory and reviewed by an officer.</span></label>
       {err && <p className="auth-err">{err}</p>}
-      <div className="panel-actions"><button className="btn btn-gold" onClick={submit} disabled={busy}>{busy ? 'Saving\u2026' : 'Save profile & get score'}</button></div>
+      <div className="panel-actions"><button className="btn btn-gold" onClick={submit} disabled={busy}>{busy ? 'Saving…' : 'Save profile & get score'}</button></div>
       <p className="panel-note">KYC verification will run through a provider such as Smile ID or Dojah. This is not legal advice.</p>
     </div>
   )
@@ -998,7 +1084,7 @@ function MemberWorkspace({ ctx }) {
   const [mode, setMode] = useState('view'), [sel, setSel] = useState(null)
   const reload = useCallback(() => { listMembers().then(setMembers); listCoops().then(setCoops); listLoans().then(setLoans) }, [])
   useEffect(() => { reload() }, [reload])
-  if (!members) return <p className="muted-line">Loading\u2026</p>
+  if (!members) return <p className="muted-line">Loading…</p>
   const mine = ctx.focusId ? members.find((m) => m.memberId === ctx.focusId) : members.find((m) => m.createdBy === ctx.email)
   const myLoans = mine ? loans.filter((l) => l.memberId === mine.memberId || (l.memberName === mine.name)) : []
   if (mode === 'onboard') return <MemberOnboardingForm ctx={ctx} coops={coops} onCancel={() => setMode('view')} onDone={() => { setMode('view'); reload() }} />
@@ -1010,7 +1096,7 @@ function MemberWorkspace({ ctx }) {
   return (
     <div className="ws">
       <div className="society-card">
-        <div className="society-top"><div><h3>{mine.name}</h3><p className="detail-sub">{mine.coop} &middot; {mine.sector}{mine.ref ? ' \u00b7 ' + mine.ref : ''}</p></div><div className="detail-chips"><StatusChip status={mine.kyc?.status || 'Unverified'} kind="cap15" /><SourceBadge source={mine.source} /></div></div>
+        <div className="society-top"><div><h3>{mine.name}</h3><p className="detail-sub">{mine.coop} &middot; {mine.sector}{mine.ref ? ' · ' + mine.ref : ''}</p></div><div className="detail-chips"><StatusChip status={mine.kyc?.status || 'Unverified'} kind="cap15" /><SourceBadge source={mine.source} /></div></div>
         <div className="society-figs"><div><span className="lf-lab">Monthly turnover</span><span className="society-fig">{fmtNaira(mine.msme?.monthlyTurnover)}</span></div><div><span className="lf-lab">Employees</span><span className="society-fig">{mine.msme?.employees ?? 0}</span></div><div><span className="lf-lab">Years</span><span className="society-fig">{mine.msme?.yearsInOperation ?? 0}</span></div></div>
         <div className="society-actions"><button className="btn btn-gold btn-sm" onClick={() => setMode('apply')}>Apply for LASMECO finance</button></div>
       </div>
@@ -1022,7 +1108,7 @@ function MemberWorkspace({ ctx }) {
 function MembersAnalytics() {
   const [members, setMembers] = useState(null), [sel, setSel] = useState(null)
   useEffect(() => { listMembers().then(setMembers) }, [])
-  if (!members) return <p className="muted-line">Loading members\u2026</p>
+  if (!members) return <p className="muted-line">Loading members…</p>
   if (sel) return <MemberDetail m={sel} onClose={() => setSel(null)} />
   if (!members.length) return <p className="muted-line">No members yet. Run a QooP sync from Integrations.</p>
   const scored = members.map((m) => ({ m, s: scoreMember(m) }))
@@ -1048,7 +1134,7 @@ function ViewAsSwitcher({ onViewAs }) {
   const fm = members.filter((m) => !ql || m.name.toLowerCase().includes(ql))
   return (
     <div className="viewas">
-      <input className="viewas-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search societies and members\u2026" />
+      <input className="viewas-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search societies and members…" />
       <div className="viewas-cols">
         <div><h4 className="ws-h">Cooperative societies</h4><div className="viewas-list">{fc.slice(0, 12).map((c) => (<button key={c.trackingId} className="viewas-item" onClick={() => onViewAs({ role: 'society', name: c.name, email: c.createdBy, focusId: c.trackingId, office: c.areaOffice + ' area office', title: 'Cooperative Society' })}><span>{c.name}<SourceBadge source={c.source} /></span><span className="va-go">View as &rarr;</span></button>))}</div></div>
         <div><h4 className="ws-h">Members</h4><div className="viewas-list">{fm.slice(0, 12).map((m) => (<button key={m.memberId} className="viewas-item" onClick={() => onViewAs({ role: 'member', name: m.name, email: m.createdBy, focusId: m.memberId, office: m.coop, title: 'Cooperative Member' })}><span>{m.name}<SourceBadge source={m.source} /></span><span className="va-go">View as &rarr;</span></button>))}</div></div>
@@ -1124,7 +1210,7 @@ function LoanApplyForm({ ctx, member, onDone, onCancel }) {
     setErr('')
     const amt = Number(f.amountRequested) || 0
     if (amt <= 0) { setErr('Enter the amount you need.'); return }
-    if (amt > 10000000) { setErr('The LASMECO cap is \u20A610,000,000.'); return }
+    if (amt > 10000000) { setErr('The LASMECO cap is ₦10,000,000.'); return }
     if (!f.purpose.trim()) { setErr('Describe what the loan is for.'); return }
     setBusy(true)
     try { await createLoan({ memberId: member.memberId, memberName: member.name, coop: member.coop, sector: member.sector, amountRequested: amt, type: f.type, purpose: f.purpose.trim() }, ctx); onDone() }
@@ -1135,13 +1221,13 @@ function LoanApplyForm({ ctx, member, onDone, onCancel }) {
       <div className="panel-head"><h3>Apply for LASMECO finance</h3><button className="link-back" onClick={onCancel}>Cancel</button></div>
       <p className="panel-sub">{member.name} &middot; {member.coop} &middot; {member.sector}</p>
       <div className="form-grid">
-        <label className="field"><span>Amount needed (\u20A6, up to 10,000,000)</span><input type="number" value={f.amountRequested} onChange={set('amountRequested')} placeholder="0" /></label>
+        <label className="field"><span>Amount needed (₦, up to 10,000,000)</span><input type="number" value={f.amountRequested} onChange={set('amountRequested')} placeholder="0" /></label>
         <label className="field"><span>Loan type</span><select value={f.type} onChange={set('type')}>{LOAN_TYPES.map((t) => <option key={t}>{t}</option>)}</select></label>
         <label className="field span2"><span>Purpose</span><textarea value={f.purpose} onChange={set('purpose')} rows={3} placeholder="What the finance is for and the growth it will drive." /></label>
       </div>
       {err && <p className="auth-err">{err}</p>}
-      <div className="panel-actions"><button className="btn btn-gold" onClick={submit} disabled={busy}>{busy ? 'Submitting\u2026' : 'Submit to Accelerator'}</button></div>
-      <p className="panel-note">No upfront fees. An Accelerator prepares you to bankable standard and recommends an amount. 9% fixed, up to 36 months, 6-month moratorium. A \u20A6200,000 Accelerator fee and 1% BOI appraisal fee are deducted only on disbursement. This is not legal advice.</p>
+      <div className="panel-actions"><button className="btn btn-gold" onClick={submit} disabled={busy}>{busy ? 'Submitting…' : 'Submit to Accelerator'}</button></div>
+      <p className="panel-note">No upfront fees. An Accelerator prepares you to bankable standard and recommends an amount. 9% fixed, up to 36 months, 6-month moratorium. A ₦200,000 Accelerator fee and 1% BOI appraisal fee are deducted only on disbursement. This is not legal advice.</p>
     </div>
   )
 }
@@ -1153,7 +1239,7 @@ function LoanDetail({ loan, ctx, onClose, onChanged }) {
     if (needNote && !note.trim()) { alert('Add a note for the record.'); return }
     setBusy(true); const next = await updateLoan(l.loanId, patch, ctx, action, note.trim()); setL(next); setNote(''); setRk((k) => k + 1); setBusy(false); onChanged && onChanged()
   }
-  const recommend = async () => { const a = Number(amt) || 0; if (a <= 0 || a > 10000000) { alert('Enter a recommended amount up to \u20A610,000,000.'); return } await act({ status: 'Shortlisted', amountRecommended: a }, 'Shortlisted; amount recommended', false) }
+  const recommend = async () => { const a = Number(amt) || 0; if (a <= 0 || a > 10000000) { alert('Enter a recommended amount up to ₦10,000,000.'); return } await act({ status: 'Shortlisted', amountRecommended: a }, 'Shortlisted; amount recommended', false) }
   const boiApprove = async () => { const a = Number(amt) || l.amountRecommended || 0; if (a <= 0) { alert('Enter the approved amount.'); return } await act({ status: 'BOI approved', amountApproved: a }, 'Final approval and funding (BOI)', true) }
   const canAP = role === 'accelerator', canOff = role === 'officer' || role === 'leadership', canSterling = role === 'sterling', canBOI = role === 'boi'
   const canDecline = (canAP && ['Applied', 'In training'].includes(l.status)) || (canOff && l.status === 'Shortlisted') || (canSterling && ['Coop validated', 'BOI approved'].includes(l.status)) || (canBOI && l.status === 'Bank assessment')
@@ -1163,8 +1249,8 @@ function LoanDetail({ loan, ctx, onClose, onChanged }) {
       <div className="detail-chips"><StatusChip status={l.status} kind="loan" />{l.apName && <span className="src-badge src-mccti">{l.apName}</span>}</div>
       <div className="detail-grid" style={{ marginTop: '20px' }}>
         <div className="field-ro"><span>Requested</span><strong>{fmtNaira(l.amountRequested)}</strong></div>
-        <div className="field-ro"><span>Recommended</span><strong>{l.amountRecommended ? fmtNaira(l.amountRecommended) : '\u2014'}</strong></div>
-        <div className="field-ro"><span>Approved</span><strong>{l.amountApproved ? fmtNaira(l.amountApproved) : '\u2014'}</strong></div>
+        <div className="field-ro"><span>Recommended</span><strong>{l.amountRecommended ? fmtNaira(l.amountRecommended) : '—'}</strong></div>
+        <div className="field-ro"><span>Approved</span><strong>{l.amountApproved ? fmtNaira(l.amountApproved) : '—'}</strong></div>
         <div className="field-ro span2"><span>Purpose</span><strong className="normal">{l.purpose}</strong></div>
       </div>
 
@@ -1186,7 +1272,7 @@ function LoanDetail({ loan, ctx, onClose, onChanged }) {
 
       <div className="action-box">
         <label className="field"><span>Note (recorded on the audit trail)</span><textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Decision, conditions or findings." /></label>
-        {(canAP && l.status === 'In training') || (canBOI && l.status === 'Bank assessment') ? <label className="field"><span>Amount (\u20A6)</span><input type="number" value={amt} onChange={(e) => setAmt(e.target.value)} placeholder={String(l.amountRecommended || l.amountRequested || '')} /></label> : null}
+        {(canAP && l.status === 'In training') || (canBOI && l.status === 'Bank assessment') ? <label className="field"><span>Amount (₦)</span><input type="number" value={amt} onChange={(e) => setAmt(e.target.value)} placeholder={String(l.amountRecommended || l.amountRequested || '')} /></label> : null}
         <div className="action-row">
           {canAP && l.status === 'Applied' && <button className="btn btn-gold btn-sm" disabled={busy} onClick={() => act({ status: 'In training', apName: ctx.name }, 'Enrolled in capacity building')}>Begin capacity building</button>}
           {canAP && l.status === 'In training' && <button className="btn btn-gold btn-sm" disabled={busy} onClick={recommend}>Shortlist &amp; recommend amount</button>}
@@ -1206,7 +1292,7 @@ function LoanDetail({ loan, ctx, onClose, onChanged }) {
 function useLoans() { const [loans, setLoans] = useState(null); const reload = useCallback(() => listLoans().then(setLoans), []); useEffect(() => { reload() }, [reload]); return [loans, reload] }
 function AcceleratorWorkspace({ ctx }) {
   const [loans, reload] = useLoans(); const [tab, setTab] = useState('queue'), [sel, setSel] = useState(null)
-  if (!loans) return <p className="muted-line">Loading pipeline\u2026</p>
+  if (!loans) return <p className="muted-line">Loading pipeline…</p>
   if (sel) return <LoanDetail loan={sel} ctx={ctx} onClose={() => { setSel(null); reload() }} onChanged={reload} />
   const queue = loans.filter((l) => AP_STATUSES.includes(l.status))
   const by = (s) => loans.filter((l) => l.status === s).length
@@ -1220,7 +1306,7 @@ function AcceleratorWorkspace({ ctx }) {
 }
 function LoanRoleWorkspace({ ctx, statuses, cards }) {
   const [loans, reload] = useLoans(); const [tab, setTab] = useState('queue'), [sel, setSel] = useState(null)
-  if (!loans) return <p className="muted-line">Loading loans\u2026</p>
+  if (!loans) return <p className="muted-line">Loading loans…</p>
   if (sel) return <LoanDetail loan={sel} ctx={ctx} onClose={() => { setSel(null); reload() }} onChanged={reload} />
   const queue = loans.filter((l) => statuses.includes(l.status))
   return (
@@ -1244,7 +1330,7 @@ function AssetMatrixWorkspace({ ctx }) {
   const [coops, setCoops] = useState(null), [loans, setLoans] = useState([]), [last, setLast] = useState(null), [busy, setBusy] = useState(false)
   const reload = useCallback(() => { listCoops().then(setCoops); listLoans().then(setLoans); kvGet('escrow:last').then(setLast) }, [])
   useEffect(() => { reload() }, [reload])
-  if (!coops) return <p className="muted-line">Loading escrow\u2026</p>
+  if (!coops) return <p className="muted-line">Loading escrow…</p>
   const regFees = coops.filter((c) => c.feeStatus === 'Paid').length * COOP_FEES.registration
   const returnsFees = coops.filter((c) => c.returns).length * COOP_FEES.annualReturns
   const disbursedValue = loans.filter((l) => ['Disbursed', 'Repaying', 'Completed'].includes(l.status)).reduce((a, l) => a + (l.amountApproved || 0), 0)
@@ -1260,7 +1346,7 @@ function AssetMatrixWorkspace({ ctx }) {
         <div className="stat"><span className="stat-fig">{fmtNaira(portalFees)}</span><span className="stat-lab">Disbursement portal (2.5%)</span></div>
       </div>
       <div className="dash-grid">
-        <section className="dash-card"><h3>Sharing formula distribution</h3>{SPV_SPLIT.map(([n, p]) => (<div className="status-row" key={n}><span>{n} ({p}%)</span><span className="mono">{fmtNaira(Math.round(accrued * p / 100))}</span></div>))}<div className="panel-actions"><button className="btn btn-gold btn-sm" onClick={distribute} disabled={busy}>{busy ? 'Recording\u2026' : 'Record distribution'}</button></div></section>
+        <section className="dash-card"><h3>Sharing formula distribution</h3>{SPV_SPLIT.map(([n, p]) => (<div className="status-row" key={n}><span>{n} ({p}%)</span><span className="mono">{fmtNaira(Math.round(accrued * p / 100))}</span></div>))}<div className="panel-actions"><button className="btn btn-gold btn-sm" onClick={distribute} disabled={busy}>{busy ? 'Recording…' : 'Record distribution'}</button></div></section>
         <section className="dash-card"><h3>Last distribution</h3>{last ? (<><p className="dash-card-sub">{fmtNaira(last.amount)} on {fmtDate(last.at)} by {last.by}</p>{(last.split || []).map(([n, v]) => (<div className="status-row" key={n}><span>{n}</span><span className="mono">{fmtNaira(v)}</span></div>))}</>) : <p className="muted-line">No distribution recorded yet.</p>}</section>
       </div>
       <p className="dash-foot">Asset Matrix MFB holds the platform revenue escrow. All platform fees accrue here and are distributed on the 50/15/15/10/10 formula. Live bank settlement connects through Paystack or Flutterwave. Not financial advice.</p>
@@ -1269,7 +1355,7 @@ function AssetMatrixWorkspace({ ctx }) {
 }
 function LasmecoOverview({ ctx }) {
   const [loans, reload] = useLoans(); const [sel, setSel] = useState(null)
-  if (!loans) return <p className="muted-line">Loading LASMECO\u2026</p>
+  if (!loans) return <p className="muted-line">Loading LASMECO…</p>
   if (sel) return <LoanDetail loan={sel} ctx={ctx} onClose={() => { setSel(null); reload() }} onChanged={reload} />
   const disbursed = loans.filter((l) => ['Disbursed', 'Repaying', 'Completed'].includes(l.status))
   const disbursedValue = disbursed.reduce((a, l) => a + (l.amountApproved || 0), 0)
@@ -1329,7 +1415,7 @@ export default function App() {
       </div>
       <header className="nav">
         <button className="brand" onClick={goHome}><span className="brand-mark" aria-hidden="true">&#9670;</span><span className="brand-name">MCCTI <em>CoopEco</em></span></button>
-        <nav className="nav-links" aria-label="Primary">{view === 'landing' ? (<><a href="#modules">Modules</a><a href="#arc">The platform</a><a href="#intelligence">Intelligence</a></>) : null}</nav>
+        <nav className="nav-links" aria-label="Primary">{view === 'landing' ? (<><a href="#modules">Modules</a><a href="#leadership">Leadership</a><a href="#about">About</a><a href="#arc">Platform</a><a href="#intelligence">Roles</a></>) : null}</nav>
         {ready && session ? (
           <div className="account"><button className="acct-btn" onClick={() => setView('dashboard')}><Avatar name={session.profile.name} photo={session.profile.photo} size={30} /><span className="acct-name">{session.profile.name.split(' ')[0]}</span></button><button className="signout" onClick={doSignOut}>Sign out</button></div>
         ) : (<button className="btn btn-gold nav-cta" onClick={enter}>Enter platform</button>)}
@@ -1341,7 +1427,7 @@ export default function App() {
       {view === 'dashboard' && session && <Dashboard session={session} onSignOut={doSignOut} />}
       <footer className="foot">
         <div className="foot-top"><div className="foot-lockup"><img src="/lagos-seal.png" alt="Lagos State" /><img className="foot-mccti" src="/mccti-logo.png" alt="MCCTI" /><div className="foot-lockup-text"><span className="lh-gov">Lagos State Government</span><span className="lh-min">Ministry of Commerce, Cooperatives, Trade &amp; Investment</span></div></div>{!session && <button className="btn btn-gold" onClick={enter}>Enter platform</button>}</div>
-        <div className="foot-grid"><p>A Ministry-owned digital platform, operated through a Public-Private Partnership and Special Purpose Vehicle. Revenue split: Lagos State 50%, Asset Matrix MFB 15%, Imade / Catridge 15%, QooP 10%, SEKAT 10%. Subject to final SPV agreement.</p><p className="foot-conf">Confidential &middot; For the Ministry of Commerce, Cooperatives, Trade &amp; Investment, Lagos State Government. Figures on this page are illustrative pending live data. <button className="link-inline" onClick={() => setView('privacy')}>Privacy notice</button></p></div>
+        <div className="foot-grid"><p>A Ministry-owned digital platform for the cooperative economy of Lagos State.</p><p className="foot-conf">&copy; Ministry of Commerce, Cooperatives, Trade &amp; Investment, Lagos State Government. <button className="link-inline" onClick={() => setView('privacy')}>Privacy notice</button></p></div>
       </footer>
       <ConsentBanner onOpenPrivacy={() => setView('privacy')} />
     </div>
@@ -1349,43 +1435,83 @@ export default function App() {
 }
 
 const CSS = `
-:root{--ink:#15171B;--ink-2:#1C1F24;--green:#2FA46A;--green-panel:#21252C;--line:rgba(198,161,91,.20);--line-soft:rgba(233,226,210,.10);--gold:#C6A15B;--gold-soft:#DcC08a;--cream:#F3EEE1;--cream-ink:#182019;--sage:#B7BEC2;--sage-dim:#7C858C;--err:#E08A6A;--serif:'Lora',Georgia,'Times New Roman',serif;--sans:'Inter',system-ui,-apple-system,sans-serif;--mono:'IBM Plex Mono',ui-monospace,monospace}
+:root{--ink:#F5F7F3;--ink-2:#FFFFFF;--green:#1C8A4F;--green-panel:#EAF3EC;--line:rgba(20,50,35,.13);--line-soft:rgba(20,50,35,.07);--gold:#B0842F;--gold-soft:#C29A52;--cream:#17241C;--cream-ink:#17241C;--sage:#48524B;--sage-dim:#78837C;--err:#C0533A;--serif:'Lora',Georgia,'Times New Roman',serif;--sans:'Inter',system-ui,-apple-system,sans-serif;--mono:'IBM Plex Mono',ui-monospace,monospace}
 *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0}
-.page{background:radial-gradient(1200px 600px at 80% -10%,rgba(47,164,106,.10),transparent 60%),radial-gradient(900px 500px at -5% 20%,rgba(198,161,91,.06),transparent 55%),var(--ink);color:var(--sage);font-family:var(--sans);-webkit-font-smoothing:antialiased;min-height:100vh;overflow-x:hidden;display:flex;flex-direction:column}
+.page{background:radial-gradient(1100px 560px at 85% -12%,rgba(28,138,79,.07),transparent 60%),radial-gradient(900px 500px at -5% 15%,rgba(176,132,47,.05),transparent 55%),var(--ink);color:var(--sage);font-family:var(--sans);-webkit-font-smoothing:antialiased;min-height:100vh;overflow-x:hidden;display:flex;flex-direction:column}
 .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);margin:0 0 16px;display:flex;align-items:center;gap:9px}
 .eb-dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block}
 h1,h2,h3,h4{font-family:var(--serif);color:var(--cream);font-weight:500;margin:0}p{margin:0}input,select,textarea{font-family:var(--sans)}
 .btn{font-family:var(--sans);font-size:14px;font-weight:600;border:none;cursor:pointer;padding:13px 24px;border-radius:2px;text-decoration:none;display:inline-block;transition:transform .18s ease,background .18s ease,color .18s ease,border-color .18s ease}
-.btn-gold{background:var(--gold);color:#20180A;box-shadow:0 8px 24px -12px rgba(198,161,91,.6)}
+.btn-gold{background:var(--green);color:#fff;box-shadow:0 10px 26px -14px rgba(28,138,79,.55)}
 .btn-gold:hover{background:var(--gold-soft);transform:translateY(-1px)}.btn-gold:disabled{opacity:.6;cursor:default;transform:none}
 .btn-ghost{background:transparent;color:var(--cream);border:1px solid var(--line)}.btn-ghost:hover{border-color:var(--gold);color:var(--gold-soft)}
 .btn-outline{background:transparent;color:var(--cream);border:1px solid var(--line);box-shadow:none}.btn-outline:hover{border-color:var(--gold);color:var(--gold-soft)}
 .btn-sm{padding:9px 16px;font-size:13px}
-.letterhead{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:11px 40px;background:var(--cream);color:var(--cream-ink);border-bottom:2px solid var(--green)}
+.letterhead{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:11px 40px;background:var(--ink-2);color:var(--cream-ink);border-bottom:2px solid var(--green)}
 .lh-left{display:flex;align-items:center;gap:14px;min-width:0}.lh-seal{height:40px;width:auto}
 .lh-text{display:flex;flex-direction:column;line-height:1.25;min-width:0}
 .lh-gov{font-family:var(--serif);font-weight:600;font-size:14px;color:var(--cream-ink)}
 .lh-min{font-family:var(--mono);font-size:10.5px;letter-spacing:.03em;color:#4a5a4f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lh-mccti{height:38px;width:auto;flex-shrink:0}
-.nav{position:sticky;top:0;z-index:40;display:flex;align-items:center;justify-content:space-between;padding:15px 40px;background:rgba(21,23,27,.86);backdrop-filter:blur(12px);border-bottom:1px solid var(--line-soft)}
+.nav{position:sticky;top:0;z-index:40;display:flex;align-items:center;justify-content:space-between;padding:15px 40px;background:rgba(255,255,255,.86);backdrop-filter:blur(12px);border-bottom:1px solid var(--line-soft)}
 .brand{display:flex;align-items:center;gap:10px;text-decoration:none;background:none;border:none;cursor:pointer;padding:0}
 .brand-mark{color:var(--green);font-size:13px}.brand-name{font-family:var(--serif);color:var(--cream);font-size:19px;letter-spacing:.01em;font-weight:600}.brand-name em{color:var(--gold-soft);font-style:italic;font-weight:500}
-.nav-links{display:flex;gap:32px}.nav-links a{color:var(--sage);text-decoration:none;font-size:14px;font-weight:500}.nav-links a:hover{color:var(--gold-soft)}
+.nav-links{display:flex;gap:32px}.nav-links a{color:var(--sage);text-decoration:none;font-size:14px;font-weight:500;position:relative}.nav-links a::after{content:'';position:absolute;left:0;right:0;bottom:-6px;height:2px;background:var(--green);transform:scaleX(0);transform-origin:left;transition:transform .25s ease}.nav-links a:hover{color:var(--cream)}.nav-links a:hover::after{transform:scaleX(1)}
+html{scroll-behavior:smooth}section[id]{scroll-margin-top:84px}
+.reveal{opacity:0;transform:translateY(20px);transition:opacity .6s cubic-bezier(.2,.7,.2,1),transform .6s cubic-bezier(.2,.7,.2,1)}.reveal.in{opacity:1;transform:none}
+@media(prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}html{scroll-behavior:auto}}
+/* leadership */
+section.leaders{max-width:1200px;margin:0 auto;padding:64px 40px}
+.leader-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:36px}
+.leader-card{background:var(--ink-2);border:1px solid var(--line-soft);border-radius:12px;overflow:hidden;transition:transform .3s cubic-bezier(.2,.7,.2,1),box-shadow .3s ease,border-color .3s ease}
+.leader-card:hover{transform:translateY(-6px);box-shadow:0 26px 50px -30px rgba(20,50,35,.5);border-color:var(--line)}
+.leader-photo{position:relative;aspect-ratio:1/1;background:linear-gradient(160deg,var(--green-panel),#dfeee2);overflow:hidden}
+.leader-photo img{width:100%;height:100%;object-fit:cover;object-position:center top;transition:transform .5s cubic-bezier(.2,.7,.2,1)}
+.leader-card:hover .leader-photo img{transform:scale(1.04)}
+.leader-mono{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:64px;font-weight:600;color:var(--green)}
+.leader-ring{position:absolute;inset:0;box-shadow:inset 0 -70px 60px -40px rgba(20,50,35,.18);pointer-events:none}
+.leader-body{padding:22px 24px 26px}
+.leader-role{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--green)}
+.leader-body h3{font-size:20px;margin:8px 0 10px;line-height:1.2}
+.leader-body p{font-size:13.5px;line-height:1.6;color:var(--sage)}
+/* about accordion */
+section.about{max-width:900px;margin:0 auto;padding:24px 40px 72px}
+.acc{margin-top:32px;display:flex;flex-direction:column;gap:12px}
+.acc-item{background:var(--ink-2);border:1px solid var(--line-soft);border-radius:10px;overflow:hidden;transition:border-color .2s ease}
+.acc-item.open{border-color:var(--green)}
+.acc-head{width:100%;display:flex;align-items:center;justify-content:space-between;gap:16px;background:none;border:none;cursor:pointer;padding:20px 24px;font-family:var(--serif);font-size:18px;font-weight:600;color:var(--cream);text-align:left}
+.acc-ic{position:relative;width:16px;height:16px;flex-shrink:0}
+.acc-ic::before,.acc-ic::after{content:'';position:absolute;background:var(--green);border-radius:2px;transition:transform .3s ease,opacity .3s ease}
+.acc-ic::before{top:7px;left:0;width:16px;height:2px}
+.acc-ic::after{top:0;left:7px;width:2px;height:16px}
+.acc-item.open .acc-ic::after{transform:rotate(90deg);opacity:0}
+.acc-panel{display:grid;grid-template-rows:0fr;transition:grid-template-rows .32s cubic-bezier(.2,.7,.2,1)}
+.acc-item.open .acc-panel{grid-template-rows:1fr}
+.acc-inner{overflow:hidden;color:var(--sage);font-size:14.5px;line-height:1.7;padding:0 24px}
+.acc-item.open .acc-inner{padding:0 24px 22px}
+/* micro-interactions on existing cards */
+.mod-card{transition:background .2s ease,transform .25s cubic-bezier(.2,.7,.2,1),box-shadow .25s ease}
+.mod-card:hover{transform:translateY(-4px);box-shadow:0 20px 40px -28px rgba(20,50,35,.4)}
+.persona{transition:transform .2s ease,border-color .2s ease}.persona:hover{transform:translateY(-3px)}
+.band-fig{transition:color .2s ease}
+.hero-watermark{animation:floaty 9s ease-in-out infinite}
+@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
+@media(prefers-reduced-motion:reduce){.hero-watermark{animation:none}}
 .nav-cta{padding:10px 18px}
 .account{display:flex;align-items:center;gap:14px}
 .acct-btn{display:flex;align-items:center;gap:9px;background:transparent;border:1px solid var(--line-soft);border-radius:40px;padding:5px 14px 5px 5px;cursor:pointer;transition:border-color .16s ease}.acct-btn:hover{border-color:var(--gold)}
 .acct-name{color:var(--cream);font-size:14px;font-weight:600}
 .signout{background:none;border:none;color:var(--sage-dim);font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer}.signout:hover{color:var(--gold-soft)}
-.avatar{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:linear-gradient(180deg,var(--green-panel),#262A31);color:var(--gold-soft);font-family:var(--serif);font-weight:600;border:1.5px solid var(--gold);flex-shrink:0}.avatar-img{object-fit:cover;padding:0}
+.avatar{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:var(--green);color:#fff;font-family:var(--serif);font-weight:600;border:none;flex-shrink:0}.avatar-img{object-fit:cover;padding:0}
 .hero{position:relative;max-width:1200px;margin:0 auto;padding:74px 40px 44px;display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center}
-.hero-watermark{position:absolute;right:-90px;top:-30px;width:520px;opacity:.05;pointer-events:none;user-select:none}
+.hero-watermark{position:absolute;right:-70px;top:-20px;width:500px;opacity:.08;pointer-events:none;user-select:none}
 .hero-copy{position:relative;z-index:1;animation:rise .7s ease both}
 h1{font-size:clamp(38px,5vw,64px);line-height:1.06;letter-spacing:-.01em;margin-bottom:24px}
 .underline{position:relative;white-space:nowrap}.underline::after{content:'';position:absolute;left:0;bottom:.02em;height:.08em;width:100%;background:var(--gold);transform:scaleX(0);transform-origin:left;animation:draw 1s .5s ease forwards}
 .lead{font-size:17px;line-height:1.68;color:var(--sage);max-width:36em;margin-bottom:30px}
 .hero-cta{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:24px}.hero-foot{font-family:var(--mono);font-size:12px;letter-spacing:.06em;color:var(--sage-dim)}
 .register{position:relative;z-index:1;animation:rise .7s .1s ease both}
-.register-frame{background:linear-gradient(180deg,var(--green-panel),#262A31);border:1px solid var(--gold);border-radius:5px;padding:5px;box-shadow:0 34px 70px -34px rgba(0,0,0,.7)}
+.register-frame{background:linear-gradient(180deg,var(--green-panel),#E6EFE7);border:1px solid var(--gold);border-radius:5px;padding:5px;box-shadow:0 34px 70px -34px rgba(0,0,0,.7)}
 .register-frame::after{content:'';position:absolute;inset:9px;border:1px solid var(--line);border-radius:3px;pointer-events:none}
 .register-head{display:flex;align-items:center;gap:12px;padding:16px 18px;border-bottom:1px solid var(--line)}.reg-seal{height:34px;width:auto}
 .reg-title{font-family:var(--serif);color:var(--cream);font-size:16px;font-weight:600}.reg-sub{font-size:11px;color:var(--sage-dim);margin-top:2px}
@@ -1405,12 +1531,12 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .section-head{max-width:44em;margin-bottom:46px}.section-head h2{font-size:clamp(26px,3.4vw,40px);line-height:1.14;letter-spacing:-.01em;margin-top:4px}.section-sub{margin-top:16px;font-size:16px;line-height:1.62;color:var(--sage)}
 .lens-tabs{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:28px}
 .lens-tab{font-family:var(--sans);font-size:13px;font-weight:600;color:var(--sage);background:transparent;border:1px solid var(--line-soft);border-radius:2px;padding:10px 16px;cursor:pointer;transition:all .16s ease}.lens-tab:hover{border-color:var(--gold);color:var(--gold-soft)}.lens-tab.is-on{background:var(--gold);color:#20180A;border-color:var(--gold)}.lens-tab.is-corridor:not(.is-on){border-style:dashed}
-.lens-readout{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:24px;padding:32px 36px;background:linear-gradient(180deg,var(--green-panel),#262A31);border:1px solid var(--line);border-radius:5px}
+.lens-readout{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:24px;padding:32px 36px;background:linear-gradient(180deg,var(--green-panel),#E6EFE7);border:1px solid var(--line);border-radius:5px}
 .lens-tag{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.corridor-flag{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);border:1px solid var(--line);padding:4px 9px;border-radius:2px}
 .lens-tag-text{font-family:var(--serif);color:var(--cream);font-size:20px;font-weight:600}
 .lens-figs{display:flex;gap:44px}.lens-figs>div{display:flex;flex-direction:column;gap:4px}.lf-fig{font-family:var(--serif);color:var(--cream);font-size:28px;font-weight:600}.lf-lab{font-family:var(--mono);font-size:11px;letter-spacing:.07em;color:var(--sage-dim);text-transform:uppercase}
 .mod-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line-soft);border:1px solid var(--line-soft);border-radius:5px;overflow:hidden}
-.mod-card{background:var(--ink-2);padding:36px 30px 30px;display:flex;flex-direction:column;gap:12px;transition:background .2s ease,transform .2s ease}.mod-card:hover{background:#262A31;transform:translateY(-2px)}
+.mod-card{background:var(--ink-2);padding:36px 30px 30px;display:flex;flex-direction:column;gap:12px;transition:background .2s ease,transform .2s ease}.mod-card:hover{background:#E6EFE7;transform:translateY(-2px)}
 .mod-top{display:flex;align-items:center;justify-content:space-between}.mod-n{font-family:var(--mono);font-size:12px;color:var(--gold);letter-spacing:.1em}.mod-lens{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--sage-dim)}
 .mod-card h3{font-size:20px;line-height:1.22}.mod-card p{font-size:14px;line-height:1.62;color:var(--sage)}
 .mod-ai{margin-top:auto;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold-soft);border-top:1px solid var(--line);padding-top:12px}
@@ -1426,7 +1552,7 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .flow-back{background:none;border:none;color:var(--sage-dim);font-family:var(--mono);font-size:12px;letter-spacing:.06em;cursor:pointer;margin-bottom:26px;padding:0}.flow-back:hover{color:var(--gold-soft)}
 .flow-title{font-size:clamp(30px,4vw,46px);line-height:1.08;margin-bottom:14px}.flow-sub{font-size:16px;line-height:1.6;color:var(--sage);max-width:34em;margin-bottom:36px}
 .role-page-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-.role-page-card{text-align:left;background:var(--ink-2);border:1px solid var(--line-soft);border-radius:6px;padding:26px 24px;cursor:pointer;display:flex;flex-direction:column;gap:10px;transition:all .18s ease}.role-page-card:hover{border-color:var(--gold);transform:translateY(-3px);background:#262A31}
+.role-page-card{text-align:left;background:var(--ink-2);border:1px solid var(--line-soft);border-radius:6px;padding:26px 24px;cursor:pointer;display:flex;flex-direction:column;gap:10px;transition:all .18s ease}.role-page-card:hover{border-color:var(--gold);transform:translateY(-3px);background:#E6EFE7}
 .role-ico{color:var(--gold);display:inline-flex;width:46px;height:46px;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:8px;margin-bottom:6px}
 .role-title{font-family:var(--serif);color:var(--cream);font-size:18px;font-weight:600}.role-desc{font-size:13px;line-height:1.5;color:var(--sage-dim)}.role-go{font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--gold);margin-top:6px}
 .demo-chip{font-family:var(--mono);font-size:11px;letter-spacing:.03em;color:var(--gold-soft);background:rgba(198,161,91,.08);border:1px solid var(--line);border-radius:3px;padding:10px 14px;margin-bottom:22px;line-height:1.5}
@@ -1447,7 +1573,7 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .dash-card{background:var(--ink-2);border:1px solid var(--line-soft);border-radius:6px;padding:28px}.dash-card h3{font-size:18px;margin-bottom:6px}.dash-card-sub{font-size:13px;color:var(--sage-dim);line-height:1.55;margin-bottom:20px}
 .caps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}.caps li{display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--line-soft);color:var(--cream);font-size:15px}.caps li:last-child{border-bottom:none}.cap-tick{color:var(--gold);font-size:11px}.cap-soon{margin-left:auto;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--sage-dim);border:1px solid var(--line-soft);padding:3px 8px;border-radius:2px}
 .status-row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--line-soft);font-size:14px;color:var(--sage)}.status-row:last-child{border-bottom:none}
-.pill{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding:4px 9px;border-radius:2px}.pill.ok{background:rgba(198,161,91,.16);color:var(--gold-soft)}.pill.muted{background:rgba(171,193,180,.10);color:var(--sage-dim)}
+.pill{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding:4px 9px;border-radius:2px}.pill.ok{background:rgba(28,138,79,.14);color:var(--green)}.pill.muted{background:rgba(72,82,75,.10);color:var(--sage-dim)}
 .dash-foot{margin-top:26px;font-size:13px;color:var(--sage-dim);line-height:1.6}
 /* Stage 3 */
 .ws{display:flex;flex-direction:column;gap:24px}.ws-h{font-size:18px}
@@ -1466,7 +1592,7 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .td-name{color:var(--cream);font-weight:500;max-width:22em}.mono{font-family:var(--mono);font-size:12px;color:var(--gold-soft)}
 .btn-open{background:transparent;border:1px solid var(--line);color:var(--gold-soft);font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:6px 12px;border-radius:2px;cursor:pointer}.btn-open:hover{border-color:var(--gold);background:rgba(198,161,91,.08)}
 .chip{font-family:var(--mono);font-size:10px;letter-spacing:.05em;padding:4px 9px;border-radius:2px;white-space:nowrap;display:inline-block}
-.st-filed{background:rgba(171,193,180,.12);color:var(--sage)}.st-review{background:rgba(198,161,91,.14);color:var(--gold-soft)}.st-approved{background:rgba(120,180,120,.16);color:#9FCF9F}.st-returned{background:rgba(224,138,106,.16);color:var(--err)}
+.st-filed{background:rgba(72,82,75,.10);color:var(--sage)}.st-review{background:rgba(176,132,47,.14);color:var(--gold)}.st-approved{background:rgba(28,138,79,.14);color:var(--green)}.st-returned{background:rgba(192,83,58,.14);color:var(--err)}
 .panel,.detail,.empty,.society-card,.action-box,.returns-box,.trail-box{background:var(--ink-2);border:1px solid var(--line-soft);border-radius:8px}
 .panel{padding:30px;max-width:760px}
 .panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}.panel-head h3{font-size:20px}
@@ -1562,6 +1688,10 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .viewas-item:hover{border-color:var(--gold)}.va-go{font-family:var(--mono);font-size:11px;color:var(--gold);letter-spacing:.04em;white-space:nowrap}
 @keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
 .analytics{display:flex;flex-direction:column;gap:22px}
+.switcher{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--ink-2);border:1px solid var(--line);border-radius:8px;padding:14px 18px}
+.switcher-lab{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--sage-dim)}
+.switcher-sel{flex:1;min-width:240px;background:var(--ink);border:1px solid var(--line);border-radius:5px;padding:11px 12px;color:var(--cream);font-size:14px;font-family:var(--sans);cursor:pointer}
+.switcher-sel:focus{outline:none;border-color:var(--green)}
 .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
 .kpi{background:var(--ink-2);border:1px solid var(--line-soft);border-radius:8px;padding:20px}
 .kpi-fig{display:block;font-family:var(--serif);color:var(--cream);font-size:26px;font-weight:600;line-height:1.1}
@@ -1587,6 +1717,6 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .miniarea{width:100%;height:90px;display:block}
 .trend-x{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--sage-dim);margin-top:2px}@keyframes draw{to{transform:scaleX(1)}}@keyframes fadeIn{from{opacity:0}to{opacity:1}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 @media(max-width:960px){.hero{grid-template-columns:1fr;padding-top:52px}.hero-watermark{display:none}.mod-grid{grid-template-columns:1fr 1fr}.persona-grid{grid-template-columns:1fr 1fr}.arc-steps{grid-template-columns:1fr}.arc-arrow{transform:rotate(90deg);justify-content:center;padding:2px 0}.foot-grid{grid-template-columns:1fr}.role-page-grid{grid-template-columns:1fr 1fr}.dash-grid{grid-template-columns:1fr}.statgrid{grid-template-columns:1fr 1fr}.viewas-cols{grid-template-columns:1fr}.kpi-row{grid-template-columns:1fr 1fr}.chart-grid{grid-template-columns:1fr}.chart-card.wide{grid-column:span 1}.bar-row{grid-template-columns:96px 1fr auto}}
-@media(max-width:680px){.letterhead{padding:9px 18px;gap:12px}.lh-min{display:none}.lh-seal{height:34px}.lh-mccti{height:32px}.nav{padding:13px 18px}.nav-links{display:none}.hero{padding:40px 18px 30px}section.lens,section.modules,section.arc,section.personas,section.quote{padding:56px 18px}.band{padding:22px 18px;gap:18px 26px}.mod-grid,.persona-grid{grid-template-columns:1fr}.lens-figs{gap:26px}.flow{padding:40px 18px 70px}.role-page-grid{grid-template-columns:1fr}.dash{padding:36px 18px 70px}.dash-hero{flex-wrap:wrap}.foot-top,.foot-grid{padding-left:18px;padding-right:18px}.acct-name{display:none}.form-grid{grid-template-columns:1fr}.detail-grid{grid-template-columns:1fr}.consent{padding:14px 18px}}
+@media(max-width:680px){.letterhead{padding:9px 18px;gap:12px}.lh-min{display:none}.lh-seal{height:34px}.lh-mccti{height:32px}.nav{padding:13px 18px}.nav-links{display:none}.hero{padding:40px 18px 30px}section.lens,section.modules,section.arc,section.personas,section.quote,section.leaders,section.about{padding:56px 18px}.band{padding:22px 18px;gap:18px 26px}.mod-grid,.persona-grid,.leader-grid{grid-template-columns:1fr}.lens-figs{gap:26px}.flow{padding:40px 18px 70px}.role-page-grid{grid-template-columns:1fr}.dash{padding:36px 18px 70px}.dash-hero{flex-wrap:wrap}.foot-top,.foot-grid{padding-left:18px;padding-right:18px}.acct-name{display:none}.form-grid{grid-template-columns:1fr}.detail-grid{grid-template-columns:1fr}.consent{padding:14px 18px}}
 @media(prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}.underline::after{transform:scaleX(1)}}
 `

@@ -67,19 +67,13 @@ visitor's own browser. To store real accounts:
 1. Go to supabase.com, create a free account, then create a new project.
 2. In the project, open Settings, then API. Copy the "Project URL" and the
    "anon public" key.
-3. Create the data table. In Supabase open the SQL editor, paste the block below,
-   and click Run:
-
-   create table if not exists kv (
-     key text primary key,
-     value jsonb,
-     user_id uuid references auth.users(id),
-     updated_at timestamptz default now()
-   );
-   alter table kv enable row level security;
-   create policy "own rows read"  on kv for select using (auth.uid() = user_id);
-   create policy "own rows write" on kv for insert with check (auth.uid() = user_id);
-   create policy "own rows update" on kv for update using (auth.uid() = user_id);
+3. Create the data table and all access policies in one step. In Supabase open
+   the SQL editor, click New query, paste the ENTIRE contents of the file
+   `supabase_setup.sql` included in this project, and click Run. This creates the
+   `kv` table and every policy for Stages 2 to 5 at once, so you do not need to run
+   the separate stage files. (If you see "relation kv does not exist", it means a
+   stage file was run before this one; just run `supabase_setup.sql` and you are
+   set. Re-running it is safe.)
 
 4. Add the keys to Vercel. Open your project on vercel.com, then Settings, then
    Environment Variables, and add:
@@ -87,12 +81,13 @@ visitor's own browser. To store real accounts:
    - VITE_SUPABASE_ANON_KEY = your anon public key
 5. Redeploy. The demo-mode notice disappears once the keys are present.
 
-## Turn on the shared registry (Stage 3, live mode only)
-The registry lets officers and auditors review societies filed by other people, so
-those rows must be shared while each person's profile stays private. After the kv
-table exists, open the Supabase SQL editor, open a New query, paste the contents of
-the file `supabase_stage3.sql` (and then `supabase_stage4.sql` for members and
-integrations) included in this project, and click Run. You only do this once. In demo mode nothing is needed; it already works in your browser.
+## Database policies (live mode only)
+`supabase_setup.sql` in step 3 already applies every access policy: private
+profiles, the shared registry and audit rows, member analytics and integrations,
+and the LASMECO loans and escrow. The separate `supabase_stage3.sql`,
+`supabase_stage4.sql` and `supabase_stage5.sql` files are kept only for reference;
+you do not need them if you ran `supabase_setup.sql`. In demo mode nothing is
+needed; the app works in your browser without Supabase.
 
 Security note, flagged for human oversight: at this stage approval controls are
 enforced in the interface (a society cannot see the approve button; only officers
@@ -176,18 +171,25 @@ provides 10% cash collateral; the guarantee stack is 25% cooperative and 50%
 Sterling, at 9% fixed. The app shows the full breakdown at approval and disbursement.
 
 ## Turn on the LASMECO pipeline (Stage 5, live mode only)
-After the Stage 3 and Stage 4 policies, run `supabase_stage5.sql` once in the SQL
-editor so the Accelerator, officer, financial partner and leadership can all see
-and act on the same loan pipeline. Not needed in demo mode.
+The LASMECO loan and escrow policies are already included in `supabase_setup.sql`,
+so no extra step is needed. Not needed in demo mode.
 
 Payments: when you are ready to take real fee payments, add PAYSTACK_SECRET_KEY or
 FLUTTERWAVE_SECRET_KEY and we will wire the Pay buttons to live checkout.
 
-## Look and Leadership analytics
-The interface uses a neutral charcoal base with green and gold as accents, rather
-than a dominant green. To adjust the palette, edit the CSS variables in the :root
-block near the top of the styles in `src/App.jsx` (for example --green is the
-accent, --gold the secondary accent, --ink and --ink-2 the surfaces).
+## Look, Leadership analytics and approvals
+The interface is a light, white-surface design with green as the accent (buttons,
+bars, chips, the active tab) and gold as a subtle secondary. The Lagos State seal
+appears as a faint watermark. To adjust the palette, edit the CSS variables in the
+:root block near the top of the styles in `src/App.jsx` (--green accent, --gold
+secondary, --ink the page, --ink-2 the card surface, --cream the text).
+
+The Leadership / Admin dashboard has a Girard-style workspace switcher at the top:
+pick any role, cooperative society or member and you drop into that workspace with
+a "Viewing as" banner and an Exit. Cooperative applications are now approved or
+rejected by Leadership: officers examine and record findings, and Leadership makes
+the final decision after reviewing the documents, on the Applications tab. The
+footer no longer shows revenue-split details.
 
 The Leadership / Admin dashboard opens on an Overview of live analytics across the
 whole platform: KPI tiles (societies, members profiled, LASMECO disbursed, escrow
@@ -195,6 +197,17 @@ accrued), donut charts for registration status, CAP15 compliance, registry sourc
 and KYC, bar charts for area offices, member credit bands, the LASMECO pipeline,
 applications by sector and the escrow distribution, and a six-month registrations
 trend. These update automatically from the registry, members, loans and escrow.
+
+## Landing page: Leadership, About and motion
+The landing page now has a Leadership section with the Honourable Commissioner,
+the Permanent Secretary and the Director of Cooperatives (photos in `public/` as
+leader-hc.jpg, leader-ps.jpg and leader-dir.jpg — replace these files to update a
+portrait), and an About section with expandable entries for the Ministry, LASMECO,
+SEKAT, QooP and the platform. The nav links (Leadership, About, Platform, Roles)
+smooth-scroll to each section. Headline figures count up on scroll, sections fade
+in as they enter view, and cards lift on hover; all motion respects the visitor's
+reduced-motion setting. When you upload to GitHub, include the `public/` folder so
+the portraits ship with the site.
 
 ## Environment variables
 See `.env.example`. For local testing copy it to `.env.local` and fill it in.
