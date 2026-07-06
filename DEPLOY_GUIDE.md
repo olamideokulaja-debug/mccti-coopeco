@@ -47,6 +47,12 @@ Paystack and Flutterwave (payments), a KYC provider, and the AI proxy. When that
 happens you will add them in Vercel under Settings, then Environment Variables,
 and each will be flagged for you clearly.
 
+## Branding assets
+The Lagos State coat of arms and the MCCTI logo live in the `public` folder
+(`lagos-seal.png`, `mccti-logo.png`, and a faint `seal-watermark.png`). They appear
+in the letterhead, the live register, the quote and the footer. To swap either mark,
+replace the file in `public` with the same name and re-upload. The display face is Lora.
+
 ## Notes
 - British English throughout. Currency shown as ₦.
 - All figures on the landing page are illustrative pending live data.
