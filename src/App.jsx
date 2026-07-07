@@ -1679,7 +1679,7 @@ async function updateLoan(id, patch, ctx, action, note) {
 }
 async function payCoopFee(coopId, ctx) { return updateCoop(coopId, { feeStatus: 'Paid' }, ctx, 'Registration fee paid', fmtNaira(COOP_FEES.registration)) }
 async function seedDemoData() {
-  if (await kvGet('integration:seed-v4')) return
+  if (await kvGet('integration:seed-v5')) return
   const now = Date.now(), day = 86400000
   const isoAgo = (ms) => new Date(now - ms).toISOString()
   const monthsAgoISO = (k) => { const d = new Date(now); d.setMonth(d.getMonth() - k); return d.toISOString() }
@@ -1703,12 +1703,12 @@ async function seedDemoData() {
   }
   // 2) Members (varied sectors / KYC / bands)
   const memberSeeds = [
-    { name: 'Folake Adisa', coop: 'Oshodi Market Women Coop', sector: 'Trade', lasmecoSector: 'General MSME Services', accel: 'Trade, Creative & Services Accelerator', phone: '08031000001', gender: 'Female', bvn: 1, nin: 1, msme: { monthlyTurnover: 520000, employees: 4, cashFlow: 200000, customerBase: 160, yearsInOperation: 6 } },
-    { name: 'Chidi Okafor', coop: 'Oshodi Market Women Coop', sector: 'Trade', lasmecoSector: 'General MSME Services', accel: 'Trade, Creative & Services Accelerator', phone: '08031000002', gender: 'Male', bvn: 1, nin: 1, msme: { monthlyTurnover: 780000, employees: 6, cashFlow: 300000, customerBase: 220, yearsInOperation: 8 } },
-    { name: 'Aisha Bello', coop: 'Agege Transport Union Coop', sector: 'Transport', lasmecoSector: 'General MSME Services', accel: 'Trade, Creative & Services Accelerator', phone: '08031000003', gender: 'Female', bvn: 1, nin: 0, msme: { monthlyTurnover: 260000, employees: 2, cashFlow: 80000, customerBase: 70, yearsInOperation: 3 } },
-    { name: 'Segun Ade', coop: 'Eti-Osa Fashion Enterprise Coop', sector: 'Services', lasmecoSector: 'Creative Industries & Tourism', accel: 'Trade, Creative & Services Accelerator', phone: '08031000004', gender: 'Male', bvn: 1, nin: 1, msme: { monthlyTurnover: 1350000, employees: 9, cashFlow: 500000, customerBase: 380, yearsInOperation: 10 } },
-    { name: 'Grace Umeh', coop: 'Kosofe Poultry Farmers Coop', sector: 'Agriculture', lasmecoSector: 'Agriculture', accel: 'Agribusiness & Health Accelerator', phone: '08031000005', gender: 'Female', bvn: 0, nin: 0, msme: { monthlyTurnover: 110000, employees: 1, cashFlow: 30000, customerBase: 40, yearsInOperation: 2 } },
-    { name: 'Ibrahim Sule', coop: 'Alimosho Tailors Multipurpose', sector: 'Artisan', lasmecoSector: 'Manufacturing & Light Industry', accel: 'Manufacturing & Circular Economy Accelerator', phone: '08031000006', gender: 'Male', bvn: 1, nin: 1, msme: { monthlyTurnover: 430000, employees: 3, cashFlow: 150000, customerBase: 120, yearsInOperation: 5 } },
+    { name: 'Folake Adisa', coop: 'Oshodi Market Women Coop', sector: 'Trade', lasmecoSector: 'General MSME Services', accel: 'General MSME Accelerator', phone: '08031000001', gender: 'Female', bvn: 1, nin: 1, msme: { monthlyTurnover: 520000, employees: 4, cashFlow: 200000, customerBase: 160, yearsInOperation: 6 } },
+    { name: 'Chidi Okafor', coop: 'Oshodi Market Women Coop', sector: 'Trade', lasmecoSector: 'General MSME Services', accel: 'General MSME Accelerator', phone: '08031000002', gender: 'Male', bvn: 1, nin: 1, msme: { monthlyTurnover: 780000, employees: 6, cashFlow: 300000, customerBase: 220, yearsInOperation: 8 } },
+    { name: 'Aisha Bello', coop: 'Agege Transport Union Coop', sector: 'Transport', lasmecoSector: 'General MSME Services', accel: 'General MSME Accelerator', phone: '08031000003', gender: 'Female', bvn: 1, nin: 0, msme: { monthlyTurnover: 260000, employees: 2, cashFlow: 80000, customerBase: 70, yearsInOperation: 3 } },
+    { name: 'Segun Ade', coop: 'Eti-Osa Fashion Enterprise Coop', sector: 'Services', lasmecoSector: 'Creative Industries & Tourism', accel: 'Creative & Tourism Accelerator', phone: '08031000004', gender: 'Male', bvn: 1, nin: 1, msme: { monthlyTurnover: 1350000, employees: 9, cashFlow: 500000, customerBase: 380, yearsInOperation: 10 } },
+    { name: 'Grace Umeh', coop: 'Kosofe Poultry Farmers Coop', sector: 'Agriculture', lasmecoSector: 'Agriculture', accel: 'Agriculture Accelerator', phone: '08031000005', gender: 'Female', bvn: 0, nin: 0, msme: { monthlyTurnover: 110000, employees: 1, cashFlow: 30000, customerBase: 40, yearsInOperation: 2 } },
+    { name: 'Ibrahim Sule', coop: 'Alimosho Tailors Multipurpose', sector: 'Artisan', lasmecoSector: 'Manufacturing & Light Industry', accel: 'Manufacturing Accelerator', phone: '08031000006', gender: 'Male', bvn: 1, nin: 1, msme: { monthlyTurnover: 430000, employees: 3, cashFlow: 150000, customerBase: 120, yearsInOperation: 5 } },
   ]
   const memberMap = {}
   for (let i = 0; i < memberSeeds.length; i++) {
@@ -1774,13 +1774,17 @@ async function seedDemoData() {
   const docCoop = coopMap['Eti-Osa Fashion Enterprise Coop']
   await kvSet('doc:' + docCoop + ':Dseed1', { id: 'Dseed1', coopId: docCoop, name: 'by-laws.pdf', category: 'By-laws', size: 284000, type: 'application/pdf', url: '', path: '', storage: 'demo', uploadedBy: 'T. Coker', uploadedAt: isoAgo(9 * day), verified: true, verifiedBy: 'Area Registrar' })
   await kvSet('doc:' + docCoop + ':Dseed2', { id: 'Dseed2', coopId: docCoop, name: 'registration-certificate.pdf', category: 'Registration certificate', size: 156000, type: 'application/pdf', url: '', path: '', storage: 'demo', uploadedBy: 'T. Coker', uploadedAt: isoAgo(9 * day), verified: false })
-  await kvSet('integration:seed-v4', { done: true, at: new Date().toISOString() })
+  await kvSet('integration:seed-v5', { done: true, at: new Date().toISOString() })
 }
 const ACCEL_SEEDS = [
-  { email: 'accel.agric@coopeco.ng', name: 'Agribusiness & Health Accelerator', sectors: ['Agriculture', 'Healthcare & Life Sciences'] },
-  { email: 'accel.industry@coopeco.ng', name: 'Manufacturing & Circular Economy Accelerator', sectors: ['Manufacturing & Light Industry', 'Circular Economy & Environment'] },
-  { email: 'accel.digital@coopeco.ng', name: 'Digital & Skills Accelerator', sectors: ['Digital Economy & ICT', 'Training & Education'] },
-  { email: 'accel.trade@coopeco.ng', name: 'Trade, Creative & Services Accelerator', sectors: ['General MSME Services', 'Creative Industries & Tourism'] },
+  { email: 'accel.agric@coopeco.ng', name: 'Agriculture Accelerator', sectors: ['Agriculture'] },
+  { email: 'accel.mfg@coopeco.ng', name: 'Manufacturing Accelerator', sectors: ['Manufacturing & Light Industry'] },
+  { email: 'accel.health@coopeco.ng', name: 'Healthcare Accelerator', sectors: ['Healthcare & Life Sciences'] },
+  { email: 'accel.digital@coopeco.ng', name: 'Digital & ICT Accelerator', sectors: ['Digital Economy & ICT'] },
+  { email: 'accel.circular@coopeco.ng', name: 'Circular Economy Accelerator', sectors: ['Circular Economy & Environment'] },
+  { email: 'accel.creative@coopeco.ng', name: 'Creative & Tourism Accelerator', sectors: ['Creative Industries & Tourism'] },
+  { email: 'accel.training@coopeco.ng', name: 'Training & Education Accelerator', sectors: ['Training & Education'] },
+  { email: 'accel.msme@coopeco.ng', name: 'General MSME Accelerator', sectors: ['General MSME Services'] },
 ]
 async function listAccelerators() { return (await kvList('accelerator:')).sort((a, b) => (a.name > b.name ? 1 : -1)) }
 async function getAccelerator(email) { return kvGet('accelerator:' + email) }
@@ -1970,7 +1974,7 @@ function AcceleratorWorkspace({ ctx, section }) {
     )
   }
   if (sel) return <LoanDetail loan={sel} ctx={ctx} onClose={() => { setSel(null); reload() }} onChanged={reload} />
-  const mine = (l) => (l.apEmail === ctx.email) || (!l.apEmail && (accel.sectors || []).includes(l.sector))
+  const mine = (l) => (l.apEmail === ctx.email) || ((accel.sectors || []).includes(l.sector))
   const myLoans = loans.filter(mine)
   const queue = myLoans.filter((l) => AP_STATUSES.includes(l.status))
   const by = (s) => myLoans.filter((l) => l.status === s).length
@@ -2427,10 +2431,11 @@ function SideIcon({ name }) {
   }
   return <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">{paths[name]}</svg>
 }
-function Sidebar({ role, profile, sections, section, setSection, onSignOut, onHome, canPrivacy, unread }) {
+function Sidebar({ role, profile, sections, section, setSection, onSignOut, onHome, canPrivacy, unread, impersonating, onExitView }) {
   return (
     <aside className="side">
       <button className="side-brand" onClick={onHome}><span className="brand-mark" aria-hidden="true">&#9670;</span><span className="side-brand-name">MCCTI <em>CoopEco</em></span></button>
+      {impersonating && <button className="side-return" onClick={onExitView}>&larr; Return to my workspace</button>}
       <nav className="side-nav" aria-label="Sections">{sections.map(([id, label]) => (<button key={id} className={cx('side-item', section === id && 'on')} onClick={() => setSection(id)}><span className="side-dot" aria-hidden="true" /><span>{label}</span></button>))}</nav>
       <div className="side-sep" />
       <nav className="side-nav" aria-label="Support">
@@ -2469,7 +2474,7 @@ function Dashboard({ session, onSignOut, onHome }) {
           : <Workspace ctx={ctx} section={section} />
   return (
     <div className="shell">
-      <Sidebar role={eff.role} profile={p} sections={sections} section={section} setSection={setSection} onSignOut={onSignOut} onHome={onHome} canPrivacy={canPrivacy} unread={unread} />
+      <Sidebar role={eff.role} profile={p} sections={sections} section={section} setSection={setSection} onSignOut={onSignOut} onHome={onHome} canPrivacy={canPrivacy} unread={unread} impersonating={!!viewAs} onExitView={() => setViewAs(null)} />
       <main className="shell-main"><div className="dash-inner">
         {viewAs && <div className="viewas-banner"><span>Viewing as <strong>{eff.name}</strong> &middot; {roleTitle(eff.role)}</span><button className="link-inline" onClick={() => setViewAs(null)}>Exit view</button></div>}
         <div className="dash-hero">
@@ -2764,6 +2769,8 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .sla-figs>div{display:flex;flex-direction:column;gap:3px}
 .sla-fig{font-family:var(--serif);font-size:26px;color:var(--cream);font-weight:600}
 .sla-lab{font-family:var(--mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--sage-dim)}
+.side-return{margin:0 12px 10px;padding:9px 12px;background:var(--green-panel);border:1px solid var(--green);border-radius:8px;color:var(--green);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;text-align:left;transition:background .18s ease}
+.side-return:hover{background:#e0eee4}
 .bulk-type{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:12px}
 .bulk-type .seg{background:none;border:none;padding:8px 16px;font-family:var(--sans);font-size:13px;font-weight:600;color:var(--sage);cursor:pointer}
 .bulk-type .seg.on{background:var(--green);color:#fff}

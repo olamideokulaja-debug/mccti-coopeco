@@ -391,11 +391,11 @@ in-arrears and defaulted with recovery), wallets and an active esusu rotation,
 support tickets in every status, notifications, and uploaded-document records. This
 fixes empty/incomplete sections that previously appeared for live users (seeding used
 to be skipped when Supabase was configured). The seed runs exactly once, guarded by
-the integration:seed-v4 marker, so it never duplicates. When you are ready to go live
+the integration:seed-v5 marker, so it never duplicates. When you are ready to go live
 for real, clear the demo rows: in Supabase SQL Editor run
 `delete from kv where key like 'coop:%' or key like 'member:%' or key like 'loan:%'
 or key like 'ticket:%' or key like 'notif:%' or key like 'doc:%' or key like 'wallet:%'
-or key like 'audit:%' or key = 'integration:seed-v4';` then reload. (Ask before running
+or key like 'audit:%' or key = 'integration:seed-v5';` then reload. (Ask before running
 this against real data.)
 
 ## Landing navigation (pages, not scrolling)
@@ -412,8 +412,14 @@ Industry; Healthcare & Life Sciences; Digital Economy & ICT; Circular Economy &
 Environment; Creative Industries & Tourism; Training & Education; and General MSME
 Services. A member selects a sector, then selects an accelerator that covers that
 sector. Accelerators choose the sectors they support on first sign-in (sector picker),
-so member applications route to the right accelerator automatically. Four demo
-accelerators are seeded to cover all eight sectors.
+so member applications route to the right accelerator automatically. Eight demo
+accelerators are seeded, one per sector, so members pick the specific accelerator
+for their sector and accelerators see every application in the sectors they support.
+
+## Leadership: view-as and returning
+When leadership opens another workspace via "Open a workspace as", a green "Return to
+my workspace" button appears at the top of the sidebar (in addition to the Exit view
+banner), so it is always an obvious selection to get back to the leadership overview.
 
 ## Environment variables
 See `.env.example`. For local testing copy it to `.env.local` and fill it in.
