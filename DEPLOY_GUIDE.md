@@ -391,11 +391,11 @@ in-arrears and defaulted with recovery), wallets and an active esusu rotation,
 support tickets in every status, notifications, and uploaded-document records. This
 fixes empty/incomplete sections that previously appeared for live users (seeding used
 to be skipped when Supabase was configured). The seed runs exactly once, guarded by
-the integration:seed-v3 marker, so it never duplicates. When you are ready to go live
+the integration:seed-v4 marker, so it never duplicates. When you are ready to go live
 for real, clear the demo rows: in Supabase SQL Editor run
 `delete from kv where key like 'coop:%' or key like 'member:%' or key like 'loan:%'
 or key like 'ticket:%' or key like 'notif:%' or key like 'doc:%' or key like 'wallet:%'
-or key like 'audit:%' or key = 'integration:seed-v3';` then reload. (Ask before running
+or key like 'audit:%' or key = 'integration:seed-v4';` then reload. (Ask before running
 this against real data.)
 
 ## Landing navigation (pages, not scrolling)
@@ -404,6 +404,16 @@ distinct pages instead of scrolling down one long page. Home shows the hero, the
 headline figures, the area-office lens and the closing quote; each link opens its own
 page with the active tab highlighted, and the brand logo returns Home. On phones the
 links appear as a scrollable strip beneath the top bar so every page stays reachable.
+
+## LASMECO priority sectors & accelerator routing
+The LASMECO application now uses the eight official priority sectors from the LASMECO
+guideline as a preloaded dropdown (no typing): Agriculture; Manufacturing & Light
+Industry; Healthcare & Life Sciences; Digital Economy & ICT; Circular Economy &
+Environment; Creative Industries & Tourism; Training & Education; and General MSME
+Services. A member selects a sector, then selects an accelerator that covers that
+sector. Accelerators choose the sectors they support on first sign-in (sector picker),
+so member applications route to the right accelerator automatically. Four demo
+accelerators are seeded to cover all eight sectors.
 
 ## Environment variables
 See `.env.example`. For local testing copy it to `.env.local` and fill it in.

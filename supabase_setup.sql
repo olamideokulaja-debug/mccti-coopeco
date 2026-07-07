@@ -46,11 +46,11 @@ drop policy if exists "members update" on kv;
 drop policy if exists "members delete" on kv;
 
 create policy "members read"   on kv for select to authenticated
-  using (key like 'member:%' or key like 'integration:%');
+  using (key like 'member:%' or key like 'integration:%' or key like 'accelerator:%');
 create policy "members write"  on kv for insert to authenticated
-  with check (key like 'member:%' or key like 'integration:%');
+  with check (key like 'member:%' or key like 'integration:%' or key like 'accelerator:%');
 create policy "members update" on kv for update to authenticated
-  using (key like 'member:%' or key like 'integration:%');
+  using (key like 'member:%' or key like 'integration:%' or key like 'accelerator:%');
 create policy "members delete" on kv for delete to authenticated
   using (key like 'member:%' and user_id = auth.uid());
 

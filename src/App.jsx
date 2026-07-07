@@ -80,6 +80,7 @@ const ROLE_CAPS = {
 /* --------------------------- Stage 3 config --------------------------- */
 const AREA_OFFICES = ['Alausa (HQ)', 'Ikeja', 'Mushin', 'Ikorodu', 'Epe', 'Badagry', 'Ibeju-Lekki', 'Lagos Island', 'Surulere', 'Ojo', 'Agege', 'Oshodi', 'Kosofe', 'Alimosho', 'Eti-Osa', 'Somolu', 'Apapa', 'Amuwo-Odofin', 'Ifako-Ijaiye', 'Lagos Mainland', 'Ajeromi']
 const SECTORS = ['Trade', 'Thrift & Credit', 'Artisan', 'Agriculture', 'Transport', 'Manufacturing', 'Processing', 'Services', 'Multipurpose']
+const LASMECO_SECTORS = ['Agriculture', 'Manufacturing & Light Industry', 'Healthcare & Life Sciences', 'Digital Economy & ICT', 'Circular Economy & Environment', 'Creative Industries & Tourism', 'Training & Education', 'General MSME Services']
 const STATUS_CLASS = { 'Filed': 'st-filed', 'Under review': 'st-review', 'Approved': 'st-approved', 'Returned': 'st-returned' }
 const CAP15_CLASS = { 'Compliant': 'st-approved', 'Returns due': 'st-review', 'Under audit': 'st-filed' }
 const LOAN_STATUS_CLASS = { 'Applied': 'st-filed', 'In training': 'st-review', 'Shortlisted': 'st-review', 'Coop validated': 'st-review', 'Bank assessment': 'st-review', 'BOI approved': 'st-approved', 'Disbursed': 'st-approved', 'Repaying': 'st-approved', 'Completed': 'st-approved', 'Declined': 'st-returned', 'Default': 'st-returned' }
@@ -1662,8 +1663,8 @@ async function createLoan(rec, ctx) {
   const record = { loanId, status: 'Applied', apName: '', amountRecommended: null, amountApproved: null, createdBy: ctx.email, createdAt: now, updatedAt: now, ...rec }
   await kvSet('loan:' + loanId, record, ctx.uid)
   await addAudit({ trackingId: loanId, action: 'Application submitted', by: ctx.name, role: ctx.role, note: rec.purpose || '' })
-  await notify({ to: ctx.email, title: 'LASMECO application received', body: 'Application ' + loanId + ' submitted to an Accelerator.', event: 'loan', phone: rec.memberPhone })
-  await notify({ to: 'role:accelerator', title: 'New LASMECO application', body: rec.memberName + ' \u2014 ' + rec.sector, event: 'loan' })
+  await notify({ to: ctx.email, title: 'LASMECO application received', body: 'Application ' + loanId + ' submitted to ' + (rec.apName || 'an Accelerator') + '.', event: 'loan', phone: rec.memberPhone })
+  await notify({ to: rec.apEmail || 'role:accelerator', title: 'New LASMECO application', body: rec.memberName + ' \u2014 ' + rec.sector, event: 'loan' })
   return record
 }
 async function updateLoan(id, patch, ctx, action, note) {
@@ -1678,7 +1679,7 @@ async function updateLoan(id, patch, ctx, action, note) {
 }
 async function payCoopFee(coopId, ctx) { return updateCoop(coopId, { feeStatus: 'Paid' }, ctx, 'Registration fee paid', fmtNaira(COOP_FEES.registration)) }
 async function seedDemoData() {
-  if (await kvGet('integration:seed-v3')) return
+  if (await kvGet('integration:seed-v4')) return
   const now = Date.now(), day = 86400000
   const isoAgo = (ms) => new Date(now - ms).toISOString()
   const monthsAgoISO = (k) => { const d = new Date(now); d.setMonth(d.getMonth() - k); return d.toISOString() }
@@ -1702,43 +1703,46 @@ async function seedDemoData() {
   }
   // 2) Members (varied sectors / KYC / bands)
   const memberSeeds = [
-    { name: 'Folake Adisa', coop: 'Oshodi Market Women Coop', sector: 'Trade', phone: '08031000001', gender: 'Female', bvn: 1, nin: 1, msme: { monthlyTurnover: 520000, employees: 4, cashFlow: 200000, customerBase: 160, yearsInOperation: 6 } },
-    { name: 'Chidi Okafor', coop: 'Oshodi Market Women Coop', sector: 'Trade', phone: '08031000002', gender: 'Male', bvn: 1, nin: 1, msme: { monthlyTurnover: 780000, employees: 6, cashFlow: 300000, customerBase: 220, yearsInOperation: 8 } },
-    { name: 'Aisha Bello', coop: 'Agege Transport Union Coop', sector: 'Transport', phone: '08031000003', gender: 'Female', bvn: 1, nin: 0, msme: { monthlyTurnover: 260000, employees: 2, cashFlow: 80000, customerBase: 70, yearsInOperation: 3 } },
-    { name: 'Segun Ade', coop: 'Eti-Osa Fashion Enterprise Coop', sector: 'Services', phone: '08031000004', gender: 'Male', bvn: 1, nin: 1, msme: { monthlyTurnover: 1350000, employees: 9, cashFlow: 500000, customerBase: 380, yearsInOperation: 10 } },
-    { name: 'Grace Umeh', coop: 'Kosofe Poultry Farmers Coop', sector: 'Agriculture', phone: '08031000005', gender: 'Female', bvn: 0, nin: 0, msme: { monthlyTurnover: 110000, employees: 1, cashFlow: 30000, customerBase: 40, yearsInOperation: 2 } },
-    { name: 'Ibrahim Sule', coop: 'Alimosho Tailors Multipurpose', sector: 'Artisan', phone: '08031000006', gender: 'Male', bvn: 1, nin: 1, msme: { monthlyTurnover: 430000, employees: 3, cashFlow: 150000, customerBase: 120, yearsInOperation: 5 } },
+    { name: 'Folake Adisa', coop: 'Oshodi Market Women Coop', sector: 'Trade', lasmecoSector: 'General MSME Services', accel: 'Trade, Creative & Services Accelerator', phone: '08031000001', gender: 'Female', bvn: 1, nin: 1, msme: { monthlyTurnover: 520000, employees: 4, cashFlow: 200000, customerBase: 160, yearsInOperation: 6 } },
+    { name: 'Chidi Okafor', coop: 'Oshodi Market Women Coop', sector: 'Trade', lasmecoSector: 'General MSME Services', accel: 'Trade, Creative & Services Accelerator', phone: '08031000002', gender: 'Male', bvn: 1, nin: 1, msme: { monthlyTurnover: 780000, employees: 6, cashFlow: 300000, customerBase: 220, yearsInOperation: 8 } },
+    { name: 'Aisha Bello', coop: 'Agege Transport Union Coop', sector: 'Transport', lasmecoSector: 'General MSME Services', accel: 'Trade, Creative & Services Accelerator', phone: '08031000003', gender: 'Female', bvn: 1, nin: 0, msme: { monthlyTurnover: 260000, employees: 2, cashFlow: 80000, customerBase: 70, yearsInOperation: 3 } },
+    { name: 'Segun Ade', coop: 'Eti-Osa Fashion Enterprise Coop', sector: 'Services', lasmecoSector: 'Creative Industries & Tourism', accel: 'Trade, Creative & Services Accelerator', phone: '08031000004', gender: 'Male', bvn: 1, nin: 1, msme: { monthlyTurnover: 1350000, employees: 9, cashFlow: 500000, customerBase: 380, yearsInOperation: 10 } },
+    { name: 'Grace Umeh', coop: 'Kosofe Poultry Farmers Coop', sector: 'Agriculture', lasmecoSector: 'Agriculture', accel: 'Agribusiness & Health Accelerator', phone: '08031000005', gender: 'Female', bvn: 0, nin: 0, msme: { monthlyTurnover: 110000, employees: 1, cashFlow: 30000, customerBase: 40, yearsInOperation: 2 } },
+    { name: 'Ibrahim Sule', coop: 'Alimosho Tailors Multipurpose', sector: 'Artisan', lasmecoSector: 'Manufacturing & Light Industry', accel: 'Manufacturing & Circular Economy Accelerator', phone: '08031000006', gender: 'Male', bvn: 1, nin: 1, msme: { monthlyTurnover: 430000, employees: 3, cashFlow: 150000, customerBase: 120, yearsInOperation: 5 } },
   ]
   const memberMap = {}
   for (let i = 0; i < memberSeeds.length; i++) {
     const s = memberSeeds[i], id = 'M-' + String(100001 + i), email = 'demo.' + s.name.toLowerCase().replace(/[^a-z]+/g, '.') + '@coopeco.ng'
     const status = s.bvn && s.nin ? 'Verified' : (s.bvn || s.nin) ? 'Partial' : 'Unverified'
     await kvSet('member:' + id, { memberId: id, source: 'MCCTI', name: s.name, coop: s.coop, sector: s.sector, phone: s.phone, gender: s.gender, kyc: { bvn: s.bvn ? 'on file' : '', nin: s.nin ? 'on file' : '', bvnVerified: !!s.bvn, ninVerified: !!s.nin, status }, msme: s.msme, createdBy: email, createdAt: isoAgo((10 - i) * day) })
-    memberMap[s.name] = { memberId: id, email, phone: s.phone, coop: s.coop, sector: s.sector }
+    memberMap[s.name] = { memberId: id, email, phone: s.phone, coop: s.coop, sector: s.sector, lasmecoSector: s.lasmecoSector, accel: s.accel }
   }
   // 3) Loans across every pipeline stage (with schedules, repayments, arrears, default)
   const mkSchedLoan = (m, amount, tenor, disbMonths, paidCount, status, extra) => {
     const disbAt = monthsAgoISO(disbMonths), schedule = buildSchedule(amount, tenor, 9, disbAt)
     const repayments = []
     for (let k = 0; k < paidCount && k < schedule.length; k++) repayments.push({ at: monthsAgoISO(Math.max(0, disbMonths - k - 1)), amount: schedule[k].amount, by: m.name, method: 'manual' })
-    return { memberId: m.memberId, memberName: m.name, memberPhone: m.phone, createdBy: m.email, coop: m.coop, sector: m.sector, amountRequested: amount, amountRecommended: amount, amountApproved: amount, type: LOAN_TYPES[0], purpose: 'Business expansion', status, apName: 'Trade & Commerce Accelerator', tenorMonths: tenor, disbursedAt: disbAt, schedule, repayments, createdAt: monthsAgoISO(disbMonths + 1), updatedAt: new Date().toISOString(), ...(extra || {}) }
+    return { memberId: m.memberId, memberName: m.name, memberPhone: m.phone, createdBy: m.email, coop: m.coop, sector: m.lasmecoSector, amountRequested: amount, amountRecommended: amount, amountApproved: amount, type: LOAN_TYPES[0], purpose: 'Business expansion', status, apName: m.accel, tenorMonths: tenor, disbursedAt: disbAt, schedule, repayments, createdAt: monthsAgoISO(disbMonths + 1), updatedAt: new Date().toISOString(), ...(extra || {}) }
   }
   const M = memberMap
   const loanRecs = []
-  loanRecs.push({ memberId: M['Grace Umeh'].memberId, memberName: 'Grace Umeh', memberPhone: M['Grace Umeh'].phone, createdBy: M['Grace Umeh'].email, coop: M['Grace Umeh'].coop, sector: 'Agriculture', amountRequested: 900000, type: LOAN_TYPES[0], purpose: 'Feed and stock', status: 'Applied', apName: '', createdAt: isoAgo(2 * day), updatedAt: isoAgo(2 * day) })
-  loanRecs.push({ memberId: M['Aisha Bello'].memberId, memberName: 'Aisha Bello', memberPhone: M['Aisha Bello'].phone, createdBy: M['Aisha Bello'].email, coop: M['Aisha Bello'].coop, sector: 'Transport', amountRequested: 1500000, type: LOAN_TYPES[0], purpose: 'Vehicle maintenance', status: 'In training', apName: 'Trade & Commerce Accelerator', createdAt: isoAgo(6 * day), updatedAt: isoAgo(3 * day) })
-  loanRecs.push({ memberId: M['Ibrahim Sule'].memberId, memberName: 'Ibrahim Sule', memberPhone: M['Ibrahim Sule'].phone, createdBy: M['Ibrahim Sule'].email, coop: M['Ibrahim Sule'].coop, sector: 'Artisan', amountRequested: 2200000, amountRecommended: 2000000, type: LOAN_TYPES[0], purpose: 'Industrial machines', status: 'Shortlisted', apName: 'Manufacturing Accelerator', createdAt: isoAgo(9 * day), updatedAt: isoAgo(4 * day) })
-  loanRecs.push({ memberId: M['Folake Adisa'].memberId, memberName: 'Folake Adisa', memberPhone: M['Folake Adisa'].phone, createdBy: M['Folake Adisa'].email, coop: M['Folake Adisa'].coop, sector: 'Trade', amountRequested: 4000000, amountRecommended: 4000000, type: LOAN_TYPES[0], purpose: 'Bulk inventory', status: 'Coop validated', apName: 'Trade & Commerce Accelerator', createdAt: isoAgo(12 * day), updatedAt: isoAgo(5 * day) })
-  loanRecs.push({ memberId: M['Chidi Okafor'].memberId, memberName: 'Chidi Okafor', memberPhone: M['Chidi Okafor'].phone, createdBy: M['Chidi Okafor'].email, coop: M['Chidi Okafor'].coop, sector: 'Trade', amountRequested: 5000000, amountRecommended: 5000000, type: LOAN_TYPES[0], purpose: 'Cold room', status: 'Bank assessment', apName: 'Trade & Commerce Accelerator', createdAt: isoAgo(14 * day), updatedAt: isoAgo(6 * day) })
-  loanRecs.push({ memberId: M['Segun Ade'].memberId, memberName: 'Segun Ade', memberPhone: M['Segun Ade'].phone, createdBy: M['Segun Ade'].email, coop: M['Segun Ade'].coop, sector: 'Services', amountRequested: 6000000, amountRecommended: 6000000, amountApproved: 6000000, type: LOAN_TYPES[0], purpose: 'Studio expansion', status: 'BOI approved', apName: 'Trade & Commerce Accelerator', createdAt: isoAgo(16 * day), updatedAt: isoAgo(7 * day) })
+  loanRecs.push({ memberId: M['Grace Umeh'].memberId, memberName: 'Grace Umeh', memberPhone: M['Grace Umeh'].phone, createdBy: M['Grace Umeh'].email, coop: M['Grace Umeh'].coop, sector: M['Grace Umeh'].lasmecoSector, amountRequested: 900000, type: LOAN_TYPES[0], purpose: 'Feed and stock', status: 'Applied', apName: M['Grace Umeh'].accel, createdAt: isoAgo(2 * day), updatedAt: isoAgo(2 * day) })
+  loanRecs.push({ memberId: M['Aisha Bello'].memberId, memberName: 'Aisha Bello', memberPhone: M['Aisha Bello'].phone, createdBy: M['Aisha Bello'].email, coop: M['Aisha Bello'].coop, sector: M['Aisha Bello'].lasmecoSector, amountRequested: 1500000, type: LOAN_TYPES[0], purpose: 'Vehicle maintenance', status: 'In training', apName: M['Aisha Bello'].accel, createdAt: isoAgo(6 * day), updatedAt: isoAgo(3 * day) })
+  loanRecs.push({ memberId: M['Ibrahim Sule'].memberId, memberName: 'Ibrahim Sule', memberPhone: M['Ibrahim Sule'].phone, createdBy: M['Ibrahim Sule'].email, coop: M['Ibrahim Sule'].coop, sector: M['Ibrahim Sule'].lasmecoSector, amountRequested: 2200000, amountRecommended: 2000000, type: LOAN_TYPES[0], purpose: 'Industrial machines', status: 'Shortlisted', apName: M['Ibrahim Sule'].accel, createdAt: isoAgo(9 * day), updatedAt: isoAgo(4 * day) })
+  loanRecs.push({ memberId: M['Folake Adisa'].memberId, memberName: 'Folake Adisa', memberPhone: M['Folake Adisa'].phone, createdBy: M['Folake Adisa'].email, coop: M['Folake Adisa'].coop, sector: M['Folake Adisa'].lasmecoSector, amountRequested: 4000000, amountRecommended: 4000000, type: LOAN_TYPES[0], purpose: 'Bulk inventory', status: 'Coop validated', apName: M['Folake Adisa'].accel, createdAt: isoAgo(12 * day), updatedAt: isoAgo(5 * day) })
+  loanRecs.push({ memberId: M['Chidi Okafor'].memberId, memberName: 'Chidi Okafor', memberPhone: M['Chidi Okafor'].phone, createdBy: M['Chidi Okafor'].email, coop: M['Chidi Okafor'].coop, sector: M['Chidi Okafor'].lasmecoSector, amountRequested: 5000000, amountRecommended: 5000000, type: LOAN_TYPES[0], purpose: 'Cold room', status: 'Bank assessment', apName: M['Chidi Okafor'].accel, createdAt: isoAgo(14 * day), updatedAt: isoAgo(6 * day) })
+  loanRecs.push({ memberId: M['Segun Ade'].memberId, memberName: 'Segun Ade', memberPhone: M['Segun Ade'].phone, createdBy: M['Segun Ade'].email, coop: M['Segun Ade'].coop, sector: M['Segun Ade'].lasmecoSector, amountRequested: 6000000, amountRecommended: 6000000, amountApproved: 6000000, type: LOAN_TYPES[0], purpose: 'Studio expansion', status: 'BOI approved', apName: M['Segun Ade'].accel, createdAt: isoAgo(16 * day), updatedAt: isoAgo(7 * day) })
   loanRecs.push(mkSchedLoan(M['Folake Adisa'], 3000000, 12, 3, 0, 'Disbursed', { purpose: 'Shop refit' }))       // arrears (no repayments, disbursed 3mo ago)
   loanRecs.push(mkSchedLoan(M['Chidi Okafor'], 4500000, 12, 4, 3, 'Repaying', { purpose: 'Distribution van' }))   // partly repaid
   loanRecs.push(mkSchedLoan(M['Segun Ade'], 2400000, 6, 8, 6, 'Completed', { purpose: 'Equipment' }))              // fully repaid
   const defLoan = mkSchedLoan(M['Ibrahim Sule'], 3600000, 12, 7, 1, 'Default', { purpose: 'Workshop' })
   defLoan.recovery = recoveryPlan(loanRepayState(defLoan).outstanding, loanBreakdown(3600000))
   loanRecs.push(defLoan)
-  loanRecs.push({ memberId: M['Grace Umeh'].memberId, memberName: 'Grace Umeh', memberPhone: M['Grace Umeh'].phone, createdBy: M['Grace Umeh'].email, coop: M['Grace Umeh'].coop, sector: 'Agriculture', amountRequested: 8000000, type: LOAN_TYPES[0], purpose: 'Over-exposure request', status: 'Declined', apName: 'Trade & Commerce Accelerator', createdAt: isoAgo(20 * day), updatedAt: isoAgo(15 * day) })
-  for (const r of loanRecs) { const id = genLoanId(); await kvSet('loan:' + id, { loanId: id, amountApproved: null, amountRecommended: null, ...r, loanId: id }); await addAudit({ trackingId: id, action: 'Application submitted', by: r.memberName, role: 'member', note: r.purpose || '', at: r.createdAt }) }
+  loanRecs.push({ memberId: M['Grace Umeh'].memberId, memberName: 'Grace Umeh', memberPhone: M['Grace Umeh'].phone, createdBy: M['Grace Umeh'].email, coop: M['Grace Umeh'].coop, sector: M['Grace Umeh'].lasmecoSector, amountRequested: 8000000, type: LOAN_TYPES[0], purpose: 'Over-exposure request', status: 'Declined', apName: M['Grace Umeh'].accel, createdAt: isoAgo(20 * day), updatedAt: isoAgo(15 * day) })
+  const apEmailFor = (name) => (ACCEL_SEEDS.find((a) => a.name === name) || {}).email || ''
+  for (const r of loanRecs) { const id = genLoanId(); await kvSet('loan:' + id, { loanId: id, amountApproved: null, amountRecommended: null, ...r, apEmail: r.apName ? apEmailFor(r.apName) : '', loanId: id }); await addAudit({ trackingId: id, action: 'Application submitted', by: r.memberName, role: 'member', note: r.purpose || '', at: r.createdAt }) }
+  // Accelerators (sector-aligned) so members can route applications to them
+  for (const a of ACCEL_SEEDS) await kvSet('accelerator:' + a.email, { ...a, createdAt: isoAgo(20 * day) })
   // 4) Wallets + esusu rotation
   await kvSet('wallet:' + mWallet(M['Folake Adisa'].memberId), { id: mWallet(M['Folake Adisa'].memberId), balance: 45000, txns: [{ tid: 'Ts1', type: 'topup', amount: 60000, note: 'Card top-up', by: 'Folake Adisa', at: isoAgo(8 * day) }, { tid: 'Ts2', type: 'debit', amount: 15000, note: 'Saved to cooperative', by: 'Folake Adisa', at: isoAgo(6 * day) }] })
   await kvSet('wallet:' + mWallet(M['Chidi Okafor'].memberId), { id: mWallet(M['Chidi Okafor'].memberId), balance: 30000, txns: [{ tid: 'Ts3', type: 'topup', amount: 50000, note: 'Card top-up', by: 'Chidi Okafor', at: isoAgo(7 * day) }, { tid: 'Ts4', type: 'debit', amount: 20000, note: 'Saved to cooperative', by: 'Chidi Okafor', at: isoAgo(5 * day) }] })
@@ -1770,7 +1774,21 @@ async function seedDemoData() {
   const docCoop = coopMap['Eti-Osa Fashion Enterprise Coop']
   await kvSet('doc:' + docCoop + ':Dseed1', { id: 'Dseed1', coopId: docCoop, name: 'by-laws.pdf', category: 'By-laws', size: 284000, type: 'application/pdf', url: '', path: '', storage: 'demo', uploadedBy: 'T. Coker', uploadedAt: isoAgo(9 * day), verified: true, verifiedBy: 'Area Registrar' })
   await kvSet('doc:' + docCoop + ':Dseed2', { id: 'Dseed2', coopId: docCoop, name: 'registration-certificate.pdf', category: 'Registration certificate', size: 156000, type: 'application/pdf', url: '', path: '', storage: 'demo', uploadedBy: 'T. Coker', uploadedAt: isoAgo(9 * day), verified: false })
-  await kvSet('integration:seed-v3', { done: true, at: new Date().toISOString() })
+  await kvSet('integration:seed-v4', { done: true, at: new Date().toISOString() })
+}
+const ACCEL_SEEDS = [
+  { email: 'accel.agric@coopeco.ng', name: 'Agribusiness & Health Accelerator', sectors: ['Agriculture', 'Healthcare & Life Sciences'] },
+  { email: 'accel.industry@coopeco.ng', name: 'Manufacturing & Circular Economy Accelerator', sectors: ['Manufacturing & Light Industry', 'Circular Economy & Environment'] },
+  { email: 'accel.digital@coopeco.ng', name: 'Digital & Skills Accelerator', sectors: ['Digital Economy & ICT', 'Training & Education'] },
+  { email: 'accel.trade@coopeco.ng', name: 'Trade, Creative & Services Accelerator', sectors: ['General MSME Services', 'Creative Industries & Tourism'] },
+]
+async function listAccelerators() { return (await kvList('accelerator:')).sort((a, b) => (a.name > b.name ? 1 : -1)) }
+async function getAccelerator(email) { return kvGet('accelerator:' + email) }
+async function saveAccelerator(rec) { await kvSet('accelerator:' + rec.email, { ...rec, updatedAt: new Date().toISOString() }, rec.uid || null); return rec }
+async function acceleratorsForSector(sector) { return (await listAccelerators()).filter((a) => (a.sectors || []).includes(sector)) }
+async function ensureSeedData() {
+  try { await syncFromSekat({ name: 'SEKAT gateway', role: 'officer', email: 'sekat@system' }, true); await syncFromQoop({ name: 'QooP gateway', role: 'officer', email: 'qoop@system' }, true) } catch (e) { /* not configured */ }
+  try { await seedDemoData() } catch (e) { /* best-effort, once */ }
 }
 async function seedDemoLoans() {
   if (supa) return
@@ -1799,31 +1817,38 @@ function LoanTable({ loans, onOpen }) {
   )
 }
 function LoanApplyForm({ ctx, member, onDone, onCancel }) {
-  const [f, setF] = useState({ amountRequested: '', type: LOAN_TYPES[0], purpose: '' })
+  const [f, setF] = useState({ amountRequested: '', type: LOAN_TYPES[0], purpose: '', sector: LASMECO_SECTORS[0] })
+  const [accels, setAccels] = useState([]), [apEmail, setApEmail] = useState('')
   const [busy, setBusy] = useState(false), [err, setErr] = useState('')
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value })
+  useEffect(() => { acceleratorsForSector(f.sector).then((list) => { setAccels(list); setApEmail(list[0] ? list[0].email : '') }) }, [f.sector])
   const submit = async () => {
     setErr('')
     const amt = Number(f.amountRequested) || 0
     if (amt <= 0) { setErr('Enter the amount you need.'); return }
     if (amt > 10000000) { setErr('The LASMECO cap is ₦10,000,000.'); return }
     if (!f.purpose.trim()) { setErr('Describe what the loan is for.'); return }
+    if (accels.length && !apEmail) { setErr('Select an accelerator to prepare your application.'); return }
     setBusy(true)
-    try { await createLoan({ memberId: member.memberId, memberName: member.name, memberPhone: member.phone, coop: member.coop, sector: member.sector, amountRequested: amt, type: f.type, purpose: f.purpose.trim() }, ctx); onDone() }
+    const ap = accels.find((a) => a.email === apEmail)
+    try { await createLoan({ memberId: member.memberId, memberName: member.name, memberPhone: member.phone, coop: member.coop, sector: f.sector, amountRequested: amt, type: f.type, purpose: f.purpose.trim(), apName: ap ? ap.name : '', apEmail: ap ? ap.email : '' }, ctx); onDone() }
     catch (e) { setErr(e.message || 'Could not submit the application.') } setBusy(false)
   }
   return (
     <div className="panel">
       <div className="panel-head"><h3>Apply for LASMECO finance</h3><button className="link-back" onClick={onCancel}>Cancel</button></div>
-      <p className="panel-sub">{member.name} &middot; {member.coop} &middot; {member.sector}</p>
+      <p className="panel-sub">{member.name} &middot; {member.coop}</p>
       <div className="form-grid">
+        <label className="field"><span>LASMECO priority sector</span><select value={f.sector} onChange={set('sector')}>{LASMECO_SECTORS.map((s) => <option key={s}>{s}</option>)}</select></label>
+        <label className="field"><span>Accelerator</span><select value={apEmail} onChange={(e) => setApEmail(e.target.value)} disabled={!accels.length}>{accels.length ? accels.map((a) => <option key={a.email} value={a.email}>{a.name}</option>) : <option value="">No accelerator for this sector yet</option>}</select></label>
         <label className="field"><span>Amount needed (₦, up to 10,000,000)</span><input type="number" value={f.amountRequested} onChange={set('amountRequested')} placeholder="0" /></label>
         <label className="field"><span>Loan type</span><select value={f.type} onChange={set('type')}>{LOAN_TYPES.map((t) => <option key={t}>{t}</option>)}</select></label>
         <label className="field span2"><span>Purpose</span><textarea value={f.purpose} onChange={set('purpose')} rows={3} placeholder="What the finance is for and the growth it will drive." /></label>
       </div>
+      {!accels.length && <p className="panel-note">No accelerator is registered for this sector yet. You can still submit and MCCTI will assign one, or choose another sector.</p>}
       {err && <p className="auth-err">{err}</p>}
       <div className="panel-actions"><button className="btn btn-gold" onClick={submit} disabled={busy}>{busy ? 'Submitting…' : 'Submit to Accelerator'}</button></div>
-      <p className="panel-note">No upfront fees. An Accelerator prepares you to bankable standard and recommends an amount. 9% fixed, up to 36 months, 6-month moratorium. A ₦200,000 Accelerator fee and 1% BOI appraisal fee are deducted only on disbursement. This is not legal advice.</p>
+      <p className="panel-note">No upfront fees. Your chosen Accelerator prepares you to bankable standard and recommends an amount. 9% fixed, up to 36 months, 6-month moratorium. A ₦200,000 Accelerator fee and 1% BOI appraisal fee are deducted only on disbursement. This is not legal advice.</p>
     </div>
   )
 }
@@ -1927,16 +1952,34 @@ function LoanDetail({ loan, ctx, onClose, onChanged }) {
 function useLoans() { const [loans, setLoans] = useState(null); const reload = useCallback(() => listLoans().then(setLoans), []); useEffect(() => { reload() }, [reload]); return [loans, reload] }
 function AcceleratorWorkspace({ ctx, section }) {
   const [loans, reload] = useLoans(); const [sel, setSel] = useState(null)
-  if (!loans) return <p className="muted-line">Loading pipeline\u2026</p>
+  const [accel, setAccel] = useState(undefined), [pick, setPick] = useState([]), [busy, setBusy] = useState(false)
+  const loadAccel = useCallback(() => getAccelerator(ctx.email).then((a) => { setAccel(a); if (a) setPick(a.sectors || []) }), [ctx.email])
+  useEffect(() => { loadAccel() }, [loadAccel])
+  if (!loans || accel === undefined) return <p className="muted-line">Loading pipeline\u2026</p>
+  if (!accel) {
+    const toggle = (s) => setPick(pick.includes(s) ? pick.filter((x) => x !== s) : [...pick, s])
+    const save = async () => { if (!pick.length) { alert('Select at least one sector you support.'); return } setBusy(true); await saveAccelerator({ email: ctx.email, name: ctx.name, sectors: pick, uid: ctx.uid }); await loadAccel(); setBusy(false) }
+    return (
+      <div className="panel">
+        <div className="panel-head"><h3>Set up your Accelerator profile</h3></div>
+        <p className="panel-sub">Choose the LASMECO priority sectors you support. Members applying for finance in these sectors can route their applications directly to you.</p>
+        <div className="sector-pick">{LASMECO_SECTORS.map((s) => (<button key={s} className={cx('sector-chip', pick.includes(s) && 'on')} onClick={() => toggle(s)}>{s}</button>))}</div>
+        <div className="panel-actions"><button className="btn btn-gold" onClick={save} disabled={busy}>{busy ? 'Saving\u2026' : 'Save profile'}</button></div>
+        <p className="panel-note">You can change your sectors at any time from the Overview.</p>
+      </div>
+    )
+  }
   if (sel) return <LoanDetail loan={sel} ctx={ctx} onClose={() => { setSel(null); reload() }} onChanged={reload} />
-  const queue = loans.filter((l) => AP_STATUSES.includes(l.status))
-  const by = (s) => loans.filter((l) => l.status === s).length
-  const cards = () => [['New applications', by('Applied')], ['In training', by('In training')], ['Shortlisted', by('Shortlisted')], ['Total in pipeline', loans.length]]
+  const mine = (l) => (l.apEmail === ctx.email) || (!l.apEmail && (accel.sectors || []).includes(l.sector))
+  const myLoans = loans.filter(mine)
+  const queue = myLoans.filter((l) => AP_STATUSES.includes(l.status))
+  const by = (s) => myLoans.filter((l) => l.status === s).length
+  const cards = () => [['New applications', by('Applied')], ['In training', by('In training')], ['Shortlisted', by('Shortlisted')], ['My pipeline', myLoans.length]]
   return (
     <div className="ws">
-      {section === 'overview' && <LoanStageOverview loans={loans} cards={cards} />}
+      {section === 'overview' && (<><div className="accel-sectors"><span>Serving: {(accel.sectors || []).join(', ') || 'no sectors set'}</span><button className="link-inline" onClick={() => setAccel(null)}>Edit sectors</button></div><LoanStageOverview loans={myLoans} cards={cards} /></>)}
       {section === 'queue' && <LoanTable loans={queue} onOpen={setSel} />}
-      {section === 'all' && <LoanTable loans={loans} onOpen={setSel} />}
+      {section === 'all' && <LoanTable loans={myLoans} onOpen={setSel} />}
     </div>
   )
 }
@@ -2454,14 +2497,15 @@ export default function App() {
   const goLanding = (tab) => { setView('landing'); setLandingTab(tab); if (typeof window !== 'undefined') window.scrollTo({ top: 0 }) }
   useEffect(() => {
     (async () => {
-      try { await syncFromSekat({ name: 'SEKAT gateway', role: 'officer', email: 'sekat@system' }, true); await syncFromQoop({ name: 'QooP gateway', role: 'officer', email: 'qoop@system' }, true) } catch (e) { /* offline / not configured */ }
-      try { await seedDemoData() } catch (e) { /* seed once, best-effort */ }
-      const s = await loadSession(); setSession(s); setReady(true)
+      if (!hasSupabase) await ensureSeedData()
+      const s = await loadSession()
+      if (s) await ensureSeedData()
+      setSession(s); setReady(true)
     })()
   }, [])
   const enter = useCallback(() => setView(session ? 'dashboard' : 'role'), [session])
   const pickRole = (id) => { setChosenRole(id); setView('auth') }
-  const onAuthed = (res) => { setSession(res); setView('dashboard') }
+  const onAuthed = async (res) => { setSession(res); await ensureSeedData(); setView('dashboard') }
   const doSignOut = async () => { await signOutNow(); setSession(null); setView('landing') }
   const goHome = () => { setView('landing'); setLandingTab('home'); if (typeof window !== 'undefined') window.scrollTo({ top: 0 }) }
   const inApp = view === 'dashboard' && session
@@ -2736,6 +2780,11 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .doc-actions{display:flex;align-items:center;gap:12px;flex-shrink:0}
 .link-inline.danger{color:var(--err)}
 .muted-line.sm{font-size:11px}
+.sector-pick{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0}
+.sector-chip{background:var(--ink-2);border:1px solid var(--line);border-radius:20px;padding:9px 16px;font-size:13px;font-weight:600;color:var(--sage);cursor:pointer;transition:all .15s ease}
+.sector-chip:hover{border-color:var(--green)}
+.sector-chip.on{background:var(--green);color:#fff;border-color:var(--green)}
+.accel-sectors{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;background:var(--green-panel);border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin-bottom:18px;font-size:13.5px;color:var(--cream-ink)}
 @media(max-width:640px){.verify-facts{grid-template-columns:1fr}.verify-h{font-size:28px}.verify-page{padding:40px 18px 70px}}
 .side-foot{margin-top:auto;display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--line-soft);padding-top:16px}
 .side-user{display:flex;align-items:center;gap:10px;min-width:0}
