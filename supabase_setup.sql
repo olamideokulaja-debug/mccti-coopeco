@@ -73,17 +73,40 @@ create policy "loans update" on kv for update to authenticated
 -- Document storage (Supabase Storage) for cooperative uploads
 -- ============================================================
 insert into storage.buckets (id, name, public)
-values ('coop-docs', 'coop-docs', true)
-on conflict (id) do nothing;
+values ('coop-docs', 'coop-docs', false)
+on conflict (id) do update set public = false;
 
+-- Reviewer roles that may view any KYC/loan document (in addition to the uploader).
+create or replace function public.is_doc_reviewer() returns boolean
+  language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.kv
+    where key = 'profile:' || (auth.uid())::text
+      and (value->>'role') in ('officer','sterling','boi','leadership','accelerator')
+  );
+$$;
+
+-- Read: only the uploader (owner) or an authorised reviewer. No public/anon access.
 drop policy if exists "coop_docs_read" on storage.objects;
 create policy "coop_docs_read" on storage.objects
-  for select using (bucket_id = 'coop-docs');
+  for select to authenticated using (
+    bucket_id = 'coop-docs' and (owner = auth.uid() or public.is_doc_reviewer())
+  );
 
+-- Insert: any signed-in user may upload (their upload is owned by them).
 drop policy if exists "coop_docs_insert" on storage.objects;
 create policy "coop_docs_insert" on storage.objects
   for insert to authenticated with check (bucket_id = 'coop-docs');
 
+-- Delete: only the uploader or an authorised reviewer.
 drop policy if exists "coop_docs_delete" on storage.objects;
 create policy "coop_docs_delete" on storage.objects
-  for delete to authenticated using (bucket_id = 'coop-docs');
+  for delete to authenticated using (
+    bucket_id = 'coop-docs' and (owner = auth.uid() or public.is_doc_reviewer())
+  );
+
+-- FALLBACK (if reviewers cannot see documents after the above): comment out the two
+-- policies above and use this permissive authenticated-only read instead:
+--   drop policy if exists "coop_docs_read" on storage.objects;
+--   create policy "coop_docs_read" on storage.objects
+--     for select to authenticated using (bucket_id = 'coop-docs');

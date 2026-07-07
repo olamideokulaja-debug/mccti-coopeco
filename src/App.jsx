@@ -952,6 +952,8 @@ function LeadershipOverview({ ctx, section, onViewAs }) {
       {section === 'reports' && <ReportsPanel role="leadership" />}
       {section === 'risk' && <RiskPanel />}
       {section === 'sla' && <GovernanceSLA />}
+      {section === 'revenue' && <RevenuePanel ctx={ctx} />}
+      {section === 'retention' && <RetentionPanel />}
       {section === 'viewas' && <ViewAsSwitcher onViewAs={onViewAs} />}
       {section === 'integrations' && <IntegrationsPanel ctx={ctx} onSynced={reload} />}
     </div>
@@ -1741,8 +1743,7 @@ async function seedDemoData() {
   loanRecs.push({ memberId: M['Grace Umeh'].memberId, memberName: 'Grace Umeh', memberPhone: M['Grace Umeh'].phone, createdBy: M['Grace Umeh'].email, coop: M['Grace Umeh'].coop, sector: M['Grace Umeh'].lasmecoSector, amountRequested: 8000000, type: LOAN_TYPES[0], purpose: 'Over-exposure request', status: 'Declined', apName: M['Grace Umeh'].accel, createdAt: isoAgo(20 * day), updatedAt: isoAgo(15 * day) })
   const apEmailFor = (name) => (ACCEL_SEEDS.find((a) => a.name === name) || {}).email || ''
   for (const r of loanRecs) { const id = genLoanId(); await kvSet('loan:' + id, { loanId: id, amountApproved: null, amountRecommended: null, ...r, apEmail: r.apName ? apEmailFor(r.apName) : '', loanId: id }); await addAudit({ trackingId: id, action: 'Application submitted', by: r.memberName, role: 'member', note: r.purpose || '', at: r.createdAt }) }
-  // Accelerators (sector-aligned) so members can route applications to them
-  for (const a of ACCEL_SEEDS) await kvSet('accelerator:' + a.email, { ...a, createdAt: isoAgo(20 * day) })
+  // Accelerators are seeded/refreshed separately by ensureAccelerators() so name changes propagate without re-seeding everything.
   // 4) Wallets + esusu rotation
   await kvSet('wallet:' + mWallet(M['Folake Adisa'].memberId), { id: mWallet(M['Folake Adisa'].memberId), balance: 45000, txns: [{ tid: 'Ts1', type: 'topup', amount: 60000, note: 'Card top-up', by: 'Folake Adisa', at: isoAgo(8 * day) }, { tid: 'Ts2', type: 'debit', amount: 15000, note: 'Saved to cooperative', by: 'Folake Adisa', at: isoAgo(6 * day) }] })
   await kvSet('wallet:' + mWallet(M['Chidi Okafor'].memberId), { id: mWallet(M['Chidi Okafor'].memberId), balance: 30000, txns: [{ tid: 'Ts3', type: 'topup', amount: 50000, note: 'Card top-up', by: 'Chidi Okafor', at: isoAgo(7 * day) }, { tid: 'Ts4', type: 'debit', amount: 20000, note: 'Saved to cooperative', by: 'Chidi Okafor', at: isoAgo(5 * day) }] })
@@ -1779,7 +1780,7 @@ async function seedDemoData() {
 const ACCEL_SEEDS = [
   { email: 'accel.agric@coopeco.ng', name: 'Agriculture Accelerator', sectors: ['Agriculture'] },
   { email: 'accel.mfg@coopeco.ng', name: 'Manufacturing Accelerator', sectors: ['Manufacturing & Light Industry'] },
-  { email: 'accel.health@coopeco.ng', name: 'Healthcare Accelerator', sectors: ['Healthcare & Life Sciences'] },
+  { email: 'accel.health@coopeco.ng', name: 'Health Accelerator', sectors: ['Healthcare & Life Sciences'] },
   { email: 'accel.digital@coopeco.ng', name: 'Digital & ICT Accelerator', sectors: ['Digital Economy & ICT'] },
   { email: 'accel.circular@coopeco.ng', name: 'Circular Economy Accelerator', sectors: ['Circular Economy & Environment'] },
   { email: 'accel.creative@coopeco.ng', name: 'Creative & Tourism Accelerator', sectors: ['Creative Industries & Tourism'] },
@@ -1790,9 +1791,33 @@ async function listAccelerators() { return (await kvList('accelerator:')).sort((
 async function getAccelerator(email) { return kvGet('accelerator:' + email) }
 async function saveAccelerator(rec) { await kvSet('accelerator:' + rec.email, { ...rec, updatedAt: new Date().toISOString() }, rec.uid || null); return rec }
 async function acceleratorsForSector(sector) { return (await listAccelerators()).filter((a) => (a.sectors || []).includes(sector)) }
+async function ensureAccelerators() {
+  if (await kvGet('integration:accel-v6')) return
+  const prior = await kvList('accelerator:')
+  for (const a of prior) { if (a && a.email && a.email.startsWith('accel.') && a.email.endsWith('@coopeco.ng')) await kvDelete('accelerator:' + a.email) }
+  for (const a of ACCEL_SEEDS) await kvSet('accelerator:' + a.email, { ...a, createdAt: new Date().toISOString() })
+  await kvSet('integration:accel-v6', { done: true, at: new Date().toISOString() })
+}
+async function ensureLoanDocsSeed() {
+  if (await kvGet('integration:loandocs-v1')) return
+  try {
+    const loans = await listLoans()
+    const targets = loans.filter((l) => ['Coop validated', 'Bank assessment', 'BOI approved', 'Disbursed', 'Repaying'].includes(l.status)).slice(0, 4)
+    for (const l of targets) {
+      const cats = LASMECO_DOC_REQUIREMENTS.slice(0, 4)
+      for (let i = 0; i < cats.length; i++) {
+        const id = 'LD' + String(l.loanId).replace(/[^0-9]/g, '') + i
+        await kvSet('doc:' + l.loanId + ':' + id, { id, coopId: l.loanId, name: cats[i].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.pdf', category: cats[i], size: 180000 + i * 24000, type: 'application/pdf', url: '', path: '', storage: 'demo', uploadedBy: l.memberName, uploadedAt: new Date().toISOString(), verified: (l.status !== 'Coop validated') && i < 2 })
+      }
+    }
+  } catch (e) { /* best-effort */ }
+  await kvSet('integration:loandocs-v1', { done: true, at: new Date().toISOString() })
+}
 async function ensureSeedData() {
   try { await syncFromSekat({ name: 'SEKAT gateway', role: 'officer', email: 'sekat@system' }, true); await syncFromQoop({ name: 'QooP gateway', role: 'officer', email: 'qoop@system' }, true) } catch (e) { /* not configured */ }
   try { await seedDemoData() } catch (e) { /* best-effort, once */ }
+  try { await ensureAccelerators() } catch (e) { /* keep accelerator directory current */ }
+  try { await ensureLoanDocsSeed() } catch (e) { /* seed loan documents once */ }
 }
 async function seedDemoLoans() {
   if (supa) return
@@ -1856,6 +1881,75 @@ function LoanApplyForm({ ctx, member, onDone, onCancel }) {
     </div>
   )
 }
+const LASMECO_DOC_REQUIREMENTS = ['Valid ID (NIN slip / passport)', 'BVN confirmation', 'Passport photograph', 'Business registration or trade permit', '6-month bank statement', 'Cooperative membership letter']
+function lasmecoChecklist(loan, member, docs) {
+  const items = []
+  items.push({ label: 'BVN verified', ok: !!(member && member.kyc && member.kyc.bvnVerified), critical: true })
+  items.push({ label: 'NIN verified', ok: !!(member && member.kyc && member.kyc.ninVerified), critical: true })
+  LASMECO_DOC_REQUIREMENTS.forEach((c) => { const d = docs.find((x) => x.category === c); items.push({ label: c, ok: !!d, verified: d ? d.verified : false, doc: true }) })
+  const score = member ? scoreMember(member).score : 0
+  items.push({ label: 'Credit score at least 500 (currently ' + score + ')', ok: score >= 500 })
+  items.push({ label: 'Active cooperative membership', ok: !!(member && member.coop) })
+  const outstanding = items.filter((i) => !i.ok)
+  const unverifiedDocs = items.filter((i) => i.doc && i.ok && !i.verified)
+  return { items, outstanding, unverifiedDocs, qualifies: outstanding.length === 0 }
+}
+function LoanKycPanel({ loan, ctx }) {
+  const [member, setMember] = useState(undefined), [docs, setDocs] = useState([]), [busy, setBusy] = useState(false)
+  const role = ctx.role
+  const isBorrower = role === 'member' && (loan.createdBy === ctx.email || loan.memberId === ctx.focusId)
+  const canVerify = role === 'sterling'
+  const reloadDocs = useCallback(() => listDocs(loan.loanId).then(setDocs), [loan.loanId])
+  useEffect(() => { (async () => { const ms = await listMembers(); setMember(ms.find((m) => m.memberId === loan.memberId) || null) })() }, [loan.memberId])
+  useEffect(() => { reloadDocs() }, [reloadDocs])
+  const chk = lasmecoChecklist(loan, member, docs)
+  const requestFeedback = async () => {
+    setBusy(true)
+    const missing = chk.outstanding.map((i) => '\u2022 ' + i.label).join('\n')
+    await notify({ to: loan.createdBy, title: 'Action needed on your LASMECO application', body: 'To continue, please submit or update:\n' + (missing || 'Documents pending verification'), event: 'loan', phone: loan.memberPhone })
+    setBusy(false); alert('The member has been notified (in-app' + (loan.memberPhone ? ' and SMS' : '') + ') of the outstanding items.')
+  }
+  if (member === undefined) return <div className="returns-box"><h4>Application documents &amp; KYC</h4><p className="muted-line">Loading\u2026</p></div>
+  return (
+    <div className="returns-box"><h4>Application documents &amp; KYC</h4>
+      <p className="muted-line">{isBorrower ? 'Submit the documents below so your Accelerator and Sterling Bank can verify your KYC and process your application. You will be notified if anything is outstanding.' : 'Documents submitted by the applicant. Sterling Bank verifies each item for KYC; BOI sees the verified set.'}</p>
+      <div className="kyc-check">{chk.items.map((it, i) => (<div className={cx('kyc-item', it.ok && 'ok')} key={i}><span className="kyc-mark">{it.ok ? '\u2713' : '\u25cb'}</span><span className="kyc-label">{it.label}{it.doc && it.ok ? (it.verified ? ' \u2014 verified' : ' \u2014 submitted, awaiting verification') : ''}</span></div>))}</div>
+      <div className={cx('kyc-status', chk.qualifies ? 'ok' : 'pending')}>{chk.qualifies ? 'All requirements met \u2014 ready to proceed to assessment.' : chk.outstanding.length + ' item(s) outstanding' + (chk.unverifiedDocs.length ? ', ' + chk.unverifiedDocs.length + ' awaiting Sterling verification' : '') + '.'}</div>
+      <DocumentsPanel coopId={loan.loanId} ctx={ctx} canVerify={canVerify} canUpload={isBorrower} categories={LASMECO_DOC_REQUIREMENTS} onChange={reloadDocs} />
+      {!isBorrower && (role === 'accelerator' || role === 'sterling') && (chk.outstanding.length > 0) && <div className="panel-actions"><button className="btn btn-outline btn-sm" disabled={busy} onClick={requestFeedback}>Notify member of outstanding items</button></div>}
+    </div>
+  )
+}
+function RevenuePanel({ ctx }) {
+  const [fig, setFig] = useState(null), [amounts, setAmounts] = useState({}), [busy, setBusy] = useState('')
+  useEffect(() => { escrowFigures().then(setFig) }, [])
+  const fixed = { 'Cooperative registration': COOP_FEES.registration, 'Annual returns filing': COOP_FEES.annualReturns, 'Directory & verification search': 2000 }
+  const pay = (name) => async () => {
+    const amt = Number(amounts[name] != null ? amounts[name] : (fixed[name] || 0)) || 0
+    if (amt <= 0) { alert('Enter an amount to collect for this stream.'); return }
+    setBusy(name)
+    const r = await collectPayment({ email: ctx.email, amountNaira: amt, purpose: name, metadata: { stream: name } })
+    setBusy('')
+    if (r.ok) alert('Payment ' + (r.ref && String(r.ref).startsWith('DEMO') ? '(demo) ' : '') + 'received for ' + name + '.')
+    else if (!r.cancelled) alert('Payment could not be completed.')
+  }
+  if (!fig) return <p className="muted-line">Loading revenue\u2026</p>
+  const accrued = { 'Cooperative registration': fig.regFees, 'Annual returns filing': fig.returnsFees, 'LASMECO disbursement portal': fig.portalFees, 'Digital wallet & payments': fig.walletFees }
+  return (
+    <div className="ws">
+      <div className="statgrid"><div className="stat"><span className="stat-fig">{fmtNaira(fig.accrued)}</span><span className="stat-lab">Total accrued to escrow</span></div><div className="stat"><span className="stat-fig">{fmtNaira(fig.regFees)}</span><span className="stat-lab">Registration</span></div><div className="stat"><span className="stat-fig">{fmtNaira(fig.portalFees)}</span><span className="stat-lab">Disbursement portal</span></div><div className="stat"><span className="stat-fig">{fmtNaira(fig.walletFees)}</span><span className="stat-lab">Wallet fees</span></div></div>
+      <div className="revenue-grid">{PRICING.map((pr) => (
+        <div className="revenue-card" key={pr.name}>
+          <div className="revenue-top"><h4>{pr.name}</h4><span className="revenue-price">{pr.price}<em> {pr.unit}</em></span></div>
+          <p className="revenue-who">{pr.who}</p>
+          <p className="revenue-body">{pr.body}</p>
+          {accrued[pr.name] != null && <p className="revenue-accrued">Accrued to date: {fmtNaira(accrued[pr.name])}</p>}
+          <div className="revenue-pay"><input type="number" value={amounts[pr.name] != null ? amounts[pr.name] : (fixed[pr.name] || '')} onChange={(e) => setAmounts({ ...amounts, [pr.name]: e.target.value })} placeholder="Amount (₦)" /><button className="btn btn-gold btn-sm" disabled={busy === pr.name} onClick={pay(pr.name)}>{busy === pr.name ? 'Opening\u2026' : (PAYSTACK_PUBLIC ? 'Send pay link' : 'Collect (demo)')}</button></div>
+        </div>))}</div>
+      <p className="panel-note">Each stream can raise a payment on request through a secure Paystack checkout (test/demo until live keys are set). Percentage and custom streams also accrue automatically from platform activity; the amount field lets you raise a one-off charge or reconciliation for any stream.</p>
+    </div>
+  )
+}
 function LoanDetail({ loan, ctx, onClose, onChanged }) {
   const [l, setL] = useState(loan), [note, setNote] = useState(''), [amt, setAmt] = useState(''), [busy, setBusy] = useState(false), [rk, setRk] = useState(0), [tenorInput, setTenorInput] = useState('12'), [repay, setRepay] = useState('')
   const role = ctx.role
@@ -1892,6 +1986,8 @@ function LoanDetail({ loan, ctx, onClose, onChanged }) {
         <div className="field-ro"><span>Approved</span><strong>{l.amountApproved ? fmtNaira(l.amountApproved) : '—'}</strong></div>
         <div className="field-ro span2"><span>Purpose</span><strong className="normal">{l.purpose}</strong></div>
       </div>
+
+      <LoanKycPanel loan={l} ctx={ctx} />
 
       {['Bank assessment', 'BOI approved', 'Disbursed', 'Repaying', 'Completed'].includes(l.status) && (
         <div className="returns-box"><h4>Guarantee stack &amp; disbursement</h4>
@@ -1982,8 +2078,8 @@ function AcceleratorWorkspace({ ctx, section }) {
   return (
     <div className="ws">
       {section === 'overview' && (<><div className="accel-sectors"><span>Serving: {(accel.sectors || []).join(', ') || 'no sectors set'}</span><button className="link-inline" onClick={() => setAccel(null)}>Edit sectors</button></div><LoanStageOverview loans={myLoans} cards={cards} /></>)}
-      {section === 'queue' && <LoanTable loans={queue} onOpen={setSel} />}
-      {section === 'all' && <LoanTable loans={myLoans} onOpen={setSel} />}
+      {section === 'queue' && (<><p className="muted-line">Applications awaiting your action \u2014 new, in training and shortlisted.</p><LoanTable loans={queue} onOpen={setSel} /></>)}
+      {section === 'all' && (<><p className="muted-line">Every application in your sectors, at all stages (including validated, funded, disbursed, repaying and closed).</p><LoanTable loans={myLoans} onOpen={setSel} /></>)}
     </div>
   )
 }
@@ -2148,31 +2244,79 @@ async function uploadDocument(file, coopId, category, ctx) {
     try {
       const up = await supa.storage.from('coop-docs').upload(path, file, { upsert: true, contentType: file.type })
       if (up.error) return { ok: false, error: up.error.message || 'Upload failed. Is the coop-docs bucket created?' }
-      const pub = supa.storage.from('coop-docs').getPublicUrl(path)
-      url = (pub && pub.data && pub.data.publicUrl) || ''; storage = 'supabase'
+      storage = 'supabase' // private bucket: no public URL stored; access via short-lived signed URLs on view
     } catch (e) { return { ok: false, error: 'Storage upload failed.' } }
   } else if (file.size <= 1024 * 1024) { url = await fileToDataURL(file) }
   const rec = { id, coopId, name: file.name, category, size: file.size, type: file.type, url, path, storage, uploadedBy: ctx.name, uploadedAt: new Date().toISOString(), verified: false }
   await kvSet('doc:' + coopId + ':' + id, rec)
   return { ok: true, rec }
 }
+async function openDocument(d) {
+  if (d.storage === 'supabase' && d.path && supa) {
+    try { const s = await supa.storage.from('coop-docs').createSignedUrl(d.path, 300); const u = s && s.data && s.data.signedUrl; if (u) { window.open(u, '_blank', 'noopener'); return true } } catch (e) { /* fall through */ }
+    alert('Could not open the document. You may not have access, or it has been removed.'); return false
+  }
+  if (d.url) { window.open(d.url, '_blank', 'noopener'); return true }
+  alert('This document is stored securely; open it from a device with access to the storage bucket.'); return false
+}
 async function setDocVerified(coopId, id, verified, ctx) { const d = await kvGet('doc:' + coopId + ':' + id); if (d) await kvSet('doc:' + coopId + ':' + id, { ...d, verified, verifiedBy: ctx.name, verifiedAt: new Date().toISOString() }) }
 async function deleteDocument(coopId, id) { const d = await kvGet('doc:' + coopId + ':' + id); if (d && supa && d.path) { try { await supa.storage.from('coop-docs').remove([d.path]) } catch (e) { /* ignore */ } } await kvDelete('doc:' + coopId + ':' + id) }
 function fmtFileSize(b) { return b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB' }
-function DocumentsPanel({ coopId, ctx, canVerify, canUpload = true }) {
-  const [docs, setDocs] = useState(null), [cat, setCat] = useState(DOC_CATEGORIES[0]), [busy, setBusy] = useState(false), [err, setErr] = useState('')
+const KYC_RETENTION_MONTHS = 60
+async function expiredDocuments() {
+  const docs = await kvList('doc:'), loans = await listLoans()
+  const byId = {}; loans.forEach((l) => { byId[l.loanId] = l })
+  const cutoff = new Date(); cutoff.setMonth(cutoff.getMonth() - KYC_RETENTION_MONTHS)
+  return docs.filter((d) => {
+    const loan = byId[d.coopId]
+    if (!loan) return false // non-loan (cooperative governance) documents are retained
+    if (!['Completed', 'Declined', 'Default'].includes(loan.status)) return false // keep while application is live
+    const closed = new Date(loan.updatedAt || d.uploadedAt)
+    return closed < cutoff
+  })
+}
+async function purgeExpiredDocuments() {
+  const exp = await expiredDocuments()
+  for (const d of exp) { try { await deleteDocument(d.coopId, d.id) } catch (e) { /* continue */ } }
+  return exp.length
+}
+function RetentionPanel() {
+  const [exp, setExp] = useState(null), [busy, setBusy] = useState(false), [done, setDone] = useState(null)
+  const reload = useCallback(() => expiredDocuments().then(setExp), [])
+  useEffect(() => { reload() }, [reload])
+  const purge = async () => {
+    if (!exp || !exp.length) return
+    if (!window.confirm('Permanently delete ' + exp.length + ' expired KYC document(s)? This cannot be undone.')) return
+    setBusy(true); const n = await purgeExpiredDocuments(); setDone(n); setBusy(false); reload()
+  }
+  return (
+    <div className="ws">
+      <div className="returns-box"><h4>KYC document retention</h4>
+        <p className="muted-line">Loan/KYC documents are retained for {Math.round(KYC_RETENTION_MONTHS / 12)} years ({KYC_RETENTION_MONTHS} months) after an application closes (completed, declined or defaulted), then deleted \u2014 aligned with financial-institution KYC record-keeping. Cooperative governance documents (by-laws, certificates) are retained on the registry. Adjust the period in KYC_RETENTION_MONTHS after confirming the schedule with your data-protection officer (NDPR).</p>
+        <div className="statgrid"><div className="stat"><span className="stat-fig">{exp ? exp.length : '\u2026'}</span><span className="stat-lab">Documents past retention</span></div><div className="stat"><span className="stat-fig">{KYC_RETENTION_MONTHS} mo</span><span className="stat-lab">Retention after closure</span></div></div>
+        {exp && exp.length ? <div className="docs-list" style={{ marginTop: '12px' }}>{exp.slice(0, 8).map((d) => (<div className="doc-row" key={d.id}><div className="doc-meta"><strong>{d.name}</strong><span>{d.category} &middot; loan {d.coopId} &middot; uploaded {fmtDate(d.uploadedAt)}</span></div></div>))}</div> : <p className="muted-line" style={{ marginTop: '10px' }}>Nothing is past retention right now.</p>}
+        <div className="panel-actions"><button className="btn btn-outline btn-sm" disabled={busy || !exp || !exp.length} onClick={purge}>{busy ? 'Purging\u2026' : 'Purge expired documents'}</button></div>
+        {done != null && <p className="panel-note" style={{ color: 'var(--green)' }}>Purged {done} document{done === 1 ? '' : 's'}.</p>}
+        <p className="panel-note">For unattended enforcement, schedule the purge server-side (Supabase pg_cron / an Edge Function) on the same rule. See the deploy guide for the SQL.</p>
+      </div>
+    </div>
+  )
+}
+function DocumentsPanel({ coopId, ctx, canVerify, canUpload = true, categories, onChange }) {
+  const cats = categories || DOC_CATEGORIES
+  const [docs, setDocs] = useState(null), [cat, setCat] = useState(cats[0]), [busy, setBusy] = useState(false), [err, setErr] = useState('')
   const fileRef = useRef(null)
-  const reload = useCallback(() => listDocs(coopId).then(setDocs), [coopId])
+  const reload = useCallback(() => listDocs(coopId).then((d) => { setDocs(d); onChange && onChange() }), [coopId, onChange])
   useEffect(() => { reload() }, [reload])
   const onUpload = async (e) => { const f = e.target.files[0]; if (!f) return; setErr(''); setBusy(true); const r = await uploadDocument(f, coopId, cat, ctx); setBusy(false); if (fileRef.current) fileRef.current.value = ''; if (!r.ok) setErr(r.error || 'Upload failed.'); else reload() }
   if (!docs) return <p className="muted-line">Loading documents\u2026</p>
   return (
     <div className="docs">
-      {canUpload && <div className="docs-upload"><select value={cat} onChange={(e) => setCat(e.target.value)}>{DOC_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select><input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx" onChange={onUpload} disabled={busy} /></div>}
+      {canUpload && <div className="docs-upload"><select value={cat} onChange={(e) => setCat(e.target.value)}>{cats.map((c) => <option key={c}>{c}</option>)}</select><input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx" onChange={onUpload} disabled={busy} /></div>}
       {busy && <p className="muted-line">Uploading\u2026</p>}
       {err && <p className="auth-err">{err}</p>}
-      {docs.length ? <div className="docs-list">{docs.map((d) => (<div className="doc-row" key={d.id}><div className="doc-meta"><strong>{d.name}</strong><span>{d.category} &middot; {fmtFileSize(d.size)} &middot; {d.uploadedBy} {d.verified ? <span className="chip st-approved">Verified</span> : null}</span></div><div className="doc-actions">{d.url ? <a className="link-inline" href={d.url} target="_blank" rel="noreferrer">View</a> : <span className="muted-line sm">Stored</span>}{canVerify && !d.verified ? <button className="link-inline" onClick={async () => { await setDocVerified(coopId, d.id, true, ctx); reload() }}>Verify</button> : null}{(canUpload || canVerify) ? <button className="link-inline danger" onClick={async () => { await deleteDocument(coopId, d.id); reload() }}>Remove</button> : null}</div></div>))}</div> : <p className="muted-line">No documents uploaded yet.</p>}
-      {!hasSupabase ? <p className="panel-note">Demo mode: small files preview in-browser only. Connect Supabase Storage (create a bucket named \u201ccoop-docs\u201d) to store full documents securely.</p> : null}
+      {docs.length ? <div className="docs-list">{docs.map((d) => (<div className="doc-row" key={d.id}><div className="doc-meta"><strong>{d.name}</strong><span>{d.category} &middot; {fmtFileSize(d.size)} &middot; {d.uploadedBy} {d.verified ? <span className="chip st-approved">Verified</span> : null}</span></div><div className="doc-actions">{(d.url || (d.storage === 'supabase' && d.path)) ? <button className="link-inline" onClick={() => openDocument(d)}>View</button> : <span className="muted-line sm">Stored</span>}{canVerify && !d.verified ? <button className="link-inline" onClick={async () => { await setDocVerified(coopId, d.id, true, ctx); reload() }}>Verify</button> : null}{(canUpload || canVerify) ? <button className="link-inline danger" onClick={async () => { await deleteDocument(coopId, d.id); reload() }}>Remove</button> : null}</div></div>))}</div> : <p className="muted-line">No documents uploaded yet.</p>}
+      {!hasSupabase ? <p className="panel-note">Demo mode: small files preview in-browser only. Connect Supabase Storage (run supabase_setup.sql to create the private \u201ccoop-docs\u201d bucket) to store documents securely; they are then served only via short-lived signed links to signed-in staff.</p> : <p className="panel-note">Documents are stored in a private bucket and opened via short-lived signed links. Only signed-in platform users can view them.</p>}
     </div>
   )
 }
@@ -2418,7 +2562,7 @@ const ROLE_NAV = {
   sterling: [['overview', 'Overview'], ['queue', 'My queue'], ['all', 'All loans']],
   boi: [['overview', 'Overview'], ['queue', 'My queue'], ['all', 'All loans']],
   assetmatrix: [['overview', 'Overview'], ['distribution', 'Distribution']],
-  leadership: [['overview', 'Overview'], ['applications', 'Applications'], ['members', 'Members'], ['lasmeco', 'LASMECO'], ['sla', 'Service levels'], ['risk', 'Risk & fraud'], ['reports', 'Reports & exports'], ['integrations', 'Integrations']],
+  leadership: [['overview', 'Overview'], ['applications', 'Applications'], ['members', 'Members'], ['lasmeco', 'LASMECO'], ['sla', 'Service levels'], ['risk', 'Risk & fraud'], ['revenue', 'Revenue & billing'], ['reports', 'Reports & exports'], ['retention', 'Data retention'], ['integrations', 'Integrations']],
 }
 const WORKSPACES = { society: SocietyWorkspace, member: MemberWorkspace, officer: OfficerWorkspace, auditor: AuditorWorkspace, sterling: SterlingWorkspace, boi: BoiWorkspace, assetmatrix: AssetMatrixWorkspace, accelerator: AcceleratorWorkspace, leadership: LeadershipOverview }
 function SideIcon({ name }) {
@@ -2771,6 +2915,27 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .sla-lab{font-family:var(--mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--sage-dim)}
 .side-return{margin:0 12px 10px;padding:9px 12px;background:var(--green-panel);border:1px solid var(--green);border-radius:8px;color:var(--green);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;text-align:left;transition:background .18s ease}
 .side-return:hover{background:#e0eee4}
+.rtable th{white-space:nowrap}
+.kyc-check{display:flex;flex-direction:column;gap:7px;margin:14px 0}
+.kyc-item{display:flex;align-items:flex-start;gap:9px;font-size:13.5px;color:var(--sage)}
+.kyc-item.ok{color:var(--cream)}
+.kyc-mark{flex-shrink:0;width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;background:var(--line-soft);color:var(--sage-dim)}
+.kyc-item.ok .kyc-mark{background:var(--green);color:#fff}
+.kyc-status{margin:10px 0 4px;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600}
+.kyc-status.ok{background:var(--green-panel);color:var(--green);border:1px solid var(--green)}
+.kyc-status.pending{background:#fbf3e6;color:var(--gold-soft);border:1px solid var(--gold-soft)}
+.revenue-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:16px}
+.revenue-card{background:var(--ink-2);border:1px solid var(--line-soft);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:6px}
+.revenue-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.revenue-top h4{font-size:15px}
+.revenue-price{font-family:var(--mono);font-size:13px;color:var(--green);white-space:nowrap}
+.revenue-price em{color:var(--sage-dim);font-style:normal;font-size:11px}
+.revenue-who{font-size:12px;color:var(--sage-dim);text-transform:uppercase;letter-spacing:.04em}
+.revenue-body{font-size:13px;color:var(--sage);line-height:1.5;flex:1}
+.revenue-accrued{font-size:12.5px;color:var(--cream);font-weight:600}
+.revenue-pay{display:flex;gap:8px;margin-top:6px}
+.revenue-pay input{flex:1;min-width:0;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--ink);color:var(--cream);font-size:13px}
+.revenue-pay input:focus{outline:none;border-color:var(--green)}
 .bulk-type{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:12px}
 .bulk-type .seg{background:none;border:none;padding:8px 16px;font-family:var(--sans);font-size:13px;font-weight:600;color:var(--sage);cursor:pointer}
 .bulk-type .seg.on{background:var(--green);color:#fff}

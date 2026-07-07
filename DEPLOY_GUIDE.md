@@ -360,8 +360,7 @@ Societies can upload documents (by-laws, registration certificate, trustee IDs,
 financial statements) from their cooperative page; officers and leadership see and
 can Verify or Remove them during review. Files go to Supabase Storage when
 configured; in demo mode small files preview in-browser. To enable live storage,
-run supabase_setup.sql (it creates the public "coop-docs" bucket and access
-policies) or create a bucket named coop-docs in the Supabase dashboard. Max 5MB per
+run supabase_setup.sql (it creates the PRIVATE "coop-docs" bucket and authenticated-only policies) or create a bucket named coop-docs in the Supabase dashboard. Max 5MB per
 file. Document metadata is stored under the doc: policy already in the SQL.
 
 ## Automated esusu rotation
@@ -395,7 +394,7 @@ the integration:seed-v5 marker, so it never duplicates. When you are ready to go
 for real, clear the demo rows: in Supabase SQL Editor run
 `delete from kv where key like 'coop:%' or key like 'member:%' or key like 'loan:%'
 or key like 'ticket:%' or key like 'notif:%' or key like 'doc:%' or key like 'wallet:%'
-or key like 'audit:%' or key = 'integration:seed-v5';` then reload. (Ask before running
+or key like 'audit:%' or key like 'accelerator:%' or key = 'integration:seed-v5';` then reload. (Ask before running
 this against real data.)
 
 ## Landing navigation (pages, not scrolling)
@@ -420,6 +419,65 @@ for their sector and accelerators see every application in the sectors they supp
 When leadership opens another workspace via "Open a workspace as", a green "Return to
 my workspace" button appears at the top of the sidebar (in addition to the Exit view
 banner), so it is always an obvious selection to get back to the leadership overview.
+
+## LASMECO documents, KYC checklist & billing
+On each LASMECO loan, an "Application documents & KYC" section lets the member submit
+the required documents (valid ID, BVN confirmation, passport photo, business
+registration, 6-month bank statement, cooperative membership letter). The Accelerator,
+Sterling Bank and BOI all see the submitted set; Sterling verifies each item for KYC,
+and BOI sees the verified documents. A live qualification checklist shows what is met
+and what is outstanding (KYC, each document, credit score, cooperative membership), and
+an accelerator or Sterling can "Notify member of outstanding items" to prompt a
+resubmit via in-app notification and SMS. A "Revenue & billing" section (leadership)
+lists all eight revenue streams with accrued amounts and a pay-on-request Paystack
+collect action per stream. Table headings no longer wrap. The accelerator's pipeline
+(actionable) and all-loans (all stages) tabs are now clearly distinct.
+
+Privacy note: KYC documents are sensitive. For production, store them in a PRIVATE
+Supabase Storage bucket with signed URLs and a retention policy (NDPR), not the public
+demo bucket. Confirm the exact required-document list and the qualification thresholds
+with Sterling's KYC/underwriting policy before go-live.
+
+## KYC document storage is private
+Documents (including KYC) are stored in a PRIVATE Supabase Storage bucket. Uploads
+save only the file path; viewing generates a short-lived 5-minute signed URL on
+demand, and storage access is restricted to authenticated platform users. Re-running
+supabase_setup.sql will convert a previously public coop-docs bucket to private. In
+demo mode (no Supabase) small files preview in-browser only. If you want document
+access limited further (e.g. only the owning member plus officers/Sterling/BOI rather
+than all signed-in users), that can be layered with per-object RLS keyed on the path.
+
+## Owner + reviewer access & KYC retention
+Access: after re-running supabase_setup.sql, a KYC/loan document can be read (and its
+signed link minted) only by the member who uploaded it OR by an authorised reviewer
+role (officer, Sterling, BOI, leadership, accelerator), enforced by the
+is_doc_reviewer() function and per-object storage policies. If reviewers report they
+cannot see documents, swap to the permissive authenticated-only read policy noted
+(commented) at the bottom of the storage section in supabase_setup.sql, and check that
+each reviewer has a profile row with the expected role.
+
+Retention: leadership has a Data retention section. Loan/KYC documents are kept for
+KYC_RETENTION_MONTHS (default 60 = 5 years) after an application closes (completed/declined/
+defaulted), then deleted; cooperative governance documents are retained. Use the
+"Purge expired documents" button for on-demand cleanup. For unattended enforcement,
+schedule it server-side with Supabase pg_cron (adapt and TEST before enabling):
+
+  -- requires the pg_cron and http/storage privileges; run in Supabase SQL editor
+  select cron.schedule('purge-kyc-docs','0 3 * * *', $$ -- 60-month (5-year) retention
+    with expired as (
+      select d.key as dkey, (d.value->>'path') as path
+      from public.kv d
+      join public.kv l
+        on l.key = 'loan:' || split_part(substr(d.key,5),':',1)
+      where d.key like 'doc:%'
+        and (l.value->>'status') in ('Completed','Declined','Default')
+        and (l.value->>'updatedAt')::timestamptz < now() - interval '60 months'
+    )
+    , del_obj as (delete from storage.objects where name in (select path from expired) returning 1)
+    delete from public.kv where key in (select dkey from expired);
+  $$);
+
+Confirm the retention period with your data-protection officer before enabling.
 
 ## Environment variables
 See `.env.example`. For local testing copy it to `.env.local` and fill it in.
