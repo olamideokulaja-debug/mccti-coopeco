@@ -389,6 +389,7 @@ const PRICING = [
 ]
 const LANGS = [['en', 'English'], ['yo', 'Yor\u00f9b\u00e1'], ['ig', 'Igbo'], ['ha', 'Hausa'], ['pcm', 'Naij\u00e1']]
 const I18N = {
+  'nav.home': { en: 'Home', yo: 'Il\u00e9', ig: '\u1ee4l\u1ecd', ha: 'Gida', pcm: 'Home' },
   'nav.modules': { en: 'Modules' },
   'nav.pricing': { en: 'Pricing', yo: 'Iye ow\u00f3', ig: '\u1ecc\u1e45\u1ee5 ah\u1ecba', ha: 'Fara\u0161i', pcm: 'Price' },
   'nav.leadership': { en: 'Leadership', yo: 'A\u1e63\u00e1\u00e1j\u00fa', ig: 'Nd\u00fa', ha: 'Shugabanci', pcm: 'Leadership' },
@@ -2474,7 +2475,7 @@ export default function App() {
       {!inApp && (
         <header className="nav">
           <button className="brand" onClick={goHome}><span className="brand-mark" aria-hidden="true">&#9670;</span><span className="brand-name">MCCTI <em>CoopEco</em></span></button>
-          <nav className="nav-links" aria-label="Primary">{view === 'landing' ? (<>{[['modules', 'nav.modules'], ['pricing', 'nav.pricing'], ['leadership', 'nav.leadership'], ['about', 'nav.about'], ['platform', 'nav.platform']].map(([id, k]) => <button key={id} className={cx('nav-page', landingTab === id && 'on')} onClick={() => goLanding(id)}>{t(k, lang)}</button>)}</>) : null}<button className="nav-verify" onClick={() => setView('verify')}>{t('nav.verify', lang)}</button><select className="lang-select" value={lang} onChange={(e) => setLang(e.target.value)} aria-label="Language">{LANGS.map(([code, label]) => <option key={code} value={code}>{label}</option>)}</select></nav>
+          <nav className="nav-links" aria-label="Primary">{view === 'landing' ? (<>{[['home', 'nav.home'], ['modules', 'nav.modules'], ['pricing', 'nav.pricing'], ['leadership', 'nav.leadership'], ['about', 'nav.about'], ['platform', 'nav.platform']].map(([id, k]) => <button key={id} className={cx('nav-page', landingTab === id && 'on')} onClick={() => goLanding(id)}>{t(k, lang)}</button>)}</>) : null}<button className="nav-verify" onClick={() => setView('verify')}>{t('nav.verify', lang)}</button><select className="lang-select" value={lang} onChange={(e) => setLang(e.target.value)} aria-label="Language">{LANGS.map(([code, label]) => <option key={code} value={code}>{label}</option>)}</select></nav>
           {ready && session ? (
             <div className="account"><button className="acct-btn" onClick={() => setView('dashboard')}><Avatar name={session.profile.name} photo={session.profile.photo} size={30} /><span className="acct-name">{session.profile.name.split(' ')[0]}</span></button><button className="signout" onClick={doSignOut}>Sign out</button></div>
           ) : (<button className="btn btn-gold nav-cta" onClick={enter}>{t('cta.enter', lang)}</button>)}
