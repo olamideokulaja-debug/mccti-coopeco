@@ -401,39 +401,49 @@ const I18N = {
   'hero.ghost': { en: 'See the modules', yo: 'Wo \u00e0w\u1ecdn m\u00f3d\u00f9', ig: 'Lee modul', ha: 'Duba kayan aiki', pcm: 'See di modules' },
 }
 function t(key, lang) { const e = I18N[key]; if (!e) return key; return e[lang] || e.en || key }
-function Landing({ area, setArea, onEnter, lang = 'en' }) {
+function Landing({ area, setArea, onEnter, lang = 'en', tab = 'home', onTab }) {
   const current = AREA_LENS.find((a) => a.id === area) || AREA_LENS[0]
+  useEffect(() => { if (typeof window !== 'undefined') window.scrollTo({ top: 0 }) }, [tab])
   return (
-    <main id="top">
-      <section className="hero">
-        <img className="hero-watermark" src="/seal-watermark.png" alt="" aria-hidden="true" />
-        <div className="hero-copy">
-          <p className="eyebrow"><span className="eb-dot" />Lagos State &middot; A core economic governance reform</p>
-          <h1>{lang === 'en' ? <>One State.<br />One cooperative economy.<br /><span className="underline">One system.</span></> : t('hero.h1', lang)}</h1>
-          <p className="lead">13,000 registered cooperatives and 150,000+ members sit across two separate systems and a credit programme that cannot see them. MCCTI CoopEco consolidates the registry, member analytics, LASMECO financing, wallets and governance intelligence into a single, Ministry-owned platform.</p>
-          <div className="hero-cta"><button className="btn btn-gold" onClick={onEnter}>{t('hero.cta', lang)}</button><a className="btn btn-ghost" href="#modules">{t('hero.ghost', lang)}</a></div>
-          {lang !== 'en' && <p className="lang-note">Translations are provisional and pending review by the Ministry\u2019s language team. Detailed content remains in English for now.</p>}
-          <p className="hero-foot">Ministry-owned &middot; SPV-operated &middot; self-funding from Year 1</p>
-        </div>
-        <LiveRegister areaId={area} />
-      </section>
-      <section className="band" aria-label="Headline figures">
-        {[[13000, '', 'Registered cooperatives'], [150000, '+', 'MSME members'], [97, '%', 'MSMEs currently informal'], [8, '', 'Platform revenue streams']].map(([n, suf, l]) => (<div className="band-item" key={l}><span className="band-fig"><CountUp end={n} suffix={suf} /></span><span className="band-lab">{l}</span></div>))}
-        <div className="band-item"><span className="band-fig">₦655M<span className="band-arrow"> &rarr; </span>₦1B+</span><span className="band-lab">Year 1 to Year 3</span></div>
-      </section>
-      <section className="lens" id="lens">
-        <div className="section-head"><p className="eyebrow">Area office lens</p><h2>See the cooperative economy, office by office</h2><p className="section-sub">Switch between a State-wide view and any of the 21 cooperative area offices. The underserved Ikorodu, Epe, Badagry and Ibeju-Lekki corridors are where formalisation has furthest to travel.</p></div>
-        <div className="lens-tabs" role="tablist" aria-label="Area office">{AREA_LENS.map((a) => (<button key={a.id} role="tab" aria-selected={area === a.id} className={cx('lens-tab', area === a.id && 'is-on', a.corridor && 'is-corridor')} onClick={() => setArea(a.id)}>{a.label}</button>))}</div>
-        <div className="lens-readout">
-          <div className="lens-tag">{current.corridor && <span className="corridor-flag">Priority corridor</span>}<span className="lens-tag-text">{current.label} &middot; {current.tag}</span></div>
-          <div className="lens-figs"><div><span className="lf-fig">{current.coops}</span><span className="lf-lab">Cooperatives</span></div><div><span className="lf-fig">{current.members}</span><span className="lf-lab">Members</span></div><div><span className="lf-fig">{current.active}</span><span className="lf-lab">Digitally active</span></div></div>
-        </div>
-      </section>
-      <section className="modules" id="modules">
+    <main id="top" className={cx(tab !== 'home' && 'landing-sub')}>
+      {tab === 'home' && (<>
+        <section className="hero">
+          <img className="hero-watermark" src="/seal-watermark.png" alt="" aria-hidden="true" />
+          <div className="hero-copy">
+            <p className="eyebrow"><span className="eb-dot" />Lagos State &middot; A core economic governance reform</p>
+            <h1>{lang === 'en' ? <>One State.<br />One cooperative economy.<br /><span className="underline">One system.</span></> : t('hero.h1', lang)}</h1>
+            <p className="lead">13,000 registered cooperatives and 150,000+ members sit across two separate systems and a credit programme that cannot see them. MCCTI CoopEco consolidates the registry, member analytics, LASMECO financing, wallets and governance intelligence into a single, Ministry-owned platform.</p>
+            <div className="hero-cta"><button className="btn btn-gold" onClick={onEnter}>{t('hero.cta', lang)}</button><button className="btn btn-ghost" onClick={() => onTab && onTab('modules')}>{t('hero.ghost', lang)}</button></div>
+            {lang !== 'en' && <p className="lang-note">Translations are provisional and pending review by the Ministry\u2019s language team. Detailed content remains in English for now.</p>}
+            <p className="hero-foot">Ministry-owned &middot; SPV-operated &middot; self-funding from Year 1</p>
+          </div>
+          <LiveRegister areaId={area} />
+        </section>
+        <section className="band" aria-label="Headline figures">
+          {[[13000, '', 'Registered cooperatives'], [150000, '+', 'MSME members'], [97, '%', 'MSMEs currently informal'], [8, '', 'Platform revenue streams']].map(([n, suf, l]) => (<div className="band-item" key={l}><span className="band-fig"><CountUp end={n} suffix={suf} /></span><span className="band-lab">{l}</span></div>))}
+          <div className="band-item"><span className="band-fig">₦655M<span className="band-arrow"> &rarr; </span>₦1B+</span><span className="band-lab">Year 1 to Year 3</span></div>
+        </section>
+        <section className="lens" id="lens">
+          <div className="section-head"><p className="eyebrow">Area office lens</p><h2>See the cooperative economy, office by office</h2><p className="section-sub">Switch between a State-wide view and any of the 21 cooperative area offices. The underserved Ikorodu, Epe, Badagry and Ibeju-Lekki corridors are where formalisation has furthest to travel.</p></div>
+          <div className="lens-tabs" role="tablist" aria-label="Area office">{AREA_LENS.map((a) => (<button key={a.id} role="tab" aria-selected={area === a.id} className={cx('lens-tab', area === a.id && 'is-on', a.corridor && 'is-corridor')} onClick={() => setArea(a.id)}>{a.label}</button>))}</div>
+          <div className="lens-readout">
+            <div className="lens-tag">{current.corridor && <span className="corridor-flag">Priority corridor</span>}<span className="lens-tag-text">{current.label} &middot; {current.tag}</span></div>
+            <div className="lens-figs"><div><span className="lf-fig">{current.coops}</span><span className="lf-lab">Cooperatives</span></div><div><span className="lf-fig">{current.members}</span><span className="lf-lab">Members</span></div><div><span className="lf-fig">{current.active}</span><span className="lf-lab">Digitally active</span></div></div>
+          </div>
+        </section>
+        <section className="explore">
+          <div className="section-head"><p className="eyebrow">Explore</p><h2>Take a closer look</h2></div>
+          <div className="explore-grid">{[['modules', 'Modules', 'The six modules the cooperative economy runs on'], ['platform', 'Platform', 'How the platform changes the arithmetic'], ['pricing', 'Pricing', 'Eight revenue streams, self-funding from Year 1'], ['leadership', 'Leadership', 'The stewards behind MCCTI CoopEco'], ['about', 'About', 'The institutions and programmes behind it']].map(([id, title, desc]) => (<button className="explore-card" key={id} onClick={() => onTab && onTab(id)}><span className="explore-title">{title}</span><span className="explore-desc">{desc}</span><span className="explore-arrow" aria-hidden="true">&rarr;</span></button>))}</div>
+        </section>
+        <section className="quote"><img className="quote-seal" src="/lagos-seal.png" alt="" aria-hidden="true" /><blockquote><p>&ldquo;This engagement marks a fundamental reset of the cooperative digitalisation agenda in Lagos State: one registry, one member record, one governance framework, owned by the Ministry.&rdquo;</p><cite>Directorate of Cooperative Services, MCCTI</cite></blockquote></section>
+      </>)}
+      {tab === 'modules' && (<section className="modules page" id="modules">
         <div className="section-head"><p className="eyebrow">Six modules, one platform</p><h2>Everything the cooperative economy runs on</h2></div>
         <div className="mod-grid">{MODULES.map((m) => (<article className="mod-card" key={m.n}><div className="mod-top"><span className="mod-n">{m.n}</span><span className="mod-lens">{m.lens}</span></div><h3>{m.title}</h3><p>{m.body}</p>{m.ai && <span className="mod-ai">Summarised by MCCTI CoopEco</span>}</article>))}</div>
-      </section>
-      <section className="arc" id="arc">
+        <div className="section-head" style={{ marginTop: '48px' }}><p className="eyebrow">Role-aware from the first screen</p><h2>Built for everyone who touches a cooperative</h2></div>
+        <div className="persona-grid">{PERSONAS.map(([tt, d]) => (<div className="persona" key={tt}><span className="persona-t">{tt}</span><span className="persona-d">{d}</span></div>))}</div>
+      </section>)}
+      {tab === 'platform' && (<section className="arc page" id="arc">
         <div className="section-head"><p className="eyebrow">From fragmentation to ₦1 billion</p><h2>How the platform changes the arithmetic</h2></div>
         <div className="arc-steps">
           <div className="arc-step"><span className="arc-n">01</span><h4>The problem: fragmentation</h4><p>The registry, the analytics layer and LASMECO operate in isolation. Data is duplicated, revenue is uncollected, fraud goes undetected, and Government cannot see its own economy.</p></div>
@@ -442,27 +452,22 @@ function Landing({ area, setArea, onEnter, lang = 'en' }) {
           <div className="arc-arrow" aria-hidden="true">&rarr;</div>
           <div className="arc-step"><span className="arc-n">03</span><h4>The return: self-funding IGR</h4><p>Eight revenue streams generate ₦655M in Year 1 and cross ₦1 billion by Year 3, at zero capital cost to the State, with full ownership retained by the Ministry.</p></div>
         </div>
-      </section>
-      <section className="pricing" id="pricing">
+      </section>)}
+      {tab === 'pricing' && (<section className="pricing page" id="pricing">
         <div className="section-head"><p className="eyebrow"><span className="eb-dot" />Pricing</p><h2>Eight revenue streams, one self-funding platform</h2><p className="section-sub">Transparent, usage-based pricing that makes the platform self-funding from Year 1, at no capital cost to the State.</p></div>
         <div className="price-grid">{PRICING.map((pr, i) => (<Reveal className="price-card" tag="article" key={pr.name} delay={i * 45}><div className="price-top"><span className="price-amt">{pr.price}</span><span className="price-unit">{pr.unit}</span></div><h3>{pr.name}</h3><p className="price-who">{pr.who}</p><p>{pr.body}</p></Reveal>))}</div>
-      </section>
-      <section className="personas" id="intelligence">
-        <div className="section-head"><p className="eyebrow">Role-aware from the first screen</p><h2>Built for everyone who touches a cooperative</h2></div>
-        <div className="persona-grid">{PERSONAS.map(([t, d]) => (<div className="persona" key={t}><span className="persona-t">{t}</span><span className="persona-d">{d}</span></div>))}</div>
-      </section>
-      <section className="leaders" id="leadership">
+      </section>)}
+      {tab === 'leadership' && (<section className="leaders page" id="leadership">
         <div className="section-head"><p className="eyebrow"><span className="eb-dot" />Leadership</p><h2>Stewards of the cooperative economy</h2><p className="section-sub">The State and Ministry leadership provide the policy direction, oversight and governance behind MCCTI CoopEco.</p></div>
         <p className="leader-group-lab">Executive leadership</p>
         <div className="leader-grid two">{LEADERS_PRINCIPAL.map((l, i) => <LeaderCard l={l} i={i} key={l.name} />)}</div>
         <p className="leader-group-lab">Ministry leadership</p>
         <div className="leader-grid">{LEADERS_MINISTRY.map((l, i) => <LeaderCard l={l} i={i} key={l.name} />)}</div>
-      </section>
-      <section className="about" id="about">
+      </section>)}
+      {tab === 'about' && (<section className="about page" id="about">
         <div className="section-head"><p className="eyebrow"><span className="eb-dot" />About</p><h2>What sits behind the platform</h2><p className="section-sub">The institutions and programmes that MCCTI CoopEco brings together.</p></div>
         <Accordion items={ABOUT_ITEMS} />
-      </section>
-      <section className="quote"><img className="quote-seal" src="/lagos-seal.png" alt="" aria-hidden="true" /><blockquote><p>&ldquo;This engagement marks a fundamental reset of the cooperative digitalisation agenda in Lagos State: one registry, one member record, one governance framework, owned by the Ministry.&rdquo;</p><cite>Directorate of Cooperative Services, MCCTI</cite></blockquote></section>
+      </section>)}
     </main>
   )
 }
@@ -2444,6 +2449,8 @@ export default function App() {
   const [ready, setReady] = useState(false)
   const [lang, setLang] = useState(() => LS.get('coopeco.lang', 'en'))
   useEffect(() => { LS.set('coopeco.lang', lang) }, [lang])
+  const [landingTab, setLandingTab] = useState('home')
+  const goLanding = (tab) => { setView('landing'); setLandingTab(tab); if (typeof window !== 'undefined') window.scrollTo({ top: 0 }) }
   useEffect(() => {
     (async () => {
       try { await syncFromSekat({ name: 'SEKAT gateway', role: 'officer', email: 'sekat@system' }, true); await syncFromQoop({ name: 'QooP gateway', role: 'officer', email: 'qoop@system' }, true) } catch (e) { /* offline / not configured */ }
@@ -2455,7 +2462,7 @@ export default function App() {
   const pickRole = (id) => { setChosenRole(id); setView('auth') }
   const onAuthed = (res) => { setSession(res); setView('dashboard') }
   const doSignOut = async () => { await signOutNow(); setSession(null); setView('landing') }
-  const goHome = () => setView('landing')
+  const goHome = () => { setView('landing'); setLandingTab('home'); if (typeof window !== 'undefined') window.scrollTo({ top: 0 }) }
   const inApp = view === 'dashboard' && session
   return (
     <div className={cx('page', inApp && 'is-app')}>
@@ -2467,13 +2474,13 @@ export default function App() {
       {!inApp && (
         <header className="nav">
           <button className="brand" onClick={goHome}><span className="brand-mark" aria-hidden="true">&#9670;</span><span className="brand-name">MCCTI <em>CoopEco</em></span></button>
-          <nav className="nav-links" aria-label="Primary">{view === 'landing' ? (<><a href="#modules">{t('nav.modules', lang)}</a><a href="#pricing">{t('nav.pricing', lang)}</a><a href="#leadership">{t('nav.leadership', lang)}</a><a href="#about">{t('nav.about', lang)}</a><a href="#arc">{t('nav.platform', lang)}</a></>) : null}<button className="nav-verify" onClick={() => setView('verify')}>{t('nav.verify', lang)}</button><select className="lang-select" value={lang} onChange={(e) => setLang(e.target.value)} aria-label="Language">{LANGS.map(([code, label]) => <option key={code} value={code}>{label}</option>)}</select></nav>
+          <nav className="nav-links" aria-label="Primary">{view === 'landing' ? (<>{[['modules', 'nav.modules'], ['pricing', 'nav.pricing'], ['leadership', 'nav.leadership'], ['about', 'nav.about'], ['platform', 'nav.platform']].map(([id, k]) => <button key={id} className={cx('nav-page', landingTab === id && 'on')} onClick={() => goLanding(id)}>{t(k, lang)}</button>)}</>) : null}<button className="nav-verify" onClick={() => setView('verify')}>{t('nav.verify', lang)}</button><select className="lang-select" value={lang} onChange={(e) => setLang(e.target.value)} aria-label="Language">{LANGS.map(([code, label]) => <option key={code} value={code}>{label}</option>)}</select></nav>
           {ready && session ? (
             <div className="account"><button className="acct-btn" onClick={() => setView('dashboard')}><Avatar name={session.profile.name} photo={session.profile.photo} size={30} /><span className="acct-name">{session.profile.name.split(' ')[0]}</span></button><button className="signout" onClick={doSignOut}>Sign out</button></div>
           ) : (<button className="btn btn-gold nav-cta" onClick={enter}>{t('cta.enter', lang)}</button>)}
         </header>
       )}
-      {view === 'landing' && <Landing area={area} setArea={setArea} onEnter={enter} lang={lang} />}
+      {view === 'landing' && <Landing area={area} setArea={setArea} onEnter={enter} lang={lang} tab={landingTab} onTab={goLanding} />}
       {view === 'role' && <RolePage onPick={pickRole} onBack={goHome} />}
       {view === 'auth' && <AuthPage role={chosenRole} onDone={onAuthed} onBack={() => setView('role')} onPrivacy={() => setView('privacy')} />}
       {view === 'privacy' && <PrivacyNotice onBack={() => setView(session ? 'dashboard' : 'landing')} />}
@@ -2669,6 +2676,21 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .nav-verify:hover{border-color:var(--green);color:var(--green)}
 .lang-select{border:1px solid var(--line);border-radius:6px;padding:7px 10px;background:var(--ink-2);color:var(--sage);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer}
 .lang-select:focus{outline:none;border-color:var(--green)}
+.nav-page{background:none;border:none;padding:6px 2px;font-family:var(--sans);font-size:14px;font-weight:500;color:var(--sage);cursor:pointer;border-bottom:2px solid transparent;transition:color .18s ease,border-color .18s ease}
+.nav-page:hover{color:var(--green)}
+.nav-page.on{color:var(--green);border-bottom-color:var(--green)}
+.landing-sub{min-height:70vh}
+.landing-sub .page{padding-top:56px;padding-bottom:72px;animation:rise .5s ease both}
+@media(max-width:860px){.landing-sub .page{padding-top:32px}}
+.explore{padding:64px 40px}
+.explore-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+.explore-card{position:relative;text-align:left;background:var(--ink-2);border:1px solid var(--line-soft);border-radius:12px;padding:22px 22px 44px;cursor:pointer;transition:border-color .18s ease,transform .18s ease,box-shadow .18s ease;display:flex;flex-direction:column;gap:7px}
+.explore-card:hover{border-color:var(--green);transform:translateY(-2px);box-shadow:0 10px 26px rgba(20,50,32,.08)}
+.explore-title{font-family:var(--serif);font-size:18px;color:var(--cream)}
+.explore-desc{font-size:13px;color:var(--sage);line-height:1.5}
+.explore-arrow{position:absolute;left:22px;bottom:18px;color:var(--green);font-size:18px;transition:transform .18s ease}
+.explore-card:hover .explore-arrow{transform:translateX(4px)}
+@media(max-width:680px){.explore{padding:48px 18px}}
 .lang-note{font-size:12px;color:var(--gold-soft);margin-top:14px;max-width:520px;font-style:italic}
 .verify-page{flex:1;padding:60px 40px 100px;animation:rise .5s ease both}
 .verify-inner{max-width:760px;margin:0 auto}
@@ -2912,6 +2934,6 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .miniarea{width:100%;height:90px;display:block}
 .trend-x{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--sage-dim);margin-top:2px}@keyframes draw{to{transform:scaleX(1)}}@keyframes fadeIn{from{opacity:0}to{opacity:1}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 @media(max-width:960px){.hero{grid-template-columns:1fr;padding-top:52px}.hero-watermark{display:none}.mod-grid{grid-template-columns:1fr 1fr}.persona-grid{grid-template-columns:1fr 1fr}.arc-steps{grid-template-columns:1fr}.arc-arrow{transform:rotate(90deg);justify-content:center;padding:2px 0}.foot-grid{grid-template-columns:1fr}.role-page-grid{grid-template-columns:1fr 1fr}.dash-grid{grid-template-columns:1fr}.statgrid{grid-template-columns:1fr 1fr}.viewas-cols{grid-template-columns:1fr}.kpi-row{grid-template-columns:1fr 1fr}.chart-grid{grid-template-columns:1fr}.chart-card.wide{grid-column:span 1}.bar-row{grid-template-columns:96px 1fr auto}}
-@media(max-width:680px){.letterhead{padding:9px 18px;gap:12px}.lh-min{display:none}.lh-seal{height:34px}.lh-mccti{height:32px}.nav{padding:13px 18px}.nav-links{display:none}.hero{padding:40px 18px 30px}section.lens,section.modules,section.arc,section.personas,section.quote,section.leaders,section.about,section.pricing{padding:56px 18px}.band{padding:22px 18px;gap:18px 26px}.mod-grid,.persona-grid,.leader-grid,.price-grid{grid-template-columns:1fr}.lens-figs{gap:26px}.flow{padding:40px 18px 70px}.role-page-grid{grid-template-columns:1fr}.dash{padding:36px 18px 70px}.dash-hero{flex-wrap:wrap}.foot-top,.foot-grid{padding-left:18px;padding-right:18px}.acct-name{display:none}.form-grid{grid-template-columns:1fr}.detail-grid{grid-template-columns:1fr}.consent{padding:14px 18px}}
+@media(max-width:680px){.letterhead{padding:9px 18px;gap:12px}.lh-min{display:none}.lh-seal{height:34px}.lh-mccti{height:32px}.nav{padding:11px 18px;flex-wrap:wrap}.nav-links{display:flex;order:3;width:100%;overflow-x:auto;white-space:nowrap;gap:20px;padding:8px 0 2px;margin-top:6px;border-top:1px solid var(--line-soft);-webkit-overflow-scrolling:touch}.nav-page,.nav-verify,.lang-select{flex:0 0 auto}.hero{padding:40px 18px 30px}section.lens,section.modules,section.arc,section.personas,section.quote,section.leaders,section.about,section.pricing{padding:56px 18px}.band{padding:22px 18px;gap:18px 26px}.mod-grid,.persona-grid,.leader-grid,.price-grid{grid-template-columns:1fr}.lens-figs{gap:26px}.flow{padding:40px 18px 70px}.role-page-grid{grid-template-columns:1fr}.dash{padding:36px 18px 70px}.dash-hero{flex-wrap:wrap}.foot-top,.foot-grid{padding-left:18px;padding-right:18px}.acct-name{display:none}.form-grid{grid-template-columns:1fr}.detail-grid{grid-template-columns:1fr}.consent{padding:14px 18px}}
 @media(prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}.underline::after{transform:scaleX(1)}}
 `

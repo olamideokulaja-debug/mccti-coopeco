@@ -398,6 +398,13 @@ or key like 'ticket:%' or key like 'notif:%' or key like 'doc:%' or key like 'wa
 or key like 'audit:%' or key = 'integration:seed-v3';` then reload. (Ask before running
 this against real data.)
 
+## Landing navigation (pages, not scrolling)
+The top-banner links (Modules, Pricing, Leadership, About, Platform) now switch to
+distinct pages instead of scrolling down one long page. Home shows the hero, the
+headline figures, the area-office lens and the closing quote; each link opens its own
+page with the active tab highlighted, and the brand logo returns Home. On phones the
+links appear as a scrollable strip beneath the top bar so every page stays reachable.
+
 ## Environment variables
 See `.env.example`. For local testing copy it to `.env.local` and fill it in.
 - VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY - accounts and data (Stage 2).
