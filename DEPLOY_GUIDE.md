@@ -382,6 +382,22 @@ before public launch — add reviewed strings to the I18N table (each key takes 
 ha/pcm values). Governance and legal wording should not rely on machine translation.
 Note: two-factor login was intentionally not added (email + password retained).
 
+## Demo data (pre-go-live)
+The platform seeds a full set of demonstration data once, for every user, in both
+demo and live (Supabase) mode, so every view is populated: cooperatives across all
+statuses and area offices, members with varied KYC and credit bands, LASMECO loans
+across every pipeline stage (including disbursed with schedules, repaying, completed,
+in-arrears and defaulted with recovery), wallets and an active esusu rotation,
+support tickets in every status, notifications, and uploaded-document records. This
+fixes empty/incomplete sections that previously appeared for live users (seeding used
+to be skipped when Supabase was configured). The seed runs exactly once, guarded by
+the integration:seed-v3 marker, so it never duplicates. When you are ready to go live
+for real, clear the demo rows: in Supabase SQL Editor run
+`delete from kv where key like 'coop:%' or key like 'member:%' or key like 'loan:%'
+or key like 'ticket:%' or key like 'notif:%' or key like 'doc:%' or key like 'wallet:%'
+or key like 'audit:%' or key = 'integration:seed-v3';` then reload. (Ask before running
+this against real data.)
+
 ## Environment variables
 See `.env.example`. For local testing copy it to `.env.local` and fill it in.
 - VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY - accounts and data (Stage 2).
