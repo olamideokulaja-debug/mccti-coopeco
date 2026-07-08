@@ -827,16 +827,47 @@ function LoanStageOverview({ loans, cards }) {
   </div>)
 }
 function SocietyOverview({ mine }) {
+  const [loans, setLoans] = useState([]), [members, setMembers] = useState([]), [series, setSeries] = useState(null)
+  useEffect(() => { listLoans().then((ls) => setLoans(ls.filter((l) => l.coop === mine.name))); listMembers().then((ms) => setMembers(ms.filter((m) => m.coop === mine.name))) }, [mine.name])
+  useEffect(() => { (async () => { await recordCoopSnapshot(mine); setSeries(await coopContributionSeries(mine.trackingId, 6)) })() }, [mine.trackingId])
   const r = mine.returns
+  const active = loans.filter((l) => !['Declined', 'Completed', 'Default'].includes(l.status)).length
+  const nl = coopNominationLimit(mine, active)
+  const liab = coopGuaranteeLiability(mine.name, loans)
+  const adm = coopAdmission(mine)
   const finance = r ? [{ label: 'Income', value: r.income || 0, color: CHART_C.green }, { label: 'Expenses', value: r.expenses || 0, color: CHART_C.gold }, { label: 'Surplus', value: Math.max(0, r.surplus || 0), color: CHART_C.teal }] : []
+  const statusColors = { Repaying: CHART_C.green, Disbursed: CHART_C.teal, Completed: CHART_C.slate, Default: CHART_C.red, 'Bank assessment': CHART_C.gold, 'Coop validated': CHART_C.amber, 'BOI approved': CHART_C.plum, Applied: CHART_C.gold, 'In training': CHART_C.gold, Shortlisted: CHART_C.teal }
+  const loanStatus = Object.entries(loans.reduce((a, l) => { a[l.status] = (a[l.status] || 0) + 1; return a }, {})).map(([k, v]) => ({ label: k, value: v, color: statusColors[k] || CHART_C.slate }))
+  const capUse = [{ label: 'Used', value: nl.used, color: CHART_C.green }, { label: 'Remaining', value: nl.remaining, color: CHART_C.slate }]
+  const base = mine.contributions || 0
+  const hasReal = series && series.length >= 2
+  const trend = hasReal ? series.map((s) => s.contributions) : [0.68, 0.76, 0.83, 0.89, 0.95, 1].map((x) => Math.round(base * x))
+  const genders = members.reduce((a, m) => { const g = (m.gender || 'Unstated'); a[g] = (a[g] || 0) + 1; return a }, {})
+  const genderData = [['Female', CHART_C.plum], ['Male', CHART_C.teal], ['Unstated', CHART_C.slate]].map(([g, c]) => ({ label: g, value: genders[g] || 0, color: c })).filter((d) => d.value)
   return (<div className="analytics">
+    <div className="coop-hero">
+      <svg viewBox="0 0 120 80" className="coop-hero-art" aria-hidden="true">
+        <rect x="0" y="0" width="120" height="80" rx="10" fill="var(--green-panel)" />
+        {[16, 40, 64, 88].map((x, i) => <rect key={i} x={x} y={54 - (i % 2) * 8} width="16" height={26 + (i % 2) * 8} rx="3" fill={i % 2 ? CHART_C.teal : CHART_C.green} opacity=".85" />)}
+        <path d="M8 60 Q40 40 72 50 T112 34" fill="none" stroke={CHART_C.gold} strokeWidth="2.5" />
+        {[[8, 60], [40, 45], [72, 50], [112, 34]].map(([cx, cy], i) => <circle key={i} cx={cx} cy={cy} r="3" fill={CHART_C.gold} />)}
+      </svg>
+      <div className="coop-hero-text"><h3>{mine.name}</h3><p>{mine.areaOffice} area office &middot; {mine.sector} &middot; {adm.admitted ? 'Admitted to LASMECO' : 'Admission pending'}</p></div>
+    </div>
     <div className="kpi-row">
       <div className="kpi"><span className="kpi-fig">{Number(mine.members || 0).toLocaleString('en-NG')}</span><span className="kpi-lab">Members</span></div>
       <div className="kpi"><span className="kpi-fig">{fmtNaira(mine.contributions)}</span><span className="kpi-lab">Contributions</span></div>
-      <div className="kpi"><span className="kpi-fig">{mine.cap15 || '\u2014'}</span><span className="kpi-lab">CAP15 status</span></div>
-      <div className="kpi"><span className="kpi-fig">{mine.returns ? 'Filed' : 'Due'}</span><span className="kpi-lab">Annual returns</span></div>
+      <div className="kpi"><span className="kpi-fig">{nl.tier}</span><span className="kpi-lab">LASMECO tier</span></div>
+      <div className="kpi"><span className="kpi-fig">{nl.remaining}</span><span className="kpi-lab">Nominations left</span></div>
     </div>
-    {finance.length ? <div className="chart-grid"><section className="chart-card wide"><h4>Latest annual returns</h4><Bars data={finance} unit="naira" /></section></div> : <p className="muted-line">File your annual returns to see your financial summary here.</p>}
+    <div className="chart-grid">
+      <section className="chart-card"><h4>Nomination capacity</h4><Donut data={capUse} centerTop={String(nl.limit)} centerBottom="limit" /></section>
+      <section className="chart-card"><h4>Loan portfolio</h4>{loanStatus.length ? <Donut data={loanStatus} centerTop={String(loans.length)} centerBottom={loans.length === 1 ? 'loan' : 'loans'} /> : <p className="muted-line">No member loans yet.</p>}</section>
+      <section className="chart-card wide"><h4>Contributions trend</h4><MiniArea points={trend} /><p className="chart-note">{hasReal ? 'Recorded monthly, ' + monthLabel(series[0].month) + ' \u2013 ' + monthLabel(series[series.length - 1].month) + ' (current ' + fmtNaira(base) + ').' : 'Illustrative until monthly figures accumulate; current ' + fmtNaira(base) + ' on record.'}</p></section>
+      {genderData.length ? <section className="chart-card"><h4>Membership mix</h4><Donut data={genderData} centerTop={String(members.length)} centerBottom="profiled" /></section> : null}
+      <section className="chart-card"><h4>Guarantee exposure</h4><Bars data={[{ label: 'Contingent (25%)', value: liab.contingent, color: CHART_C.gold }, { label: 'Crystallised', value: liab.crystallised, color: CHART_C.red }]} unit="naira" /></section>
+      {finance.length ? <section className="chart-card wide"><h4>Latest annual returns</h4><Bars data={finance} unit="naira" /></section> : <section className="chart-card wide"><h4>Annual returns</h4><p className="muted-line">File your annual returns to see income, expenses and surplus here.</p></section>}
+    </div>
   </div>)
 }
 function MemberOverview({ mine, loans }) {
@@ -1740,6 +1771,38 @@ function coopGuaranteeLiability(coopName, loans) {
   return { crystallised, contingent }
 }
 function globalGuaranteeUsed(loans) { return loans.filter((l) => ['Disbursed', 'Repaying'].includes(l.status)).reduce((a, l) => a + loanBreakdown(l.amountApproved || 0).sterlingGuarantee, 0) }
+function monthKey(d) { const x = new Date(d); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') }
+function monthLabel(mk) { const [y, m] = String(mk).split('-'); return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][Number(m) - 1] + " '" + String(y).slice(2) }
+async function recordCoopSnapshot(coop) {
+  if (!coop || !coop.trackingId) return
+  const mk = monthKey(Date.now())
+  try { await kvSet('snap:' + coop.trackingId + ':' + mk, { coopId: coop.trackingId, month: mk, contributions: coop.contributions || 0, members: coop.members || 0, at: new Date().toISOString() }) } catch (e) { /* best-effort */ }
+}
+async function coopContributionSeries(trackingId, months = 6) {
+  const rows = await kvList('snap:' + trackingId + ':')
+  return rows.filter((r) => r && r.month).sort((a, b) => (a.month < b.month ? -1 : 1)).slice(-months)
+}
+async function ensureCoopSnapshots() {
+  if (await kvGet('integration:snapshots-v1')) return
+  try {
+    const coops = await listCoops()
+    const factors = [0.68, 0.76, 0.83, 0.89, 0.95, 1], now = new Date()
+    for (const c of coops) {
+      const cur = c.contributions || 0
+      for (let i = 0; i < 6; i++) { const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1); const mk = monthKey(d); await kvSet('snap:' + c.trackingId + ':' + mk, { coopId: c.trackingId, month: mk, contributions: Math.round(cur * factors[i]), members: c.members || 0, at: d.toISOString() }) }
+    }
+  } catch (e) { /* best-effort */ }
+  await kvSet('integration:snapshots-v1', { done: true, at: new Date().toISOString() })
+}
+async function ensureMonthlySnapshots() {
+  const mk = monthKey(Date.now()), marker = 'snapsweep:' + mk
+  if (await kvGet(marker)) return
+  try {
+    const coops = await listCoops()
+    for (const c of coops) await recordCoopSnapshot(c)
+    await kvSet(marker, { month: mk, done: true, at: new Date().toISOString(), count: coops.length })
+  } catch (e) { /* best-effort */ }
+}
 async function recordRepayment(l, amount, ctx, method) {
   const amt = Number(amount) || 0; if (amt <= 0) return l
   const repayments = [...(l.repayments || []), { at: new Date().toISOString(), amount: amt, by: ctx.name, method: method || 'manual' }]
@@ -1779,7 +1842,9 @@ async function clearPriorSeed() {
   await del('notif:', (n) => 'notif:' + n.id, (n) => n.event === 'seed')
   await del('doc:', (d) => 'doc:' + d.coopId + ':' + d.id, (d) => seedLoanIds.has(d.coopId) || String(d.id).indexOf('LD') === 0 || String(d.id).indexOf('Dseed') === 0)
   await del('wallet:', (w) => 'wallet:' + w.id, (w) => /^M:M-100\d/.test(w.id || '') || !!w.esusu)
-  await kvDelete('integration:loandocs-v2'); await kvDelete('integration:loandocs-v2')
+  await del('snap:', (s) => 'snap:' + s.coopId + ':' + s.month, (s) => !!s.coopId)
+  await del('snapsweep:', (s) => 'snapsweep:' + s.month, (s) => !!s.month)
+  await kvDelete('integration:loandocs-v1'); await kvDelete('integration:loandocs-v2'); await kvDelete('integration:snapshots-v1')
 }
 async function seedDemoData() {
   if (await kvGet('integration:seed-v7')) return
@@ -1922,6 +1987,8 @@ async function ensureSeedData() {
   try { await seedDemoData() } catch (e) { /* best-effort, once */ }
   try { await ensureAccelerators() } catch (e) { /* keep accelerator directory current */ }
   try { await ensureLoanDocsSeed() } catch (e) { /* seed loan documents once */ }
+  try { await ensureCoopSnapshots() } catch (e) { /* seed contribution history once */ }
+  try { await ensureMonthlySnapshots() } catch (e) { /* record all cooperatives once per month */ }
 }
 async function seedDemoLoans() {
   if (supa) return
@@ -2832,21 +2899,22 @@ export default function App() {
   const [chosenRole, setChosenRole] = useState(null)
   const [session, setSession] = useState(null)
   const [ready, setReady] = useState(false)
+  const [seedTick, setSeedTick] = useState(0)
+  const bgSeed = useCallback(() => { ensureSeedData().then(() => setSeedTick((t) => t + 1)).catch(() => { }) }, [])
   const [lang, setLang] = useState(() => LS.get('coopeco.lang', 'en'))
   useEffect(() => { LS.set('coopeco.lang', lang) }, [lang])
   const [landingTab, setLandingTab] = useState('home')
   const goLanding = (tab) => { setView('landing'); setLandingTab(tab); if (typeof window !== 'undefined') window.scrollTo({ top: 0 }) }
   useEffect(() => {
     (async () => {
-      if (!hasSupabase) await ensureSeedData()
       const s = await loadSession()
-      if (s) await ensureSeedData()
       setSession(s); setReady(true)
+      if (!hasSupabase || s) bgSeed()
     })()
-  }, [])
+  }, [bgSeed])
   const enter = useCallback(() => setView(session ? 'dashboard' : 'role'), [session])
   const pickRole = (id) => { setChosenRole(id); setView('auth') }
-  const onAuthed = async (res) => { setSession(res); await ensureSeedData(); setView('dashboard') }
+  const onAuthed = (res) => { setSession(res); setView('dashboard'); bgSeed() }
   const doSignOut = async () => { await signOutNow(); setSession(null); setView('landing') }
   const goHome = () => { setView('landing'); setLandingTab('home'); if (typeof window !== 'undefined') window.scrollTo({ top: 0 }) }
   const inApp = view === 'dashboard' && session
@@ -2871,7 +2939,7 @@ export default function App() {
       {view === 'auth' && <AuthPage role={chosenRole} onDone={onAuthed} onBack={() => setView('role')} onPrivacy={() => setView('privacy')} />}
       {view === 'privacy' && <PrivacyNotice onBack={() => setView(session ? 'dashboard' : 'landing')} />}
       {view === 'verify' && <PublicVerify onBack={goHome} />}
-      {inApp && <Dashboard session={session} onSignOut={doSignOut} onHome={goHome} />}
+      {inApp && <Dashboard key={seedTick} session={session} onSignOut={doSignOut} onHome={goHome} />}
       {!inApp && (
         <footer className="foot">
           <div className="foot-top"><div className="foot-lockup"><img src="/lagos-seal.png" alt="Lagos State" /><img className="foot-mccti" src="/mccti-logo.png" alt="MCCTI" /><div className="foot-lockup-text"><span className="lh-gov">Lagos State Government</span><span className="lh-min">Ministry of Commerce, Cooperatives, Trade &amp; Investment</span></div></div>{!session && <button className="btn btn-gold" onClick={enter}>Enter platform</button>}</div>
@@ -3128,6 +3196,12 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .sec-item{background:none;border:none;text-align:left;width:100%;padding:0;font:inherit;color:inherit;cursor:default}
 .sec-item.clickable{cursor:pointer}
 .sec-item.clickable:hover .kyc-mark{border:1px solid var(--green)}
+.coop-hero{display:flex;align-items:center;gap:18px;background:var(--ink-2);border:1px solid var(--line-soft);border-radius:14px;padding:16px 20px;margin-bottom:18px}
+.coop-hero-art{width:120px;height:80px;flex-shrink:0;border-radius:10px}
+.coop-hero-text h3{font-size:18px;margin:0 0 4px}
+.coop-hero-text p{font-size:13px;color:var(--sage);margin:0}
+.chart-note{font-size:11.5px;color:var(--sage-dim);margin:8px 0 0;font-style:italic}
+@media(max-width:560px){.coop-hero{flex-direction:column;text-align:center}}
 .revenue-pay{display:flex;gap:8px;margin-top:6px}
 .revenue-pay input{flex:1;min-width:0;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--ink);color:var(--cream);font-size:13px}
 .revenue-pay input:focus{outline:none;border-color:var(--green)}

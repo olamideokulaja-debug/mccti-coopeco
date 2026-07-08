@@ -530,6 +530,37 @@ Built in this batch:
 - Disbursement destination captured: beneficiary Sterling account (and supplier/vendor
   account for asset finance) recorded on the loan at disbursement.
 
+## Sign-in performance (fixed)
+Login and initial load no longer wait for demo data to seed. The dashboard renders
+immediately and seed/refresh runs in the background, so sign-in is instant even on the
+first load after a version bump (which clears and re-seeds the demo batch). The
+cooperative Overview now shows an illustrated summary with charts: nomination capacity,
+loan portfolio, membership mix, a real monthly contributions trend, guarantee exposure and annual returns.
+
+## Contributions history
+The cooperative contributions trend is now backed by real monthly snapshots (kv keys
+snap:<trackingId>:<YYYY-MM>). A snapshot for the current month is recorded whenever the
+cooperative Overview loads, so the trend accumulates over time; the demo seeds six
+months of history so the curve is populated immediately. In addition, a once-a-month
+sweep (guarded by a snapsweep:<YYYY-MM> marker) records a snapshot for EVERY cooperative
+the first time anyone loads the app in a new month, so trends fill in even for
+cooperatives that never sign in themselves.
+
+For fully unattended capture (even if no one logs in during a month), schedule it
+server-side with Supabase pg_cron (adapt/TEST before enabling):
+
+  -- first of each month at 02:00: snapshot every cooperative
+  select cron.schedule('coop-contrib-snapshot','0 2 1 * *', $$
+    insert into public.kv (key, value)
+    select 'snap:' || (value->>'trackingId') || ':' || to_char(now(),'YYYY-MM'),
+           jsonb_build_object('coopId', value->>'trackingId',
+             'month', to_char(now(),'YYYY-MM'),
+             'contributions', (value->>'contributions'),
+             'members', (value->>'members'), 'at', now())
+    from public.kv where key like 'coop:%'
+    on conflict (key) do update set value = excluded.value;
+  $$);
+
 ## Environment variables
 See `.env.example`. For local testing copy it to `.env.local` and fill it in.
 - VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY - accounts and data (Stage 2).
