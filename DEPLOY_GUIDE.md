@@ -479,6 +479,57 @@ schedule it server-side with Supabase pg_cron (adapt and TEST before enabling):
 
 Confirm the retention period with your data-protection officer before enabling.
 
+## RAC alignment (Sterling Bank Risk Acceptance Criteria)
+The platform is being aligned to the Sterling Bank LASMECO RAC as the source of truth.
+Done in this phase:
+- Sectors: the RAC target-market list (Agriculture, Manufacturing, Health, Tourism,
+  Service Delivery, Circular Economy, Digital Economy) with one accelerator per sector.
+- Product variants: Working Capital (24 months, 3-month moratorium) and Asset Finance /
+  Term Loan (36 months, 6-month moratorium). Repayment schedules model interest-only
+  during the moratorium, then equal principal + interest.
+- Documents: the RAC document set (ID, BVN, 12-month bank statements, credit-bureau
+  report, cooperative letter of introduction, CAC, licences, cash-flow analysis,
+  statement of net worth, asset register/invoices, insurance, photo).
+- Eligibility checklist per loan: accelerator + cooperative recommendation, 12+ months
+  trading (no startups), acceptable credit profile, and key documents.
+- Facility-limit guidance from turnover (WC up to 30%/15%, Asset up to 50%/25% of
+  annualised average monthly turnover). Loan cap N10m; Sterling guarantee cap N5m (50%).
+
+Two items to confirm with Sterling: (a) the N5m "single obligor limit" is read as the
+50% guarantee cap on a N10m maximum loan; (b) the facility-limit basis is read as a
+percentage of ANNUALISED average monthly turnover (the RAC wording says "monthly").
+
+Governance layer (now built):
+- Cooperative Tier A/B/C classification (set on the cooperative, with NAV) and
+  nomination limits (A 20 / B 10 / C 5), further capped by NAV / (25% x reference loan).
+- Portfolio monitoring (Sterling, BOI, leadership): NPL ratio and loss norm with RAC
+  thresholds - review at 5% NPL, suspend at 10%; loss-norm cap 1%; NPL loan list.
+- Per-loan security & guarantee checklist (Sterling ticks): 50%/25% guarantees, 10%
+  cash deposit, 15% lien, asset+credit-life insurance, GSI mandate, personal guarantee.
+- Accelerator appointment by Sterling: self-registered accelerators are Pending until
+  appointed; members can only route to Appointed accelerators.
+- BOI fund management fee (2.5% p.a., shown quarterly) in Revenue & billing and escrow.
+Note: demo NPL/loss-norm read high because the seed intentionally includes stressed
+loans; both are computed live from real repayment data.
+
+## RAC confirmations locked in
+Following confirmation: max loan N10m (single-obligor guarantee N5m = 50%); facility
+limit = % of annualised turnover; NPL = default or 90 days / 3 installments overdue;
+BOI management fee = 2.5% of disbursed (proxy); RAC 7 sectors; moratorium interest kept.
+Built in this batch:
+- Cooperative Tier/NAV classification is MCCTI-only (officer/leadership), not Sterling.
+- Accelerator appointment is by MCCTI (Ministry). Accelerators self-register (Pending),
+  submit appointment documents (CAC, 3-yr audited accounts, CVs, cover letter, permits),
+  and MCCTI reviews and appoints; members can only route to Appointed accelerators.
+- Cooperative admission gates (approved by MCCTI, 12+ months, clean credit, focal
+  person, tier, NAV) are enforced: an unadmitted cooperative cannot nominate members.
+- Cooperative 25% guarantee liability is tracked per cooperative (contingent on active
+  loans; crystallised on default).
+- Scheme caps surfaced: global guarantee utilisation vs N5bn; single-obligor guarantee
+  N5m implied by the N10m loan ceiling.
+- Disbursement destination captured: beneficiary Sterling account (and supplier/vendor
+  account for asset finance) recorded on the loan at disbursement.
+
 ## Environment variables
 See `.env.example`. For local testing copy it to `.env.local` and fill it in.
 - VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY - accounts and data (Stage 2).

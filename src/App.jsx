@@ -80,7 +80,7 @@ const ROLE_CAPS = {
 /* --------------------------- Stage 3 config --------------------------- */
 const AREA_OFFICES = ['Alausa (HQ)', 'Ikeja', 'Mushin', 'Ikorodu', 'Epe', 'Badagry', 'Ibeju-Lekki', 'Lagos Island', 'Surulere', 'Ojo', 'Agege', 'Oshodi', 'Kosofe', 'Alimosho', 'Eti-Osa', 'Somolu', 'Apapa', 'Amuwo-Odofin', 'Ifako-Ijaiye', 'Lagos Mainland', 'Ajeromi']
 const SECTORS = ['Trade', 'Thrift & Credit', 'Artisan', 'Agriculture', 'Transport', 'Manufacturing', 'Processing', 'Services', 'Multipurpose']
-const LASMECO_SECTORS = ['Agriculture', 'Manufacturing & Light Industry', 'Healthcare & Life Sciences', 'Digital Economy & ICT', 'Circular Economy & Environment', 'Creative Industries & Tourism', 'Training & Education', 'General MSME Services']
+const LASMECO_SECTORS = ['Agriculture', 'Manufacturing', 'Health', 'Tourism', 'Service Delivery', 'Circular Economy', 'Digital Economy']
 const STATUS_CLASS = { 'Filed': 'st-filed', 'Under review': 'st-review', 'Approved': 'st-approved', 'Returned': 'st-returned' }
 const CAP15_CLASS = { 'Compliant': 'st-approved', 'Returns due': 'st-review', 'Under audit': 'st-filed' }
 const LOAN_STATUS_CLASS = { 'Applied': 'st-filed', 'In training': 'st-review', 'Shortlisted': 'st-review', 'Coop validated': 'st-review', 'Bank assessment': 'st-review', 'BOI approved': 'st-approved', 'Disbursed': 'st-approved', 'Repaying': 'st-approved', 'Completed': 'st-approved', 'Declined': 'st-returned', 'Default': 'st-returned' }
@@ -663,6 +663,7 @@ function CoopDetail({ coop, ctx, onClose, onChanged }) {
         </div>
       )}
 
+      <CoopTierPanel coop={c} ctx={ctx} onChanged={onChanged} />
       <div className="trail-box"><h4>Documents</h4><DocumentsPanel coopId={c.trackingId} ctx={ctx} canVerify={canExamine} canUpload={canExamine} /></div>
       <div className="trail-box"><h4>Audit trail</h4><AuditTrail trackingId={c.trackingId} refreshKey={rk} /></div>
     </div>
@@ -952,6 +953,8 @@ function LeadershipOverview({ ctx, section, onViewAs }) {
       {section === 'reports' && <ReportsPanel role="leadership" />}
       {section === 'risk' && <RiskPanel />}
       {section === 'sla' && <GovernanceSLA />}
+      {section === 'monitoring' && <PortfolioMonitoring />}
+      {section === 'accelerators' && <AcceleratorAppointments ctx={ctx} />}
       {section === 'revenue' && <RevenuePanel ctx={ctx} />}
       {section === 'retention' && <RetentionPanel />}
       {section === 'viewas' && <ViewAsSwitcher onViewAs={onViewAs} />}
@@ -1103,11 +1106,13 @@ async function escrowFigures() {
   const portalFees = Math.round(disbursedValue * 0.025)
   const funding = wallets.reduce((a, w) => a + (w.txns || []).filter((t) => t.type === 'topup').reduce((s, t) => s + (t.amount || 0), 0), 0)
   const walletFees = Math.round(funding * 0.01)
+  const boiMgmtFeeAnnual = Math.round(disbursedValue * 0.025)
+  const boiMgmtFeeQuarter = Math.round(boiMgmtFeeAnnual / 4)
   const accrued = regFees + returnsFees + portalFees + walletFees
   const sched = loans.filter((l) => (l.schedule || []).length)
   const outstanding = sched.reduce((a, l) => a + loanRepayState(l).outstanding, 0)
   const arrears = sched.reduce((a, l) => a + loanRepayState(l).arrears, 0)
-  return { coops, loans, regFees, returnsFees, disbursedValue, portalFees, funding, walletFees, accrued, outstanding, arrears }
+  return { coops, loans, regFees, returnsFees, disbursedValue, portalFees, funding, walletFees, boiMgmtFeeAnnual, boiMgmtFeeQuarter, accrued, outstanding, arrears }
 }
 async function reportEscrow() {
   const f = await escrowFigures()
@@ -1290,17 +1295,20 @@ function ConsentBanner({ onOpenPrivacy }) {
   )
 }
 function LoanCalculator() {
-  const [amt, setAmt] = useState('1000000'), [tenor, setTenor] = useState('12')
-  const a = Number(amt) || 0, t = Math.max(1, Number(tenor) || 12)
-  const sched = a > 0 ? buildSchedule(a, t, 9, new Date().toISOString()) : []
-  const monthly = sched.length ? sched[0].amount : 0
+  const [amt, setAmt] = useState('1000000'), [type, setType] = useState(LOAN_TYPES[0])
+  const v = loanVariant(type)
+  const a = Number(amt) || 0, t = v.tenor
+  const sched = a > 0 ? buildSchedule(a, t, 9, new Date().toISOString(), v.moratorium) : []
+  const firstPrincipalRow = sched.find((r) => !r.moratorium)
+  const monthly = firstPrincipalRow ? firstPrincipalRow.amount : 0
+  const morPay = sched.length ? sched[0].amount : 0
   const total = sched.reduce((s, r) => s + r.amount, 0)
   const b = loanBreakdown(a)
   return (
     <div className="returns-box"><h4>LASMECO repayment calculator</h4>
-      <div className="calc-row"><label className="field"><span>Amount (₦)</span><input type="number" value={amt} onChange={(e) => setAmt(e.target.value)} /></label><label className="field"><span>Tenor (months)</span><input type="number" value={tenor} onChange={(e) => setTenor(e.target.value)} /></label></div>
-      <div className="statgrid"><div className="stat"><span className="stat-fig">{fmtNaira(monthly)}</span><span className="stat-lab">Monthly repayment</span></div><div className="stat"><span className="stat-fig">{fmtNaira(total)}</span><span className="stat-lab">Total repayable</span></div><div className="stat"><span className="stat-fig">{fmtNaira(Math.max(0, total - a))}</span><span className="stat-lab">Total interest (9%)</span></div><div className="stat"><span className="stat-fig">{fmtNaira(b.netToBorrower)}</span><span className="stat-lab">Net to you after fees</span></div></div>
-      <p className="panel-note">Indicative only, at 9% reducing balance. Final terms are set on approval. One-off fees: ₦200,000 Accelerator and 1% BOI appraisal. Not a loan offer.</p>
+      <div className="calc-row"><label className="field"><span>Amount (₦)</span><input type="number" value={amt} onChange={(e) => setAmt(e.target.value)} /></label><label className="field"><span>Product</span><select value={type} onChange={(e) => setType(e.target.value)}>{LOAN_TYPES.map((x) => <option key={x}>{x}</option>)}</select></label></div>
+      <div className="statgrid"><div className="stat"><span className="stat-fig">{fmtNaira(morPay)}</span><span className="stat-lab">Moratorium months ({v.moratorium}) \u2014 interest only</span></div><div className="stat"><span className="stat-fig">{fmtNaira(monthly)}</span><span className="stat-lab">Then monthly (principal + interest)</span></div><div className="stat"><span className="stat-fig">{fmtNaira(total)}</span><span className="stat-lab">Total repayable over {t} months</span></div><div className="stat"><span className="stat-fig">{fmtNaira(b.netToBorrower)}</span><span className="stat-lab">Net to you after fees</span></div></div>
+      <p className="panel-note">Indicative only, at 9% reducing balance with a {v.moratorium}-month principal moratorium (interest-only), then equal principal over the remaining term. One-off fees: ₦200,000 Accelerator and 1% BOI appraisal. Not a loan offer.</p>
     </div>
   )
 }
@@ -1610,24 +1618,38 @@ function ViewAsSwitcher({ onViewAs }) {
    ====================================================================== */
 
 const COOP_FEES = { registration: 50000, annualReturns: 15000 } // NGN, from the platform revenue model
-const LOAN_TYPES = ['Term loan (up to 36 months)', 'Working capital (up to 24 months)']
+const LOAN_TYPES = ['Working Capital (24 months, 3-month moratorium)', 'Asset Finance / Term Loan (36 months, 6-month moratorium)']
+const LOAN_VARIANTS = {
+  'Working Capital (24 months, 3-month moratorium)': { tenor: 24, moratorium: 3, capHigh: 0.30, capLow: 0.15, label: 'Working Capital' },
+  'Asset Finance / Term Loan (36 months, 6-month moratorium)': { tenor: 36, moratorium: 6, capHigh: 0.50, capLow: 0.25, label: 'Asset Finance' },
+}
+function loanVariant(type) { return LOAN_VARIANTS[type] || LOAN_VARIANTS[LOAN_TYPES[0]] }
+// RAC facility limit: % of average monthly credit turnover over 12 months (full cap if >=70% consistency in 8/12 months, else reduced cap). We annualise the average monthly turnover figure on file. NOTE: confirm monthly-vs-annualised basis with Sterling.
+function facilityLimit(member, type, consistent) {
+  const v = loanVariant(type)
+  const monthly = (member && member.msme && member.msme.monthlyTurnover) || 0
+  const cap = consistent === false ? v.capLow : v.capHigh
+  return Math.min(10000000, Math.round(monthly * 12 * cap))
+}
 const AP_STATUSES = ['Applied', 'In training', 'Shortlisted']
 const PARTNER_STATUSES = ['Coop validated', 'Bank assessment', 'BOI approved']
 function loanBreakdown(amount) {
   const a = Number(amount) || 0
-  return { amount: a, collateral: Math.round(a * 0.10), coopGuarantee: Math.round(a * 0.25), sterlingGuarantee: Math.round(a * 0.50), apFee: 200000, boiFee: Math.round(a * 0.01), netToBorrower: Math.max(0, a - 200000 - Math.round(a * 0.01)), rate: 9 }
+  return { amount: a, collateral: Math.round(a * 0.10), coopGuarantee: Math.round(a * 0.25), sterlingGuarantee: Math.round(a * 0.50), lien: Math.round(a * 0.15), apFee: 200000, boiFee: Math.round(a * 0.01), netToBorrower: Math.max(0, a - 200000 - Math.round(a * 0.01)), rate: 9 }
 }
-function buildSchedule(principal, tenor, annualRatePct, startISO) {
+function buildSchedule(principal, tenor, annualRatePct, startISO, moratorium) {
   const P = Number(principal) || 0, n = Math.max(1, Number(tenor) || 12), r = (Number(annualRatePct) || 9) / 100 / 12
-  const pay = r > 0 ? P * r / (1 - Math.pow(1 + r, -n)) : P / n
+  const mor = Math.min(n - 1, Math.max(0, Number(moratorium) || 0))
+  const payMonths = Math.max(1, n - mor)
+  const pay = r > 0 ? P * r / (1 - Math.pow(1 + r, -payMonths)) : P / payMonths
   const start = new Date(startISO || Date.now()), rows = []
   let bal = P
   for (let i = 1; i <= n; i++) {
     const interest = r > 0 ? bal * r : 0
-    let principalPart = (i === n) ? bal : pay - interest
+    let principalPart = (i <= mor) ? 0 : (i === n ? bal : pay - interest)
     bal = Math.max(0, bal - principalPart)
     const due = new Date(start); due.setMonth(due.getMonth() + i)
-    rows.push({ n: i, dueDate: due.toISOString(), amount: Math.round(principalPart + interest), interest: Math.round(interest), principal: Math.round(principalPart), balance: Math.round(bal) })
+    rows.push({ n: i, dueDate: due.toISOString(), amount: Math.round(principalPart + interest), interest: Math.round(interest), principal: Math.round(principalPart), balance: Math.round(bal), moratorium: i <= mor })
   }
   return rows
 }
@@ -1651,6 +1673,73 @@ function recoveryPlan(outstanding, b) {
   const sterling = Math.min(rem, b.sterlingGuarantee); rem -= sterling
   return { collateral, coop, sterling, shortfall: Math.max(0, rem) }
 }
+/* ---- RAC governance: tiers, NPL, security, BOI fee ----------------------- */
+const COOP_TIERS = { A: { cap: 20, label: 'Tier A \u2013 Strong Liquidity Partner' }, B: { cap: 10, label: 'Tier B \u2013 Stable but Capped' }, C: { cap: 5, label: 'Tier C \u2013 Low Liquidity / At-Risk' } }
+const NAV_REF_LOAN = 5000000
+function coopNominationLimit(coop, activeCount) {
+  const tier = (coop && coop.tier) || 'C'
+  const cap = (COOP_TIERS[tier] || COOP_TIERS.C).cap
+  let limit = cap
+  if (coop && coop.nav) limit = Math.min(cap, Math.floor(Number(coop.nav) / (0.25 * NAV_REF_LOAN)))
+  return { tier, cap, limit: Math.max(0, limit), used: activeCount || 0, remaining: Math.max(0, limit - (activeCount || 0)) }
+}
+const NPL_ARREARS_MONTHS = 3
+function nplMetrics(loans) {
+  const sched = loans.filter((l) => (l.schedule || []).length && ['Disbursed', 'Repaying', 'Completed', 'Default'].includes(l.status))
+  const disbursed = sched.reduce((a, l) => a + (l.amountApproved || 0), 0)
+  let nplValue = 0, crystallised = 0
+  const nplLoans = []
+  for (const l of sched) {
+    const rp = loanRepayState(l)
+    const overdue = (l.schedule || []).filter((s) => rp.instStatus(s) === 'Overdue').length
+    if (l.status === 'Default' || overdue >= NPL_ARREARS_MONTHS) { nplValue += rp.outstanding; nplLoans.push({ loan: l, outstanding: rp.outstanding, overdue }) }
+    if (l.status === 'Default' && l.recovery) crystallised += (l.recovery.sterling || 0) + (l.recovery.shortfall || 0)
+  }
+  const guaranteed = Math.round(disbursed * 0.5)
+  const nplRatio = disbursed ? nplValue / disbursed : 0
+  const lossNorm = guaranteed ? crystallised / guaranteed : 0
+  const status = nplRatio >= 0.10 ? 'Suspended' : nplRatio >= 0.05 ? 'Review' : 'Healthy'
+  return { disbursed, nplValue, nplRatio, guaranteed, crystallised, lossNorm, status, nplLoans }
+}
+const SECURITY_ITEMS = [
+  ['sterlingGuarantee', '50% Sterling Bank guarantee (letter of guarantee)'],
+  ['coopGuarantee', '25% cooperative guarantee (letter of guarantee)'],
+  ['cashDeposit', '10% cash security deposit lodged (refundable on liquidation)'],
+  ['lien', '15% lien on borrower present/future assets'],
+  ['insurance', 'Asset + credit-life insurance (BOI as first-loss payee)'],
+  ['gsi', 'GSI mandate on BVN-linked accounts'],
+  ['personalGuarantee', 'Irrevocable personal guarantee of the Chief Promoter'],
+]
+function securityState(loan) {
+  const s = loan.security || {}
+  const done = SECURITY_ITEMS.filter(([k]) => s[k]).length
+  return { done, total: SECURITY_ITEMS.length, complete: done === SECURITY_ITEMS.length, map: s }
+}
+const GLOBAL_GUARANTEE_LIMIT = 5000000000
+const SINGLE_OBLIGOR_GUARANTEE = 5000000
+const ACCEL_DOC_REQUIREMENTS = ['CAC registration & organisational profile', 'Valid regulatory operating permits', 'Audited financial statements (last 3 years)', 'CVs of key team members', 'Cover letter (preferred sectors & capacity)', 'Past interventions & methodology', 'Supporting bank statements']
+function coopAdmission(coop) {
+  const items = [
+    { label: 'Recognised & approved by MCCTI', ok: coop.status === 'Approved' },
+    { label: 'In existence 12+ months', ok: (coop.members || 0) > 0 || coop.established12 === true },
+    { label: 'Clean credit history', ok: coop.creditClean !== false },
+    { label: 'Designated focal person', ok: !!coop.custodian },
+    { label: 'Governance structure & tier classified', ok: !!coop.tier },
+    { label: 'NAV valuation (ICAN/FRCN)', ok: !!coop.nav },
+  ]
+  return { items, outstanding: items.filter((i) => !i.ok), admitted: items.every((i) => i.ok) }
+}
+function coopGuaranteeLiability(coopName, loans) {
+  let crystallised = 0, contingent = 0
+  for (const l of loans) {
+    if (l.coop !== coopName || !(l.schedule || []).length) continue
+    const g = loanBreakdown(l.amountApproved || l.amountRequested).coopGuarantee
+    if (l.status === 'Default') crystallised += (l.recovery ? l.recovery.coop : g)
+    else if (['Disbursed', 'Repaying'].includes(l.status)) contingent += g
+  }
+  return { crystallised, contingent }
+}
+function globalGuaranteeUsed(loans) { return loans.filter((l) => ['Disbursed', 'Repaying'].includes(l.status)).reduce((a, l) => a + loanBreakdown(l.amountApproved || 0).sterlingGuarantee, 0) }
 async function recordRepayment(l, amount, ctx, method) {
   const amt = Number(amount) || 0; if (amt <= 0) return l
   const repayments = [...(l.repayments || []), { at: new Date().toISOString(), amount: amt, by: ctx.name, method: method || 'manual' }]
@@ -1680,18 +1769,31 @@ async function updateLoan(id, patch, ctx, action, note) {
   return next
 }
 async function payCoopFee(coopId, ctx) { return updateCoop(coopId, { feeStatus: 'Paid' }, ctx, 'Registration fee paid', fmtNaira(COOP_FEES.registration)) }
+async function clearPriorSeed() {
+  const del = async (prefix, keyOf, pred) => { const rows = await kvList(prefix); for (const r of rows) { try { if (pred(r)) await kvDelete(keyOf(r)) } catch (e) { /* skip */ } } }
+  const seedLoanIds = new Set()
+  await del('coop:', (c) => 'coop:' + c.trackingId, (c) => c.createdBy === 'seed@mccti.lg.gov.ng')
+  await del('member:', (m) => 'member:' + m.memberId, (m) => (m.createdBy || '').indexOf('demo.') === 0)
+  await del('loan:', (l) => 'loan:' + l.loanId, (l) => { const s = (l.createdBy || '').endsWith('@coopeco.ng'); if (s) seedLoanIds.add(l.loanId); return s })
+  await del('ticket:', (t) => 'ticket:' + t.ticketId, (t) => (t.ticketId || '').indexOf('TK-25-9') === 0)
+  await del('notif:', (n) => 'notif:' + n.id, (n) => n.event === 'seed')
+  await del('doc:', (d) => 'doc:' + d.coopId + ':' + d.id, (d) => seedLoanIds.has(d.coopId) || String(d.id).indexOf('LD') === 0 || String(d.id).indexOf('Dseed') === 0)
+  await del('wallet:', (w) => 'wallet:' + w.id, (w) => /^M:M-100\d/.test(w.id || '') || !!w.esusu)
+  await kvDelete('integration:loandocs-v2'); await kvDelete('integration:loandocs-v2')
+}
 async function seedDemoData() {
-  if (await kvGet('integration:seed-v5')) return
+  if (await kvGet('integration:seed-v7')) return
+  try { await clearPriorSeed() } catch (e) { /* best-effort cleanup */ }
   const now = Date.now(), day = 86400000
   const isoAgo = (ms) => new Date(now - ms).toISOString()
   const monthsAgoISO = (k) => { const d = new Date(now); d.setMonth(d.getMonth() - k); return d.toISOString() }
   // 1) MCCTI cooperatives (varied status / office / compliance)
   const extraCoops = [
-    { name: 'Oshodi Market Women Coop', areaOffice: 'Oshodi', sector: 'Trade', custodian: 'R. Alaba', members: 240, contributions: 7200000, status: 'Approved', cap15: 'Compliant', feeStatus: 'Paid' },
-    { name: 'Agege Transport Union Coop', areaOffice: 'Agege', sector: 'Transport', custodian: 'S. Okoro', members: 160, contributions: 5400000, status: 'Under review', cap15: 'Under audit', feeStatus: 'Paid' },
-    { name: 'Alimosho Tailors Multipurpose', areaOffice: 'Alimosho', sector: 'Artisan', custodian: 'B. Yusuf', members: 95, contributions: 2100000, status: 'Returned', cap15: 'Returns due' },
-    { name: 'Kosofe Poultry Farmers Coop', areaOffice: 'Kosofe', sector: 'Agriculture', custodian: 'N. Eze', members: 130, contributions: 3900000, status: 'Filed', cap15: 'Under audit' },
-    { name: 'Eti-Osa Fashion Enterprise Coop', areaOffice: 'Eti-Osa', sector: 'Services', custodian: 'T. Coker', members: 210, contributions: 8800000, status: 'Approved', cap15: 'Compliant', feeStatus: 'Paid' },
+    { name: 'Oshodi Market Women Coop', areaOffice: 'Oshodi', sector: 'Trade', custodian: 'R. Alaba', members: 240, contributions: 7200000, status: 'Approved', cap15: 'Compliant', feeStatus: 'Paid', tier: 'A', nav: 90000000 },
+    { name: 'Agege Transport Union Coop', areaOffice: 'Agege', sector: 'Transport', custodian: 'S. Okoro', members: 160, contributions: 5400000, status: 'Under review', cap15: 'Under audit', feeStatus: 'Paid', tier: 'B', nav: 30000000 },
+    { name: 'Alimosho Tailors Multipurpose', areaOffice: 'Alimosho', sector: 'Artisan', custodian: 'B. Yusuf', members: 95, contributions: 2100000, status: 'Returned', cap15: 'Returns due', tier: 'C', nav: 8000000 },
+    { name: 'Kosofe Poultry Farmers Coop', areaOffice: 'Kosofe', sector: 'Agriculture', custodian: 'N. Eze', members: 130, contributions: 3900000, status: 'Filed', cap15: 'Under audit', tier: 'C', nav: 6000000 },
+    { name: 'Eti-Osa Fashion Enterprise Coop', areaOffice: 'Eti-Osa', sector: 'Services', custodian: 'T. Coker', members: 210, contributions: 8800000, status: 'Approved', cap15: 'Compliant', feeStatus: 'Paid', tier: 'A', nav: 120000000 },
   ]
   const coopMap = {}
   const allCoopSeeds = [...SEED_COOPS, ...extraCoops]
@@ -1705,12 +1807,12 @@ async function seedDemoData() {
   }
   // 2) Members (varied sectors / KYC / bands)
   const memberSeeds = [
-    { name: 'Folake Adisa', coop: 'Oshodi Market Women Coop', sector: 'Trade', lasmecoSector: 'General MSME Services', accel: 'General MSME Accelerator', phone: '08031000001', gender: 'Female', bvn: 1, nin: 1, msme: { monthlyTurnover: 520000, employees: 4, cashFlow: 200000, customerBase: 160, yearsInOperation: 6 } },
-    { name: 'Chidi Okafor', coop: 'Oshodi Market Women Coop', sector: 'Trade', lasmecoSector: 'General MSME Services', accel: 'General MSME Accelerator', phone: '08031000002', gender: 'Male', bvn: 1, nin: 1, msme: { monthlyTurnover: 780000, employees: 6, cashFlow: 300000, customerBase: 220, yearsInOperation: 8 } },
-    { name: 'Aisha Bello', coop: 'Agege Transport Union Coop', sector: 'Transport', lasmecoSector: 'General MSME Services', accel: 'General MSME Accelerator', phone: '08031000003', gender: 'Female', bvn: 1, nin: 0, msme: { monthlyTurnover: 260000, employees: 2, cashFlow: 80000, customerBase: 70, yearsInOperation: 3 } },
-    { name: 'Segun Ade', coop: 'Eti-Osa Fashion Enterprise Coop', sector: 'Services', lasmecoSector: 'Creative Industries & Tourism', accel: 'Creative & Tourism Accelerator', phone: '08031000004', gender: 'Male', bvn: 1, nin: 1, msme: { monthlyTurnover: 1350000, employees: 9, cashFlow: 500000, customerBase: 380, yearsInOperation: 10 } },
+    { name: 'Folake Adisa', coop: 'Oshodi Market Women Coop', sector: 'Trade', lasmecoSector: 'Service Delivery', accel: 'Service Delivery Accelerator', phone: '08031000001', gender: 'Female', bvn: 1, nin: 1, msme: { monthlyTurnover: 520000, employees: 4, cashFlow: 200000, customerBase: 160, yearsInOperation: 6 } },
+    { name: 'Chidi Okafor', coop: 'Oshodi Market Women Coop', sector: 'Trade', lasmecoSector: 'Service Delivery', accel: 'Service Delivery Accelerator', phone: '08031000002', gender: 'Male', bvn: 1, nin: 1, msme: { monthlyTurnover: 780000, employees: 6, cashFlow: 300000, customerBase: 220, yearsInOperation: 8 } },
+    { name: 'Aisha Bello', coop: 'Agege Transport Union Coop', sector: 'Transport', lasmecoSector: 'Service Delivery', accel: 'Service Delivery Accelerator', phone: '08031000003', gender: 'Female', bvn: 1, nin: 0, msme: { monthlyTurnover: 260000, employees: 2, cashFlow: 80000, customerBase: 70, yearsInOperation: 3 } },
+    { name: 'Segun Ade', coop: 'Eti-Osa Fashion Enterprise Coop', sector: 'Services', lasmecoSector: 'Tourism', accel: 'Tourism Accelerator', phone: '08031000004', gender: 'Male', bvn: 1, nin: 1, msme: { monthlyTurnover: 1350000, employees: 9, cashFlow: 500000, customerBase: 380, yearsInOperation: 10 } },
     { name: 'Grace Umeh', coop: 'Kosofe Poultry Farmers Coop', sector: 'Agriculture', lasmecoSector: 'Agriculture', accel: 'Agriculture Accelerator', phone: '08031000005', gender: 'Female', bvn: 0, nin: 0, msme: { monthlyTurnover: 110000, employees: 1, cashFlow: 30000, customerBase: 40, yearsInOperation: 2 } },
-    { name: 'Ibrahim Sule', coop: 'Alimosho Tailors Multipurpose', sector: 'Artisan', lasmecoSector: 'Manufacturing & Light Industry', accel: 'Manufacturing Accelerator', phone: '08031000006', gender: 'Male', bvn: 1, nin: 1, msme: { monthlyTurnover: 430000, employees: 3, cashFlow: 150000, customerBase: 120, yearsInOperation: 5 } },
+    { name: 'Ibrahim Sule', coop: 'Alimosho Tailors Multipurpose', sector: 'Artisan', lasmecoSector: 'Manufacturing', accel: 'Manufacturing Accelerator', phone: '08031000006', gender: 'Male', bvn: 1, nin: 1, msme: { monthlyTurnover: 430000, employees: 3, cashFlow: 150000, customerBase: 120, yearsInOperation: 5 } },
   ]
   const memberMap = {}
   for (let i = 0; i < memberSeeds.length; i++) {
@@ -1721,7 +1823,7 @@ async function seedDemoData() {
   }
   // 3) Loans across every pipeline stage (with schedules, repayments, arrears, default)
   const mkSchedLoan = (m, amount, tenor, disbMonths, paidCount, status, extra) => {
-    const disbAt = monthsAgoISO(disbMonths), schedule = buildSchedule(amount, tenor, 9, disbAt)
+    const disbAt = monthsAgoISO(disbMonths), mv = loanVariant((extra && extra.type) || LOAN_TYPES[0]), schedule = buildSchedule(amount, tenor, 9, disbAt, mv.moratorium)
     const repayments = []
     for (let k = 0; k < paidCount && k < schedule.length; k++) repayments.push({ at: monthsAgoISO(Math.max(0, disbMonths - k - 1)), amount: schedule[k].amount, by: m.name, method: 'manual' })
     return { memberId: m.memberId, memberName: m.name, memberPhone: m.phone, createdBy: m.email, coop: m.coop, sector: m.lasmecoSector, amountRequested: amount, amountRecommended: amount, amountApproved: amount, type: LOAN_TYPES[0], purpose: 'Business expansion', status, apName: m.accel, tenorMonths: tenor, disbursedAt: disbAt, schedule, repayments, createdAt: monthsAgoISO(disbMonths + 1), updatedAt: new Date().toISOString(), ...(extra || {}) }
@@ -1734,10 +1836,13 @@ async function seedDemoData() {
   loanRecs.push({ memberId: M['Folake Adisa'].memberId, memberName: 'Folake Adisa', memberPhone: M['Folake Adisa'].phone, createdBy: M['Folake Adisa'].email, coop: M['Folake Adisa'].coop, sector: M['Folake Adisa'].lasmecoSector, amountRequested: 4000000, amountRecommended: 4000000, type: LOAN_TYPES[0], purpose: 'Bulk inventory', status: 'Coop validated', apName: M['Folake Adisa'].accel, createdAt: isoAgo(12 * day), updatedAt: isoAgo(5 * day) })
   loanRecs.push({ memberId: M['Chidi Okafor'].memberId, memberName: 'Chidi Okafor', memberPhone: M['Chidi Okafor'].phone, createdBy: M['Chidi Okafor'].email, coop: M['Chidi Okafor'].coop, sector: M['Chidi Okafor'].lasmecoSector, amountRequested: 5000000, amountRecommended: 5000000, type: LOAN_TYPES[0], purpose: 'Cold room', status: 'Bank assessment', apName: M['Chidi Okafor'].accel, createdAt: isoAgo(14 * day), updatedAt: isoAgo(6 * day) })
   loanRecs.push({ memberId: M['Segun Ade'].memberId, memberName: 'Segun Ade', memberPhone: M['Segun Ade'].phone, createdBy: M['Segun Ade'].email, coop: M['Segun Ade'].coop, sector: M['Segun Ade'].lasmecoSector, amountRequested: 6000000, amountRecommended: 6000000, amountApproved: 6000000, type: LOAN_TYPES[0], purpose: 'Studio expansion', status: 'BOI approved', apName: M['Segun Ade'].accel, createdAt: isoAgo(16 * day), updatedAt: isoAgo(7 * day) })
-  loanRecs.push(mkSchedLoan(M['Folake Adisa'], 3000000, 12, 3, 0, 'Disbursed', { purpose: 'Shop refit' }))       // arrears (no repayments, disbursed 3mo ago)
-  loanRecs.push(mkSchedLoan(M['Chidi Okafor'], 4500000, 12, 4, 3, 'Repaying', { purpose: 'Distribution van' }))   // partly repaid
-  loanRecs.push(mkSchedLoan(M['Segun Ade'], 2400000, 6, 8, 6, 'Completed', { purpose: 'Equipment' }))              // fully repaid
-  const defLoan = mkSchedLoan(M['Ibrahim Sule'], 3600000, 12, 7, 1, 'Default', { purpose: 'Workshop' })
+  loanRecs.push(mkSchedLoan(M['Folake Adisa'], 3000000, 24, 5, 0, 'Disbursed', { purpose: 'Inventory (working capital)', type: LOAN_TYPES[0] }))     // WC, early arrears
+  loanRecs.push(mkSchedLoan(M['Chidi Okafor'], 4500000, 36, 10, 10, 'Repaying', { purpose: 'Distribution van (asset finance)', type: LOAN_TYPES[1] })) // Asset, current
+  loanRecs.push(mkSchedLoan(M['Folake Adisa'], 2000000, 24, 6, 6, 'Repaying', { purpose: 'Inventory restock', type: LOAN_TYPES[0] }))                 // performing
+  loanRecs.push(mkSchedLoan(M['Segun Ade'], 5000000, 36, 9, 9, 'Repaying', { purpose: 'Studio fit-out', type: LOAN_TYPES[1] }))                        // performing
+  loanRecs.push(mkSchedLoan(M['Chidi Okafor'], 3200000, 36, 7, 7, 'Repaying', { purpose: 'Cold storage', type: LOAN_TYPES[1] }))                       // performing
+  loanRecs.push(mkSchedLoan(M['Segun Ade'], 2400000, 24, 26, 24, 'Completed', { purpose: 'Studio equipment', type: LOAN_TYPES[0] }))                  // fully repaid
+  const defLoan = mkSchedLoan(M['Ibrahim Sule'], 3600000, 36, 14, 1, 'Default', { purpose: 'Workshop machinery', type: LOAN_TYPES[1] })
   defLoan.recovery = recoveryPlan(loanRepayState(defLoan).outstanding, loanBreakdown(3600000))
   loanRecs.push(defLoan)
   loanRecs.push({ memberId: M['Grace Umeh'].memberId, memberName: 'Grace Umeh', memberPhone: M['Grace Umeh'].phone, createdBy: M['Grace Umeh'].email, coop: M['Grace Umeh'].coop, sector: M['Grace Umeh'].lasmecoSector, amountRequested: 8000000, type: LOAN_TYPES[0], purpose: 'Over-exposure request', status: 'Declined', apName: M['Grace Umeh'].accel, createdAt: isoAgo(20 * day), updatedAt: isoAgo(15 * day) })
@@ -1775,31 +1880,30 @@ async function seedDemoData() {
   const docCoop = coopMap['Eti-Osa Fashion Enterprise Coop']
   await kvSet('doc:' + docCoop + ':Dseed1', { id: 'Dseed1', coopId: docCoop, name: 'by-laws.pdf', category: 'By-laws', size: 284000, type: 'application/pdf', url: '', path: '', storage: 'demo', uploadedBy: 'T. Coker', uploadedAt: isoAgo(9 * day), verified: true, verifiedBy: 'Area Registrar' })
   await kvSet('doc:' + docCoop + ':Dseed2', { id: 'Dseed2', coopId: docCoop, name: 'registration-certificate.pdf', category: 'Registration certificate', size: 156000, type: 'application/pdf', url: '', path: '', storage: 'demo', uploadedBy: 'T. Coker', uploadedAt: isoAgo(9 * day), verified: false })
-  await kvSet('integration:seed-v5', { done: true, at: new Date().toISOString() })
+  await kvSet('integration:seed-v7', { done: true, at: new Date().toISOString() })
 }
 const ACCEL_SEEDS = [
   { email: 'accel.agric@coopeco.ng', name: 'Agriculture Accelerator', sectors: ['Agriculture'] },
-  { email: 'accel.mfg@coopeco.ng', name: 'Manufacturing Accelerator', sectors: ['Manufacturing & Light Industry'] },
-  { email: 'accel.health@coopeco.ng', name: 'Health Accelerator', sectors: ['Healthcare & Life Sciences'] },
-  { email: 'accel.digital@coopeco.ng', name: 'Digital & ICT Accelerator', sectors: ['Digital Economy & ICT'] },
-  { email: 'accel.circular@coopeco.ng', name: 'Circular Economy Accelerator', sectors: ['Circular Economy & Environment'] },
-  { email: 'accel.creative@coopeco.ng', name: 'Creative & Tourism Accelerator', sectors: ['Creative Industries & Tourism'] },
-  { email: 'accel.training@coopeco.ng', name: 'Training & Education Accelerator', sectors: ['Training & Education'] },
-  { email: 'accel.msme@coopeco.ng', name: 'General MSME Accelerator', sectors: ['General MSME Services'] },
+  { email: 'accel.mfg@coopeco.ng', name: 'Manufacturing Accelerator', sectors: ['Manufacturing'] },
+  { email: 'accel.health@coopeco.ng', name: 'Health Accelerator', sectors: ['Health'] },
+  { email: 'accel.tourism@coopeco.ng', name: 'Tourism Accelerator', sectors: ['Tourism'] },
+  { email: 'accel.services@coopeco.ng', name: 'Service Delivery Accelerator', sectors: ['Service Delivery'] },
+  { email: 'accel.circular@coopeco.ng', name: 'Circular Economy Accelerator', sectors: ['Circular Economy'] },
+  { email: 'accel.digital@coopeco.ng', name: 'Digital Economy Accelerator', sectors: ['Digital Economy'] },
 ]
 async function listAccelerators() { return (await kvList('accelerator:')).sort((a, b) => (a.name > b.name ? 1 : -1)) }
 async function getAccelerator(email) { return kvGet('accelerator:' + email) }
-async function saveAccelerator(rec) { await kvSet('accelerator:' + rec.email, { ...rec, updatedAt: new Date().toISOString() }, rec.uid || null); return rec }
-async function acceleratorsForSector(sector) { return (await listAccelerators()).filter((a) => (a.sectors || []).includes(sector)) }
+async function saveAccelerator(rec) { const prior = await kvGet('accelerator:' + rec.email); const status = rec.status || (prior && prior.status) || 'Pending'; await kvSet('accelerator:' + rec.email, { ...rec, status, updatedAt: new Date().toISOString() }, rec.uid || null); return rec }
+async function acceleratorsForSector(sector) { return (await listAccelerators()).filter((a) => (a.sectors || []).includes(sector) && (a.status || 'Pending') === 'Appointed') }
 async function ensureAccelerators() {
-  if (await kvGet('integration:accel-v6')) return
+  if (await kvGet('integration:accel-v8')) return
   const prior = await kvList('accelerator:')
   for (const a of prior) { if (a && a.email && a.email.startsWith('accel.') && a.email.endsWith('@coopeco.ng')) await kvDelete('accelerator:' + a.email) }
-  for (const a of ACCEL_SEEDS) await kvSet('accelerator:' + a.email, { ...a, createdAt: new Date().toISOString() })
-  await kvSet('integration:accel-v6', { done: true, at: new Date().toISOString() })
+  for (const a of ACCEL_SEEDS) await kvSet('accelerator:' + a.email, { ...a, status: 'Appointed', createdAt: new Date().toISOString() })
+  await kvSet('integration:accel-v8', { done: true, at: new Date().toISOString() })
 }
 async function ensureLoanDocsSeed() {
-  if (await kvGet('integration:loandocs-v1')) return
+  if (await kvGet('integration:loandocs-v2')) return
   try {
     const loans = await listLoans()
     const targets = loans.filter((l) => ['Coop validated', 'Bank assessment', 'BOI approved', 'Disbursed', 'Repaying'].includes(l.status)).slice(0, 4)
@@ -1811,7 +1915,7 @@ async function ensureLoanDocsSeed() {
       }
     }
   } catch (e) { /* best-effort */ }
-  await kvSet('integration:loandocs-v1', { done: true, at: new Date().toISOString() })
+  await kvSet('integration:loandocs-v2', { done: true, at: new Date().toISOString() })
 }
 async function ensureSeedData() {
   try { await syncFromSekat({ name: 'SEKAT gateway', role: 'officer', email: 'sekat@system' }, true); await syncFromQoop({ name: 'QooP gateway', role: 'officer', email: 'qoop@system' }, true) } catch (e) { /* not configured */ }
@@ -1849,8 +1953,10 @@ function LoanApplyForm({ ctx, member, onDone, onCancel }) {
   const [f, setF] = useState({ amountRequested: '', type: LOAN_TYPES[0], purpose: '', sector: LASMECO_SECTORS[0] })
   const [accels, setAccels] = useState([]), [apEmail, setApEmail] = useState('')
   const [busy, setBusy] = useState(false), [err, setErr] = useState('')
+  const [coopAdm, setCoopAdm] = useState(null)
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value })
   useEffect(() => { acceleratorsForSector(f.sector).then((list) => { setAccels(list); setApEmail(list[0] ? list[0].email : '') }) }, [f.sector])
+  useEffect(() => { listCoops().then((cs) => { const mc = cs.find((c) => c.name === member.coop); setCoopAdm(mc ? coopAdmission(mc) : { admitted: false, outstanding: [{ label: 'Cooperative not found on the registry' }] }) }) }, [member.coop])
   const submit = async () => {
     setErr('')
     const amt = Number(f.amountRequested) || 0
@@ -1858,6 +1964,7 @@ function LoanApplyForm({ ctx, member, onDone, onCancel }) {
     if (amt > 10000000) { setErr('The LASMECO cap is ₦10,000,000.'); return }
     if (!f.purpose.trim()) { setErr('Describe what the loan is for.'); return }
     if (accels.length && !apEmail) { setErr('Select an accelerator to prepare your application.'); return }
+    if (coopAdm && !coopAdm.admitted) { setErr('Your cooperative is not yet admitted to the LASMECO scheme, so it cannot nominate members yet. Ask your cooperative to complete admission with MCCTI.'); return }
     setBusy(true)
     const ap = accels.find((a) => a.email === apEmail)
     try { await createLoan({ memberId: member.memberId, memberName: member.name, memberPhone: member.phone, coop: member.coop, sector: f.sector, amountRequested: amt, type: f.type, purpose: f.purpose.trim(), apName: ap ? ap.name : '', apEmail: ap ? ap.email : '' }, ctx); onDone() }
@@ -1874,6 +1981,8 @@ function LoanApplyForm({ ctx, member, onDone, onCancel }) {
         <label className="field"><span>Loan type</span><select value={f.type} onChange={set('type')}>{LOAN_TYPES.map((t) => <option key={t}>{t}</option>)}</select></label>
         <label className="field span2"><span>Purpose</span><textarea value={f.purpose} onChange={set('purpose')} rows={3} placeholder="What the finance is for and the growth it will drive." /></label>
       </div>
+      {member.msme && member.msme.monthlyTurnover ? <p className="panel-note">Indicative facility limit for your turnover ({fmtNaira(member.msme.monthlyTurnover)}/month): about {fmtNaira(facilityLimit(member, f.type, true))} ({loanVariant(f.type).label}). If 12-month turnover consistency is below the RAC threshold this reduces to {fmtNaira(facilityLimit(member, f.type, false))}. Final limit is set by Sterling Bank on assessment.</p> : null}
+      {coopAdm && !coopAdm.admitted ? <p className="auth-err">Your cooperative is not yet admitted to LASMECO ({coopAdm.outstanding.length} requirement(s) outstanding). It must be admitted by MCCTI before members can be nominated.</p> : null}
       {!accels.length && <p className="panel-note">No accelerator is registered for this sector yet. You can still submit and MCCTI will assign one, or choose another sector.</p>}
       {err && <p className="auth-err">{err}</p>}
       <div className="panel-actions"><button className="btn btn-gold" onClick={submit} disabled={busy}>{busy ? 'Submitting…' : 'Submit to Accelerator'}</button></div>
@@ -1881,15 +1990,19 @@ function LoanApplyForm({ ctx, member, onDone, onCancel }) {
     </div>
   )
 }
-const LASMECO_DOC_REQUIREMENTS = ['Valid ID (NIN slip / passport)', 'BVN confirmation', 'Passport photograph', 'Business registration or trade permit', '6-month bank statement', 'Cooperative membership letter']
+const LASMECO_DOC_REQUIREMENTS = ['Valid ID (NIN slip / passport)', 'BVN confirmation', '12-month bank statements (all accounts)', 'Credit bureau report (business & promoter)', 'Cooperative letter of introduction', 'CAC / business registration certificate', 'Operating licences / permits', 'Cash-flow analysis with assumptions', "Promoter's statement of net worth", 'Asset register & vendor invoices (asset finance)', 'Insurance (asset + credit-life)', 'Passport photograph']
 function lasmecoChecklist(loan, member, docs) {
+  const has = (c) => docs.find((x) => x.category === c)
   const items = []
-  items.push({ label: 'BVN verified', ok: !!(member && member.kyc && member.kyc.bvnVerified), critical: true })
-  items.push({ label: 'NIN verified', ok: !!(member && member.kyc && member.kyc.ninVerified), critical: true })
-  LASMECO_DOC_REQUIREMENTS.forEach((c) => { const d = docs.find((x) => x.category === c); items.push({ label: c, ok: !!d, verified: d ? d.verified : false, doc: true }) })
+  items.push({ label: 'BVN verified', ok: !!(member && member.kyc && member.kyc.bvnVerified) })
+  items.push({ label: 'NIN verified', ok: !!(member && member.kyc && member.kyc.ninVerified) })
+  items.push({ label: 'Recommended by an accelerator', ok: !!loan.apName })
+  items.push({ label: 'Affiliated to a cooperative society', ok: !!(member && member.coop) })
+  items.push({ label: 'Operating 12+ months (not a startup)', ok: !!(member && member.msme && (member.msme.yearsInOperation || 0) >= 1) })
   const score = member ? scoreMember(member).score : 0
-  items.push({ label: 'Credit score at least 500 (currently ' + score + ')', ok: score >= 500 })
-  items.push({ label: 'Active cooperative membership', ok: !!(member && member.coop) })
+  items.push({ label: 'Acceptable credit profile \u2014 score at least 500 (currently ' + score + ')', ok: score >= 500 })
+  const keyDocs = ['12-month bank statements (all accounts)', 'Credit bureau report (business & promoter)', 'Cooperative letter of introduction', 'Cash-flow analysis with assumptions', 'CAC / business registration certificate']
+  keyDocs.forEach((c) => { const d = has(c); items.push({ label: c, ok: !!d, verified: d ? d.verified : false, doc: true }) })
   const outstanding = items.filter((i) => !i.ok)
   const unverifiedDocs = items.filter((i) => i.doc && i.ok && !i.verified)
   return { items, outstanding, unverifiedDocs, qualifies: outstanding.length === 0 }
@@ -1937,7 +2050,7 @@ function RevenuePanel({ ctx }) {
   const accrued = { 'Cooperative registration': fig.regFees, 'Annual returns filing': fig.returnsFees, 'LASMECO disbursement portal': fig.portalFees, 'Digital wallet & payments': fig.walletFees }
   return (
     <div className="ws">
-      <div className="statgrid"><div className="stat"><span className="stat-fig">{fmtNaira(fig.accrued)}</span><span className="stat-lab">Total accrued to escrow</span></div><div className="stat"><span className="stat-fig">{fmtNaira(fig.regFees)}</span><span className="stat-lab">Registration</span></div><div className="stat"><span className="stat-fig">{fmtNaira(fig.portalFees)}</span><span className="stat-lab">Disbursement portal</span></div><div className="stat"><span className="stat-fig">{fmtNaira(fig.walletFees)}</span><span className="stat-lab">Wallet fees</span></div></div>
+      <div className="statgrid"><div className="stat"><span className="stat-fig">{fmtNaira(fig.accrued)}</span><span className="stat-lab">Total accrued to escrow</span></div><div className="stat"><span className="stat-fig">{fmtNaira(fig.portalFees)}</span><span className="stat-lab">Disbursement portal (2.5%)</span></div><div className="stat"><span className="stat-fig">{fmtNaira(fig.boiMgmtFeeQuarter)}</span><span className="stat-lab">BOI mgmt fee / quarter (2.5% p.a.)</span></div><div className="stat"><span className="stat-fig">{fmtNaira(fig.walletFees)}</span><span className="stat-lab">Wallet fees (1%)</span></div></div>
       <div className="revenue-grid">{PRICING.map((pr) => (
         <div className="revenue-card" key={pr.name}>
           <div className="revenue-top"><h4>{pr.name}</h4><span className="revenue-price">{pr.price}<em> {pr.unit}</em></span></div>
@@ -1950,8 +2063,79 @@ function RevenuePanel({ ctx }) {
     </div>
   )
 }
+function PortfolioMonitoring() {
+  const [m, setM] = useState(null), [gg, setGg] = useState(0)
+  useEffect(() => { listLoans().then((l) => { setM(nplMetrics(l)); setGg(globalGuaranteeUsed(l)) }) }, [])
+  if (!m) return <p className="muted-line">Computing portfolio\u2026</p>
+  const pct = (x) => (x * 100).toFixed(1) + '%'
+  const ggPct = gg / GLOBAL_GUARANTEE_LIMIT
+  return (
+    <div className="ws">
+      <div className={cx('kyc-status', m.status === 'Healthy' ? 'ok' : 'pending')} style={m.status === 'Suspended' ? { background: '#f7e4de', color: 'var(--err)', borderColor: 'var(--err)' } : undefined}>Portfolio status: {m.status}. {m.status === 'Suspended' ? 'NPL \u2265 10% \u2014 new disbursements should be suspended until recovery.' : m.status === 'Review' ? 'NPL \u2265 5% \u2014 Fund review and recovery drive triggered.' : 'NPL within tolerance.'}</div>
+      <div className="statgrid">
+        <div className="stat"><span className="stat-fig">{fmtNaira(m.disbursed)}</span><span className="stat-lab">Disbursed (guaranteed {fmtNaira(m.guaranteed)})</span></div>
+        <div className="stat"><span className="stat-fig" style={m.nplRatio >= 0.05 ? { color: 'var(--err)' } : undefined}>{pct(m.nplRatio)}</span><span className="stat-lab">NPL ratio ({fmtNaira(m.nplValue)})</span></div>
+        <div className="stat"><span className="stat-fig" style={m.lossNorm >= 0.01 ? { color: 'var(--err)' } : undefined}>{pct(m.lossNorm)}</span><span className="stat-lab">Loss norm (RAC cap 1%)</span></div>
+        <div className="stat"><span className="stat-fig" style={ggPct >= 1 ? { color: 'var(--err)' } : undefined}>{pct(ggPct)}</span><span className="stat-lab">Global guarantee used ({fmtNaira(gg)} of ₦5bn)</span></div>
+      </div>
+      {m.nplLoans.length ? <div className="risk-list">{m.nplLoans.map((x, i) => (<div className="risk-item" key={i}><span className={cx('chip', x.loan.status === 'Default' ? 'st-returned' : 'st-review')}>{x.loan.status === 'Default' ? 'Default' : x.overdue + ' overdue'}</span><div className="risk-body"><strong>{x.loan.memberName} \u2014 {x.loan.loanId}</strong><p>{x.loan.sector} &middot; outstanding {fmtNaira(x.outstanding)}</p></div></div>))}</div> : <div className="empty"><span className="empty-mark">&#9670;</span><h3>No non-performing loans</h3><p>All disbursed loans are performing.</p></div>}
+      <p className="panel-note">NPL = loans in default or 3+ installments overdue, over total disbursed. Loss norm = crystallised guarantee losses over guaranteed exposure (RAC cap 1%). Global guarantee cap ₦5bn; single-obligor guarantee cap ₦5m (50% of the ₦10m loan ceiling). Thresholds: NPL review 5%, suspend 10%.</p>
+    </div>
+  )
+}
+function SecurityChecklist({ loan, ctx, onChanged }) {
+  const [l, setL] = useState(loan), [busy, setBusy] = useState(false)
+  const canEdit = ctx.role === 'sterling'
+  const b = loanBreakdown(l.amountApproved || l.amountRecommended || l.amountRequested)
+  const s = securityState(l)
+  const amt = { cashDeposit: b.collateral, lien: b.lien, sterlingGuarantee: b.sterlingGuarantee, coopGuarantee: b.coopGuarantee }
+  const toggle = async (k) => { if (!canEdit) return; setBusy(true); const security = { ...(l.security || {}), [k]: !(l.security && l.security[k]) }; const next = await updateLoan(l.loanId, { security }, ctx, 'Security ' + (security[k] ? 'confirmed' : 'cleared') + ': ' + k, ''); setL(next); setBusy(false); onChanged && onChanged() }
+  return (
+    <div className="returns-box"><h4>Security &amp; guarantee checklist ({s.done}/{s.total})</h4>
+      <div className="kyc-check">{SECURITY_ITEMS.map(([k, label]) => { const on = !!(l.security && l.security[k]); return (<button type="button" className={cx('kyc-item', 'sec-item', on && 'ok', canEdit && 'clickable')} key={k} disabled={!canEdit || busy} onClick={() => toggle(k)}><span className="kyc-mark">{on ? '\u2713' : '\u25cb'}</span><span className="kyc-label">{label}{amt[k] ? ' \u2014 ' + fmtNaira(amt[k]) : ''}</span></button>) })}</div>
+      <div className={cx('kyc-status', s.complete ? 'ok' : 'pending')}>{s.complete ? 'All security perfected \u2014 cleared for guarantee issuance.' : (s.total - s.done) + ' security item(s) outstanding before disbursement.'}</div>
+      <p className="panel-note">{canEdit ? 'Confirm each item as it is perfected during assessment.' : 'Sterling Bank completes this during assessment; BOI and leadership see the confirmed status.'}</p>
+    </div>
+  )
+}
+function CoopTierPanel({ coop, ctx, onChanged }) {
+  const [c, setC] = useState(coop), [nav, setNav] = useState(String(coop.nav || '')), [busy, setBusy] = useState(false), [loans, setLoans] = useState([])
+  const canEdit = ['officer', 'leadership'].includes(ctx.role)
+  useEffect(() => { listLoans().then(setLoans) }, [])
+  const active = loans.filter((l) => l.coop === c.name && !['Declined', 'Completed', 'Default'].includes(l.status)).length
+  const nl = coopNominationLimit(c, active)
+  const adm = coopAdmission(c)
+  const liab = coopGuaranteeLiability(c.name, loans)
+  const setTier = async (t) => { setBusy(true); const next = await updateCoop(c.trackingId, { tier: t }, ctx, 'Tier classification set to ' + t, ''); setC(next); setBusy(false); onChanged && onChanged() }
+  const saveNav = async () => { setBusy(true); const next = await updateCoop(c.trackingId, { nav: Number(nav) || 0 }, ctx, 'Net asset value updated', fmtNaira(Number(nav) || 0)); setC(next); setBusy(false); onChanged && onChanged() }
+  return (
+    <div className="trail-box"><h4>Scheme admission, tiering &amp; guarantee</h4>
+      <div className={cx('kyc-status', adm.admitted ? 'ok' : 'pending')}>{adm.admitted ? 'Admitted to the LASMECO scheme \u2014 may nominate members.' : adm.outstanding.length + ' admission requirement(s) outstanding \u2014 cannot nominate yet.'}</div>
+      <div className="kyc-check">{adm.items.map((it, i) => (<div className={cx('kyc-item', it.ok && 'ok')} key={i}><span className="kyc-mark">{it.ok ? '\u2713' : '\u25cb'}</span><span className="kyc-label">{it.label}</span></div>))}</div>
+      <div className="statgrid"><div className="stat"><span className="stat-fig">{nl.tier}</span><span className="stat-lab">Tier</span></div><div className="stat"><span className="stat-fig">{nl.limit}</span><span className="stat-lab">Nomination limit</span></div><div className="stat"><span className="stat-fig">{nl.used}</span><span className="stat-lab">Active nominations</span></div><div className="stat"><span className="stat-fig" style={nl.remaining === 0 ? { color: 'var(--err)' } : undefined}>{nl.remaining}</span><span className="stat-lab">Remaining</span></div></div>
+      <div className="statgrid"><div className="stat"><span className="stat-fig">{fmtNaira(liab.contingent)}</span><span className="stat-lab">Contingent guarantee (25%)</span></div><div className="stat"><span className="stat-fig" style={liab.crystallised ? { color: 'var(--err)' } : undefined}>{fmtNaira(liab.crystallised)}</span><span className="stat-lab">Crystallised on default</span></div></div>
+      {canEdit ? <div className="wallet-actions" style={{ marginTop: '12px' }}><select value={c.tier || 'C'} onChange={(e) => setTier(e.target.value)} disabled={busy}>{Object.keys(COOP_TIERS).map((t) => <option key={t} value={t}>{COOP_TIERS[t].label}</option>)}</select><input type="number" value={nav} onChange={(e) => setNav(e.target.value)} placeholder="Net asset value (₦)" /><button className="btn btn-outline btn-sm" disabled={busy} onClick={saveNav}>Save NAV</button></div> : null}
+      <p className="panel-note">MCCTI classifies the tier and records NAV. Tier caps: A {COOP_TIERS.A.cap}, B {COOP_TIERS.B.cap}, C {COOP_TIERS.C.cap} borrowers; actual limit = min(tier cap, NAV \u00f7 (25% \u00d7 ₦{NAV_REF_LOAN / 1e6}m reference loan)). On default the cooperative's 25% guarantee crystallises into a cash liability.</p>
+    </div>
+  )
+}
+function AcceleratorAppointments({ ctx }) {
+  const [list, setList] = useState(null), [busy, setBusy] = useState(''), [docs, setDocs] = useState({})
+  const reload = useCallback(async () => { const l = await listAccelerators(); setList(l); const d = {}; for (const a of l) { try { d[a.email] = (await listDocs('accel:' + a.email)).length } catch (e) { d[a.email] = 0 } } setDocs(d) }, [])
+  useEffect(() => { reload() }, [reload])
+  const setStatus = (a, status) => async () => { setBusy(a.email); await saveAccelerator({ ...a, status }); setBusy(''); reload() }
+  if (!list) return <p className="muted-line">Loading accelerators\u2026</p>
+  return (
+    <div className="ws">
+      <p className="muted-line">The Ministry (MCCTI) formally appoints accelerators before they operate, following the Consortium call. Appointed accelerators can be routed applications by members in their sectors.</p>
+      {list.length ? <div className="risk-list">{list.map((a) => { const appointed = a.status === 'Appointed'; return (<div className="risk-item" key={a.email}><span className={cx('chip', appointed ? 'st-approved' : 'st-review')}>{a.status || 'Pending'}</span><div className="risk-body"><strong>{a.name}</strong><p>{(a.sectors || []).join(', ') || 'No sectors set'} &middot; {a.email} &middot; {docs[a.email] || 0} document(s) submitted</p></div><div className="doc-actions">{!appointed ? <button className="link-inline" disabled={busy === a.email} onClick={setStatus(a, 'Appointed')}>Appoint</button> : <button className="link-inline danger" disabled={busy === a.email} onClick={setStatus(a, 'Suspended')}>Suspend</button>}</div></div>) })}</div> : <p className="muted-line">No accelerators have registered yet.</p>}
+      <p className="panel-note">RAC vetting before appointment: CAC registration, valid permits, 3+ years in enterprise development, sector track record, audited financials, and CVs of key staff. Required documents: {ACCEL_DOC_REQUIREMENTS.slice(0, 4).join(', ')}\u2026</p>
+    </div>
+  )
+}
 function LoanDetail({ loan, ctx, onClose, onChanged }) {
   const [l, setL] = useState(loan), [note, setNote] = useState(''), [amt, setAmt] = useState(''), [busy, setBusy] = useState(false), [rk, setRk] = useState(0), [tenorInput, setTenorInput] = useState('12'), [repay, setRepay] = useState('')
+  const [disb, setDisb] = useState({ sterlingAccount: '', supplier: '', supplierAccount: '' })
   const role = ctx.role
   const b = loanBreakdown(l.amountApproved || l.amountRecommended || l.amountRequested)
   const rp = ['Disbursed', 'Repaying', 'Completed', 'Default'].includes(l.status) && (l.schedule || []).length ? loanRepayState(l) : null
@@ -1988,6 +2172,7 @@ function LoanDetail({ loan, ctx, onClose, onChanged }) {
       </div>
 
       <LoanKycPanel loan={l} ctx={ctx} />
+      {['Coop validated', 'Bank assessment', 'BOI approved', 'Disbursed', 'Repaying', 'Completed', 'Default'].includes(l.status) && (ctx.role === 'sterling' || ctx.role === 'boi' || ctx.role === 'leadership' || ctx.role === 'officer') ? <SecurityChecklist loan={l} ctx={ctx} onChanged={onChanged} /> : null}
 
       {['Bank assessment', 'BOI approved', 'Disbursed', 'Repaying', 'Completed'].includes(l.status) && (
         <div className="returns-box"><h4>Guarantee stack &amp; disbursement</h4>
@@ -2033,14 +2218,15 @@ function LoanDetail({ loan, ctx, onClose, onChanged }) {
       <div className="action-box">
         <label className="field"><span>Note (recorded on the audit trail)</span><textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Decision, conditions or findings." /></label>
         {(canAP && l.status === 'In training') || (canBOI && l.status === 'Bank assessment') ? <label className="field"><span>Amount (₦)</span><input type="number" value={amt} onChange={(e) => setAmt(e.target.value)} placeholder={String(l.amountRecommended || l.amountRequested || '')} /></label> : null}
-        {canSterling && l.status === 'BOI approved' ? <label className="field"><span>Repayment tenor (months)</span><input type="number" value={tenorInput} onChange={(e) => setTenorInput(e.target.value)} placeholder="12" /></label> : null}
+        {canSterling && l.status === 'BOI approved' ? <p className="panel-note">Product: {loanVariant(l.type).label} \u2014 {loanVariant(l.type).tenor}-month tenor with a {loanVariant(l.type).moratorium}-month principal moratorium (fixed by the RAC). The schedule is generated automatically on disbursement.</p> : null}
+        {canSterling && l.status === 'BOI approved' ? <div className="form-grid"><label className="field"><span>Beneficiary Sterling account no.</span><input value={disb.sterlingAccount} onChange={(e) => setDisb({ ...disb, sterlingAccount: e.target.value })} placeholder="10-digit NUBAN" /></label>{loanVariant(l.type).label === 'Asset Finance' ? <><label className="field"><span>Supplier / vendor</span><input value={disb.supplier} onChange={(e) => setDisb({ ...disb, supplier: e.target.value })} placeholder="Equipment supplier" /></label><label className="field"><span>Supplier account no.</span><input value={disb.supplierAccount} onChange={(e) => setDisb({ ...disb, supplierAccount: e.target.value })} placeholder="Supplier NUBAN" /></label></> : null}</div> : null}
         <div className="action-row">
           {canAP && l.status === 'Applied' && <button className="btn btn-gold btn-sm" disabled={busy} onClick={() => act({ status: 'In training', apName: ctx.name }, 'Enrolled in capacity building')}>Begin capacity building</button>}
           {canAP && l.status === 'In training' && <button className="btn btn-gold btn-sm" disabled={busy} onClick={recommend}>Shortlist &amp; recommend amount</button>}
           {canOff && l.status === 'Shortlisted' && <button className="btn btn-gold btn-sm" disabled={busy} onClick={() => act({ status: 'Coop validated' }, 'Cooperative validated; 25% guarantee issued', true)}>Validate cooperative &amp; guarantee</button>}
           {canSterling && l.status === 'Coop validated' && <button className="btn btn-gold btn-sm" disabled={busy} onClick={() => act({ status: 'Bank assessment' }, 'KYC and assessment complete; 50% Sterling guarantee applied', true)}>Assess &amp; apply 50% guarantee</button>}
           {canBOI && l.status === 'Bank assessment' && <button className="btn btn-gold btn-sm" disabled={busy} onClick={boiApprove}>Grant final approval &amp; fund</button>}
-          {canSterling && l.status === 'BOI approved' && <button className="btn btn-gold btn-sm" disabled={busy} onClick={() => { const t = Number(tenorInput) || 12; const sched = buildSchedule(l.amountApproved || b.amount, t, 9, new Date().toISOString()); act({ status: 'Disbursed', tenorMonths: t, disbursedAt: new Date().toISOString(), schedule: sched }, 'Funds disbursed; ' + t + '-month repayment schedule generated', true) }}>Disburse to beneficiary</button>}
+          {canSterling && l.status === 'BOI approved' && <button className="btn btn-gold btn-sm" disabled={busy} onClick={() => { if (!disb.sterlingAccount.trim()) { alert('Enter the beneficiary Sterling account for disbursement.'); return } if (!securityState(l).complete) { if (!window.confirm('Not all security items are perfected. Disburse anyway?')) return } const v = loanVariant(l.type); const t = v.tenor; const sched = buildSchedule(l.amountApproved || b.amount, t, 9, new Date().toISOString(), v.moratorium); act({ status: 'Disbursed', tenorMonths: t, moratoriumMonths: v.moratorium, disbursedAt: new Date().toISOString(), schedule: sched, disbursement: { ...disb } }, 'Funds disbursed to ' + (disb.supplier ? 'supplier ' + disb.supplier : 'beneficiary account ' + disb.sterlingAccount) + '; ' + t + '-month schedule (' + v.moratorium + '-month moratorium)', true) }}>Disburse to beneficiary</button>}
           {canDecline && <button className="btn btn-outline btn-sm" disabled={busy} onClick={() => act({ status: 'Declined' }, 'Application declined', true)}>Decline</button>}
         </div>
       </div>
@@ -2077,7 +2263,11 @@ function AcceleratorWorkspace({ ctx, section }) {
   const cards = () => [['New applications', by('Applied')], ['In training', by('In training')], ['Shortlisted', by('Shortlisted')], ['My pipeline', myLoans.length]]
   return (
     <div className="ws">
-      {section === 'overview' && (<><div className="accel-sectors"><span>Serving: {(accel.sectors || []).join(', ') || 'no sectors set'}</span><button className="link-inline" onClick={() => setAccel(null)}>Edit sectors</button></div><LoanStageOverview loans={myLoans} cards={cards} /></>)}
+      {section === 'overview' && (<>
+        <div className="accel-sectors"><span>Serving: {(accel.sectors || []).join(', ') || 'no sectors set'} &middot; {accel.status || 'Pending'}</span><button className="link-inline" onClick={() => setAccel(null)}>Edit sectors</button></div>
+        {(accel.status || 'Pending') !== 'Appointed' ? <div className="returns-box"><h4>Appointment documents</h4><div className={cx('kyc-status', 'pending')}>Pending MCCTI appointment. Submit the documents below; members can be routed to you once MCCTI appoints you.</div><DocumentsPanel coopId={'accel:' + ctx.email} ctx={ctx} canVerify={false} canUpload={true} categories={ACCEL_DOC_REQUIREMENTS} /></div> : <div className="returns-box"><h4>Appointment</h4><div className={cx('kyc-status', 'ok')}>Appointed by MCCTI \u2014 you can receive applications in your sectors.</div></div>}
+        <LoanStageOverview loans={myLoans} cards={cards} />
+      </>)}
       {section === 'queue' && (<><p className="muted-line">Applications awaiting your action \u2014 new, in training and shortlisted.</p><LoanTable loans={queue} onOpen={setSel} /></>)}
       {section === 'all' && (<><p className="muted-line">Every application in your sectors, at all stages (including validated, funded, disbursed, repaying and closed).</p><LoanTable loans={myLoans} onOpen={setSel} /></>)}
     </div>
@@ -2093,6 +2283,8 @@ function LoanRoleWorkspace({ ctx, section, statuses, cards }) {
       {section === 'overview' && <LoanStageOverview loans={loans} cards={cards} />}
       {section === 'queue' && <LoanTable loans={queue} onOpen={setSel} />}
       {section === 'all' && <LoanTable loans={loans} onOpen={setSel} />}
+      {section === 'monitoring' && <PortfolioMonitoring />}
+      {section === 'accelerators' && <AcceleratorAppointments ctx={ctx} />}
     </div>
   )
 }
@@ -2559,10 +2751,10 @@ const ROLE_NAV = {
   officer: [['overview', 'Overview'], ['queue', 'Review queue'], ['all', 'All societies'], ['members', 'Members'], ['lasmeco', 'LASMECO'], ['offices', 'Area offices'], ['risk', 'Risk & fraud'], ['audit', 'Audit log'], ['reports', 'Reports'], ['integrations', 'Integrations']],
   auditor: [['overview', 'Overview'], ['returns', 'Returns to examine'], ['all', 'All societies']],
   accelerator: [['overview', 'Overview'], ['queue', 'My pipeline'], ['all', 'All loans']],
-  sterling: [['overview', 'Overview'], ['queue', 'My queue'], ['all', 'All loans']],
-  boi: [['overview', 'Overview'], ['queue', 'My queue'], ['all', 'All loans']],
+  sterling: [['overview', 'Overview'], ['queue', 'My queue'], ['all', 'All loans'], ['monitoring', 'Portfolio monitoring']],
+  boi: [['overview', 'Overview'], ['queue', 'My queue'], ['all', 'All loans'], ['monitoring', 'Portfolio monitoring']],
   assetmatrix: [['overview', 'Overview'], ['distribution', 'Distribution']],
-  leadership: [['overview', 'Overview'], ['applications', 'Applications'], ['members', 'Members'], ['lasmeco', 'LASMECO'], ['sla', 'Service levels'], ['risk', 'Risk & fraud'], ['revenue', 'Revenue & billing'], ['reports', 'Reports & exports'], ['retention', 'Data retention'], ['integrations', 'Integrations']],
+  leadership: [['overview', 'Overview'], ['applications', 'Applications'], ['accelerators', 'Accelerators'], ['members', 'Members'], ['lasmeco', 'LASMECO'], ['monitoring', 'Portfolio monitoring'], ['sla', 'Service levels'], ['risk', 'Risk & fraud'], ['revenue', 'Revenue & billing'], ['reports', 'Reports & exports'], ['retention', 'Data retention'], ['integrations', 'Integrations']],
 }
 const WORKSPACES = { society: SocietyWorkspace, member: MemberWorkspace, officer: OfficerWorkspace, auditor: AuditorWorkspace, sterling: SterlingWorkspace, boi: BoiWorkspace, assetmatrix: AssetMatrixWorkspace, accelerator: AcceleratorWorkspace, leadership: LeadershipOverview }
 function SideIcon({ name }) {
@@ -2933,6 +3125,9 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .revenue-who{font-size:12px;color:var(--sage-dim);text-transform:uppercase;letter-spacing:.04em}
 .revenue-body{font-size:13px;color:var(--sage);line-height:1.5;flex:1}
 .revenue-accrued{font-size:12.5px;color:var(--cream);font-weight:600}
+.sec-item{background:none;border:none;text-align:left;width:100%;padding:0;font:inherit;color:inherit;cursor:default}
+.sec-item.clickable{cursor:pointer}
+.sec-item.clickable:hover .kyc-mark{border:1px solid var(--green)}
 .revenue-pay{display:flex;gap:8px;margin-top:6px}
 .revenue-pay input{flex:1;min-width:0;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--ink);color:var(--cream);font-size:13px}
 .revenue-pay input:focus{outline:none;border-color:var(--green)}
