@@ -684,12 +684,22 @@ function useRegistry() {
   return [coops, reload]
 }
 function CoopTable({ coops, onOpen }) {
+  const [q, setQ] = useState(''), [st, setSt] = useState('All')
   if (!coops.length) return <p className="muted-line">No societies to show.</p>
+  const statuses = ['All', ...Array.from(new Set(coops.map((c) => c.status).filter(Boolean)))]
+  const filtered = coops.filter((c) => (st === 'All' || c.status === st) && (!q || [c.name, c.trackingId, c.areaOffice, c.sector].join(' ').toLowerCase().includes(q.toLowerCase())))
   return (
-    <div className="rtable-wrap"><table className="rtable">
-      <thead><tr><th>Society</th><th>Tracking ID</th><th>Area office</th><th>Sector</th><th>Status</th><th>CAP15</th><th></th></tr></thead>
-      <tbody>{coops.map((c) => (<tr key={c.trackingId}><td className="td-name">{c.name}<SourceBadge source={c.source} /></td><td className="mono">{c.trackingId}</td><td>{c.areaOffice}</td><td>{c.sector}</td><td><StatusChip status={c.status} /></td><td><StatusChip status={c.cap15} kind="cap15" /></td><td><button className="btn-open" onClick={() => onOpen(c)}>Open</button></td></tr>))}</tbody>
-    </table></div>
+    <div>
+      <div className="table-filter">
+        <input className="table-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search society, ID, area office or sector\u2026" aria-label="Search cooperatives" />
+        <select value={st} onChange={(e) => setSt(e.target.value)} aria-label="Filter by status">{statuses.map((s) => <option key={s}>{s}</option>)}</select>
+        <span className="table-count">{filtered.length} of {coops.length}</span>
+      </div>
+      {filtered.length ? <div className="rtable-wrap"><table className="rtable">
+        <thead><tr><th>Society</th><th>Tracking ID</th><th>Area office</th><th>Sector</th><th>Status</th><th>CAP15</th><th></th></tr></thead>
+        <tbody>{filtered.map((c) => (<tr key={c.trackingId}><td className="td-name">{c.name}<SourceBadge source={c.source} /></td><td className="mono">{c.trackingId}</td><td>{c.areaOffice}</td><td>{c.sector}</td><td><StatusChip status={c.status} /></td><td><StatusChip status={c.cap15} kind="cap15" /></td><td><button className="btn-open" onClick={() => onOpen(c)}>Open</button></td></tr>))}</tbody>
+      </table></div> : <p className="muted-line">No societies match your search.</p>}
+    </div>
   )
 }
 function SekatPanel({ ctx, onSynced }) {
@@ -2008,12 +2018,22 @@ async function seedDemoLoans() {
 }
 
 function LoanTable({ loans, onOpen }) {
+  const [q, setQ] = useState(''), [st, setSt] = useState('All')
   if (!loans.length) return <p className="muted-line">No applications to show.</p>
+  const statuses = ['All', ...Array.from(new Set(loans.map((l) => l.status)))]
+  const filtered = loans.filter((l) => (st === 'All' || l.status === st) && (!q || [l.memberName, l.loanId, l.coop, l.sector].join(' ').toLowerCase().includes(q.toLowerCase())))
   return (
-    <div className="rtable-wrap"><table className="rtable">
-      <thead><tr><th>Applicant</th><th>Loan ID</th><th>Cooperative</th><th>Sector</th><th>Requested</th><th>Status</th><th></th></tr></thead>
-      <tbody>{loans.map((l) => (<tr key={l.loanId}><td className="td-name">{l.memberName}</td><td className="mono">{l.loanId}</td><td>{l.coop}</td><td>{l.sector}</td><td className="mono">{fmtNaira(l.amountApproved || l.amountRecommended || l.amountRequested)}</td><td><StatusChip status={l.status} kind="loan" /></td><td><button className="btn-open" onClick={() => onOpen(l)}>Open</button></td></tr>))}</tbody>
-    </table></div>
+    <div>
+      <div className="table-filter">
+        <input className="table-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search applicant, ID, cooperative or sector\u2026" aria-label="Search applications" />
+        <select value={st} onChange={(e) => setSt(e.target.value)} aria-label="Filter by status">{statuses.map((s) => <option key={s}>{s}</option>)}</select>
+        <span className="table-count">{filtered.length} of {loans.length}</span>
+      </div>
+      {filtered.length ? <div className="rtable-wrap"><table className="rtable">
+        <thead><tr><th>Applicant</th><th>Loan ID</th><th>Cooperative</th><th>Sector</th><th>Requested</th><th>Status</th><th></th></tr></thead>
+        <tbody>{filtered.map((l) => (<tr key={l.loanId}><td className="td-name">{l.memberName}</td><td className="mono">{l.loanId}</td><td>{l.coop}</td><td>{l.sector}</td><td className="mono">{fmtNaira(l.amountApproved || l.amountRecommended || l.amountRequested)}</td><td><StatusChip status={l.status} kind="loan" /></td><td><button className="btn-open" onClick={() => onOpen(l)}>Open</button></td></tr>))}</tbody>
+      </table></div> : <p className="muted-line">No applications match your search.</p>}
+    </div>
   )
 }
 function LoanApplyForm({ ctx, member, onDone, onCancel }) {
@@ -2095,6 +2115,7 @@ function LoanKycPanel({ loan, ctx }) {
       <p className="muted-line">{isBorrower ? 'Submit the documents below so your Accelerator and Sterling Bank can verify your KYC and process your application. You will be notified if anything is outstanding.' : 'Documents submitted by the applicant. Sterling Bank verifies each item for KYC; BOI sees the verified set.'}</p>
       <div className="kyc-check">{chk.items.map((it, i) => (<div className={cx('kyc-item', it.ok && 'ok')} key={i}><span className="kyc-mark">{it.ok ? '\u2713' : '\u25cb'}</span><span className="kyc-label">{it.label}{it.doc && it.ok ? (it.verified ? ' \u2014 verified' : ' \u2014 submitted, awaiting verification') : ''}</span></div>))}</div>
       <div className={cx('kyc-status', chk.qualifies ? 'ok' : 'pending')}>{chk.qualifies ? 'All requirements met \u2014 ready to proceed to assessment.' : chk.outstanding.length + ' item(s) outstanding' + (chk.unverifiedDocs.length ? ', ' + chk.unverifiedDocs.length + ' awaiting Sterling verification' : '') + '.'}</div>
+      {isBorrower ? <div className="doc-guide"><h5>Documents to upload</h5><ul>{LASMECO_DOC_REQUIREMENTS.map((c) => { const has = docs.find((d) => d.category === c); return <li key={c} className={cx(has && 'done')}><span aria-hidden="true">{has ? '\u2713' : '\u2022'}</span> {c}{c.indexOf('asset finance') > -1 ? ' (only if applying for Asset Finance)' : ''}</li> })}</ul><p className="chart-note">Pick the matching type from the dropdown below, choose your file, and it uploads straight to your Accelerator and Sterling Bank for review.</p></div> : null}
       <DocumentsPanel coopId={loan.loanId} ctx={ctx} canVerify={canVerify} canUpload={isBorrower} categories={LASMECO_DOC_REQUIREMENTS} onChange={reloadDocs} />
       {!isBorrower && (role === 'accelerator' || role === 'sterling') && (chk.outstanding.length > 0) && <div className="panel-actions"><button className="btn btn-outline btn-sm" disabled={busy} onClick={requestFeedback}>Notify member of outstanding items</button></div>}
     </div>
@@ -2838,14 +2859,16 @@ function Sidebar({ role, profile, sections, section, setSection, onSignOut, onHo
   return (
     <aside className="side">
       <button className="side-brand" onClick={onHome}><span className="brand-mark" aria-hidden="true">&#9670;</span><span className="side-brand-name">MCCTI <em>CoopEco</em></span></button>
-      {impersonating && <button className="side-return" onClick={onExitView}>&larr; Return to my workspace</button>}
-      <nav className="side-nav" aria-label="Sections">{sections.map(([id, label]) => (<button key={id} className={cx('side-item', section === id && 'on')} onClick={() => setSection(id)}><span className="side-dot" aria-hidden="true" /><span>{label}</span></button>))}</nav>
-      <div className="side-sep" />
-      <nav className="side-nav" aria-label="Support">
-        <button className={cx('side-item', section === 'notifications' && 'on')} onClick={() => setSection('notifications')}><SideIcon name="bell" /><span>Notifications</span>{unread ? <span className="side-badge">{unread}</span> : null}</button>
-        <button className={cx('side-item', section === 'help' && 'on')} onClick={() => setSection('help')}><SideIcon name="help" /><span>Help & support</span></button>
-        {canPrivacy && <button className={cx('side-item', section === 'privacy' && 'on')} onClick={() => setSection('privacy')}><SideIcon name="privacy" /><span>Privacy & data</span></button>}
-      </nav>
+      <div className="side-scroll">
+        {impersonating && <button className="side-return" onClick={onExitView}>&larr; Return to my workspace</button>}
+        <nav className="side-nav" aria-label="Sections">{sections.map(([id, label]) => (<button key={id} className={cx('side-item', section === id && 'on')} onClick={() => setSection(id)}><span className="side-dot" aria-hidden="true" /><span>{label}</span></button>))}</nav>
+        <div className="side-sep" />
+        <nav className="side-nav" aria-label="Support">
+          <button className={cx('side-item', section === 'notifications' && 'on')} onClick={() => setSection('notifications')}><SideIcon name="bell" /><span>Notifications</span>{unread ? <span className="side-badge">{unread}</span> : null}</button>
+          <button className={cx('side-item', section === 'help' && 'on')} onClick={() => setSection('help')}><SideIcon name="help" /><span>Help & support</span></button>
+          {canPrivacy && <button className={cx('side-item', section === 'privacy' && 'on')} onClick={() => setSection('privacy')}><SideIcon name="privacy" /><span>Privacy & data</span></button>}
+        </nav>
+      </div>
       <div className="side-foot">
         <div className="side-user"><Avatar name={profile.name} photo={profile.photo} size={34} /><div className="side-user-text"><span className="side-name">{profile.name}</span><span className="side-role">{roleTitle(role)}</span></div></div>
         <button className="side-signout" onClick={onSignOut}>Sign out</button>
@@ -3096,7 +3119,8 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .auth-toggle button{background:none;border:none;color:var(--gold-soft);cursor:pointer;font-size:13px;font-weight:600;padding:0}.auth-toggle button:hover{text-decoration:underline}
 .dash{flex:1;padding:52px 40px 90px}.dash-inner{max-width:1080px;margin:0 auto;animation:rise .5s ease both}
 .shell{flex:1;display:flex;width:100%;align-items:stretch}
-.side{width:250px;flex-shrink:0;background:var(--ink-2);border-right:1px solid var(--line-soft);padding:22px 14px;display:flex;flex-direction:column;gap:22px;position:sticky;top:0;height:100vh;overflow-y:auto}
+.side{width:250px;flex-shrink:0;background:var(--ink-2);border-right:1px solid var(--line-soft);padding:22px 14px;display:flex;flex-direction:column;gap:16px;position:sticky;top:0;height:100vh;overflow:hidden}
+.side-scroll{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:16px}
 .side-brand{display:flex;align-items:center;gap:10px;background:none;border:none;cursor:pointer;padding:6px 8px}
 .side-brand-name{font-family:var(--serif);color:var(--cream);font-size:18px;font-weight:600}.side-brand-name em{color:var(--gold-soft);font-style:italic;font-weight:500}
 .side-nav{display:flex;flex-direction:column;gap:4px}
@@ -3201,6 +3225,19 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .coop-hero-text h3{font-size:18px;margin:0 0 4px}
 .coop-hero-text p{font-size:13px;color:var(--sage);margin:0}
 .chart-note{font-size:11.5px;color:var(--sage-dim);margin:8px 0 0;font-style:italic}
+.doc-guide{background:var(--green-panel);border:1px solid var(--line-soft);border-radius:10px;padding:14px 16px;margin:14px 0}
+.doc-guide h5{font-size:13px;margin:0 0 8px;color:var(--cream)}
+.doc-guide ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:4px 16px}
+.doc-guide li{font-size:12.5px;color:var(--sage);display:flex;gap:7px;align-items:baseline}
+.doc-guide li.done{color:var(--green)}
+.doc-guide li span{flex-shrink:0;font-weight:700}
+.table-filter{display:flex;gap:10px;align-items:center;margin:0 0 14px;flex-wrap:wrap}
+.table-search{flex:1;min-width:200px;padding:9px 13px;border:1px solid var(--line);border-radius:8px;background:var(--ink-2);color:var(--cream);font-size:13.5px}
+.table-search:focus{outline:none;border-color:var(--green)}
+.table-filter select{padding:9px 13px;border:1px solid var(--line);border-radius:8px;background:var(--ink-2);color:var(--cream);font-size:13.5px}
+.table-count{font-family:var(--mono);font-size:11px;color:var(--sage-dim);white-space:nowrap}
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--green);outline-offset:2px;border-radius:4px}
+@media(max-width:640px){.doc-guide ul{grid-template-columns:1fr}}
 @media(max-width:560px){.coop-hero{flex-direction:column;text-align:center}}
 .revenue-pay{display:flex;gap:8px;margin-top:6px}
 .revenue-pay input{flex:1;min-width:0;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--ink);color:var(--cream);font-size:13px}
@@ -3227,7 +3264,7 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .sector-chip.on{background:var(--green);color:#fff;border-color:var(--green)}
 .accel-sectors{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;background:var(--green-panel);border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin-bottom:18px;font-size:13.5px;color:var(--cream-ink)}
 @media(max-width:640px){.verify-facts{grid-template-columns:1fr}.verify-h{font-size:28px}.verify-page{padding:40px 18px 70px}}
-.side-foot{margin-top:auto;display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--line-soft);padding-top:16px}
+.side-foot{flex-shrink:0;display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--line-soft);padding-top:16px;margin-top:4px}
 .side-user{display:flex;align-items:center;gap:10px;min-width:0}
 .side-user-text{display:flex;flex-direction:column;min-width:0}
 .side-name{font-size:13.5px;font-weight:600;color:var(--cream);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -3236,7 +3273,7 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .side-signout:hover{border-color:var(--err);color:var(--err)}
 .shell-main{flex:1;min-width:0;padding:44px 40px 80px}
 .shell-main .dash-inner{margin:0;max-width:1120px}
-@media(max-width:860px){.shell{flex-direction:column}.side{width:100%;height:auto;position:sticky;top:0;z-index:30;flex-direction:row;align-items:center;gap:8px;padding:10px 14px;border-right:none;border-bottom:1px solid var(--line-soft)}.side-brand{display:none}.side-nav{flex-direction:row;flex:0 1 auto;gap:4px;overflow-x:auto}.side-item{white-space:nowrap;padding:9px 12px}.side-foot{margin:0;flex-direction:row;border-top:none;padding-top:0;gap:8px}.side-user{display:none}.shell-main{padding:26px 18px 70px}}
+@media(max-width:860px){.shell{flex-direction:column}.side{width:100%;height:auto;position:sticky;top:0;z-index:30;flex-direction:row;align-items:center;gap:8px;padding:10px 14px;border-right:none;border-bottom:1px solid var(--line-soft);overflow:visible}.side-brand{display:none}.side-scroll{flex-direction:row;flex:1;min-width:0;overflow-x:auto;overflow-y:visible;gap:6px;align-items:center}.side-nav{flex-direction:row;flex:0 0 auto;gap:4px}.side-sep{display:none}.side-item{white-space:nowrap;padding:9px 12px}.side-foot{flex-direction:row;border-top:none;padding-top:0;margin-top:0;gap:8px;flex-shrink:0}.side-user{display:none}.shell-main{padding:26px 18px 70px}}
 .dash-hero{display:flex;align-items:center;gap:20px;padding-bottom:30px;margin-bottom:30px;border-bottom:1px solid var(--line-soft)}
 .dash-hero-text{flex:1;min-width:0}.dash-hero-text .eyebrow{margin-bottom:8px}.dash-name{font-size:clamp(26px,3.4vw,38px);line-height:1.1}.dash-meta{font-size:14px;color:var(--sage-dim);margin-top:6px}
 .dash-rolebadge{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);border:1px solid var(--gold);border-radius:3px;padding:8px 14px;white-space:nowrap}
