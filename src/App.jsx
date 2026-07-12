@@ -509,6 +509,13 @@ function AuthPage({ role, onDone, onBack, onPrivacy }) {
         <label className="field"><span>Email</span><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" /></label>
         <label className="field"><span>Password</span><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 6 characters" onKeyDown={(e) => e.key === 'Enter' && submit()} /></label>
         {err && <p className="auth-err">{err}</p>}
+        {mode === 'signin' && <button type="button" className="auth-forgot" onClick={async () => {
+          if (!email) { setErr('Enter your email above, then tap reset.'); return }
+          if (!hasSupabase) { toast('Password reset works once the platform is connected to Supabase. In demo mode, accounts live only in this browser.'); return }
+          setBusy(true)
+          try { const { error } = await supa.auth.resetPasswordForEmail(email, { redirectTo: (typeof window !== 'undefined' ? window.location.origin : undefined) }); if (error) throw new Error(error.message); toast('If that email has an account, a reset link is on its way.') } catch (e) { setErr(e.message || 'Could not send the reset email.') }
+          setBusy(false)
+        }}>Forgot password?</button>}
         {mode === 'create' && <label className="consent-check"><input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} /><span>I consent to the processing of my data for cooperative administration, as described in the <button type="button" className="link-inline" onClick={onPrivacy}>Privacy notice</button>.</span></label>}
         <button className="btn btn-gold auth-submit" onClick={submit} disabled={busy}>{busy ? 'Please wait…' : (mode === 'create' ? 'Create account' : 'Sign in')}</button>
         <p className="auth-toggle">{mode === 'create' ? 'Already have an account?' : 'New to the platform?'}{' '}<button onClick={() => { setErr(''); setMode(mode === 'create' ? 'signin' : 'create') }}>{mode === 'create' ? 'Sign in' : 'Create one'}</button></p>
@@ -609,7 +616,7 @@ function CoopDetail({ coop, ctx, onClose, onChanged }) {
   const canDecide = ctx.role === 'leadership'
   const canAudit = ctx.role === 'auditor' || ctx.role === 'officer'
   const act = async (patch, action, needNote) => {
-    if (needNote && !note.trim()) { alert('Add a note explaining the decision.'); return }
+    if (needNote && !note.trim()) { toast('Add a note explaining the decision.'); return }
     setBusy(true); const next = await updateCoop(c.trackingId, patch, ctx, action, note.trim()); setC(next); setNote(''); setRk((k) => k + 1); setBusy(false); onChanged && onChanged()
   }
   const examineReturns = async () => { setBusy(true); const next = await updateCoop(c.trackingId, { cap15: 'Compliant' }, ctx, 'Returns examined and signed off', note.trim()); setC(next); setNote(''); setRk((k) => k + 1); setBusy(false); onChanged && onChanged() }
@@ -684,10 +691,15 @@ function useRegistry() {
   return [coops, reload]
 }
 function CoopTable({ coops, onOpen }) {
-  const [q, setQ] = useState(''), [st, setSt] = useState('All')
+  const [q, setQ] = useState(''), [st, setSt] = useState('All'), [sel, setSel] = useState(() => new Set())
   if (!coops.length) return <p className="muted-line">No societies to show.</p>
   const statuses = ['All', ...Array.from(new Set(coops.map((c) => c.status).filter(Boolean)))]
   const filtered = coops.filter((c) => (st === 'All' || c.status === st) && (!q || [c.name, c.trackingId, c.areaOffice, c.sector].join(' ').toLowerCase().includes(q.toLowerCase())))
+  const toggle = (id) => { const n = new Set(sel); n.has(id) ? n.delete(id) : n.add(id); setSel(n) }
+  const allOn = filtered.length > 0 && filtered.every((c) => sel.has(c.trackingId))
+  const toggleAll = () => { const n = new Set(sel); if (allOn) filtered.forEach((c) => n.delete(c.trackingId)); else filtered.forEach((c) => n.add(c.trackingId)); setSel(n) }
+  const chosen = filtered.filter((c) => sel.has(c.trackingId))
+  const exportCsv = () => downloadCSV('cooperatives.csv', chosen.map((c) => ({ society: c.name, trackingId: c.trackingId, areaOffice: c.areaOffice, sector: c.sector, status: c.status, cap15: c.cap15, members: c.members || 0, contributions: c.contributions || 0 })))
   return (
     <div>
       <div className="table-filter">
@@ -695,9 +707,10 @@ function CoopTable({ coops, onOpen }) {
         <select value={st} onChange={(e) => setSt(e.target.value)} aria-label="Filter by status">{statuses.map((s) => <option key={s}>{s}</option>)}</select>
         <span className="table-count">{filtered.length} of {coops.length}</span>
       </div>
+      {sel.size > 0 && <div className="bulk-bar"><span>{sel.size} selected</span><button className="btn btn-outline btn-sm" onClick={exportCsv}>Export CSV</button><button className="link-inline" onClick={() => setSel(new Set())}>Clear</button></div>}
       {filtered.length ? <div className="rtable-wrap"><table className="rtable">
-        <thead><tr><th>Society</th><th>Tracking ID</th><th>Area office</th><th>Sector</th><th>Status</th><th>CAP15</th><th></th></tr></thead>
-        <tbody>{filtered.map((c) => (<tr key={c.trackingId}><td className="td-name">{c.name}<SourceBadge source={c.source} /></td><td className="mono">{c.trackingId}</td><td>{c.areaOffice}</td><td>{c.sector}</td><td><StatusChip status={c.status} /></td><td><StatusChip status={c.cap15} kind="cap15" /></td><td><button className="btn-open" onClick={() => onOpen(c)}>Open</button></td></tr>))}</tbody>
+        <thead><tr><th className="th-check"><input type="checkbox" checked={allOn} onChange={toggleAll} aria-label="Select all" /></th><th>Society</th><th>Tracking ID</th><th>Area office</th><th>Sector</th><th>Status</th><th>CAP15</th><th></th></tr></thead>
+        <tbody>{filtered.map((c) => (<tr key={c.trackingId} className={cx(sel.has(c.trackingId) && 'row-sel')}><td className="th-check"><input type="checkbox" checked={sel.has(c.trackingId)} onChange={() => toggle(c.trackingId)} aria-label={'Select ' + c.name} /></td><td className="td-name">{c.name}<SourceBadge source={c.source} /></td><td className="mono">{c.trackingId}</td><td>{c.areaOffice}</td><td>{c.sector}</td><td><StatusChip status={c.status} /></td><td><StatusChip status={c.cap15} kind="cap15" /></td><td><button className="btn-open" onClick={() => onOpen(c)}>Open</button></td></tr>))}</tbody>
       </table></div> : <p className="muted-line">No societies match your search.</p>}
     </div>
   )
@@ -979,6 +992,43 @@ function ViewAsBar({ onViewAs }) {
     </div>
   )
 }
+function PortfolioTrend() {
+  const [series, setSeries] = useState(null)
+  useEffect(() => { portfolioContributionSeries(6).then(setSeries) }, [])
+  if (!series || series.length < 2) return null
+  const latest = series[series.length - 1].contributions
+  return (
+    <div className="chart-card wide" style={{ marginBottom: '18px' }}>
+      <h4>Cooperative contributions across the registry</h4>
+      <MiniArea points={series.map((s) => s.contributions)} />
+      <p className="chart-note">Total member contributions, {monthLabel(series[0].month)}{' \u2013 '}{monthLabel(series[series.length - 1].month)}. Current registry total {fmtNaira(latest)}.</p>
+    </div>
+  )
+}
+function ActionQueue() {
+  const [q, setQ] = useState(null)
+  useEffect(() => { (async () => {
+    try {
+      const [loans, coops, accels] = await Promise.all([listLoans(), listCoops(), listAccelerators()])
+      const npl = nplMetrics(loans)
+      setQ({
+        apps: loans.filter((l) => ['Applied', 'In training', 'Shortlisted', 'Coop validated', 'Bank assessment', 'BOI approved'].includes(l.status)).length,
+        coopsPending: coops.filter((c) => !coopAdmission(c).admitted).length,
+        accelsPending: accels.filter((a) => (a.status || 'Pending') !== 'Appointed').length,
+        npl: npl.nplLoans.length,
+      })
+    } catch (e) { setQ({}) }
+  })() }, [])
+  if (!q) return null
+  const items = [[q.apps, 'applications in progress'], [q.coopsPending, 'cooperatives awaiting admission'], [q.accelsPending, 'accelerators awaiting appointment'], [q.npl, 'loans non-performing']].filter(([n]) => n > 0)
+  if (!items.length) return null
+  return (
+    <div className="action-queue">
+      <h4>Needs your attention</h4>
+      <div className="aq-row">{items.map(([n, label], i) => (<div className="aq-item" key={i}><span className="aq-n">{n}</span><span className="aq-lab">{label}</span></div>))}</div>
+    </div>
+  )
+}
 function LeadershipOverview({ ctx, section, onViewAs }) {
   const [coops, reload] = useRegistry()
   const [sel, setSel] = useState(null)
@@ -987,6 +1037,8 @@ function LeadershipOverview({ ctx, section, onViewAs }) {
   const pending = coops.filter((c) => c.source !== 'SEKAT' && ['Filed', 'Under review', 'Returned'].includes(c.status))
   return (
     <div className="ws">
+      {section === 'overview' && <ActionQueue />}
+      {section === 'overview' && <PortfolioTrend />}
       {section === 'overview' && <AnalyticsDashboard />}
       {section === 'applications' && (<><p className="muted-line">Review each application's documents, then approve or reject. Societies mirrored from SEKAT are managed in SEKAT.</p><CoopTable coops={pending.length ? pending : coops} onOpen={setSel} /></>)}
       {section === 'members' && <MembersAnalytics />}
@@ -1023,7 +1075,7 @@ function SocietyWorkspace({ ctx, section }) {
       {section === 'overview' && <SocietyOverview mine={mine} />}
       {section === 'cooperative' && (<>
         {mine.source !== 'SEKAT' && mine.feeStatus !== 'Paid' && (
-          <div className="fee-banner"><span>Registration fee <strong>{fmtNaira(mine.registrationFee || COOP_FEES.registration)}</strong> to join the platform is outstanding.</span><button className="btn btn-gold btn-sm" onClick={async () => { const r = await collectPayment({ email: ctx.email, amountNaira: mine.registrationFee || COOP_FEES.registration, purpose: 'Cooperative registration fee', metadata: { coopId: mine.trackingId } }); if (r.ok) { await payCoopFee(mine.trackingId, ctx); reload() } else if (!r.cancelled) { alert('Payment could not be completed. Please try again.') } }}>{PAYSTACK_PUBLIC ? 'Pay registration fee' : 'Pay now (demo)'}</button></div>
+          <div className="fee-banner"><span>Registration fee <strong>{fmtNaira(mine.registrationFee || COOP_FEES.registration)}</strong> to join the platform is outstanding.</span><button className="btn btn-gold btn-sm" onClick={async () => { const r = await collectPayment({ email: ctx.email, amountNaira: mine.registrationFee || COOP_FEES.registration, purpose: 'Cooperative registration fee', metadata: { coopId: mine.trackingId } }); if (r.ok) { await payCoopFee(mine.trackingId, ctx); reload() } else if (!r.cancelled) { toast('Payment could not be completed. Please try again.') } }}>{PAYSTACK_PUBLIC ? 'Pay registration fee' : 'Pay now (demo)'}</button></div>
         )}
         <div className="society-card">
           <div className="society-top"><div><h3>{mine.name}</h3><p className="detail-sub">{mine.trackingId} &middot; {mine.areaOffice} area office &middot; {mine.sector}</p></div><div className="detail-chips"><StatusChip status={mine.status} /><StatusChip status={mine.cap15} kind="cap15" /></div></div>
@@ -1132,7 +1184,7 @@ function toCSV(rows) {
   return [headers.join(','), ...rows.map((r) => headers.map((h) => esc(r[h])).join(','))].join('\n')
 }
 function downloadCSV(filename, rows) {
-  if (!rows.length) { alert('Nothing to export yet.'); return }
+  if (!rows.length) { toast('Nothing to export yet.'); return }
   const blob = new Blob([toCSV(rows)], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url)
 }
@@ -1193,7 +1245,7 @@ async function generateBoardPack() {
   <div class="foot">Generated by MCCTI CoopEco. Figures are drawn from live platform data at the time of generation. For internal Ministry use.</div>
   </div></body></html>`
   const w = window.open('', '_blank')
-  if (!w) { alert('Please allow pop-ups to generate the board pack.'); return }
+  if (!w) { toast('Please allow pop-ups to generate the board pack.'); return }
   w.document.write(html); w.document.close(); w.focus(); setTimeout(() => { try { w.print() } catch (e) {} }, 500)
 }
 function ReportsPanel({ role }) {
@@ -1792,6 +1844,12 @@ async function coopContributionSeries(trackingId, months = 6) {
   const rows = await kvList('snap:' + trackingId + ':')
   return rows.filter((r) => r && r.month).sort((a, b) => (a.month < b.month ? -1 : 1)).slice(-months)
 }
+async function portfolioContributionSeries(months = 6) {
+  const rows = await kvList('snap:')
+  const byMonth = {}
+  for (const r of rows) { if (!r || !r.month) continue; byMonth[r.month] = (byMonth[r.month] || 0) + (r.contributions || 0) }
+  return Object.keys(byMonth).sort().slice(-months).map((m) => ({ month: m, contributions: byMonth[m] }))
+}
 async function ensureCoopSnapshots() {
   if (await kvGet('integration:snapshots-v1')) return
   try {
@@ -2018,10 +2076,16 @@ async function seedDemoLoans() {
 }
 
 function LoanTable({ loans, onOpen }) {
-  const [q, setQ] = useState(''), [st, setSt] = useState('All')
+  const [q, setQ] = useState(''), [st, setSt] = useState('All'), [sel, setSel] = useState(() => new Set()), [busy, setBusy] = useState(false)
   if (!loans.length) return <p className="muted-line">No applications to show.</p>
   const statuses = ['All', ...Array.from(new Set(loans.map((l) => l.status)))]
   const filtered = loans.filter((l) => (st === 'All' || l.status === st) && (!q || [l.memberName, l.loanId, l.coop, l.sector].join(' ').toLowerCase().includes(q.toLowerCase())))
+  const toggle = (id) => { const n = new Set(sel); n.has(id) ? n.delete(id) : n.add(id); setSel(n) }
+  const allOn = filtered.length > 0 && filtered.every((l) => sel.has(l.loanId))
+  const toggleAll = () => { const n = new Set(sel); if (allOn) filtered.forEach((l) => n.delete(l.loanId)); else filtered.forEach((l) => n.add(l.loanId)); setSel(n) }
+  const chosen = filtered.filter((l) => sel.has(l.loanId))
+  const exportCsv = () => downloadCSV('lasmeco-loans.csv', chosen.map((l) => ({ applicant: l.memberName, loanId: l.loanId, cooperative: l.coop, sector: l.sector, amount: l.amountApproved || l.amountRecommended || l.amountRequested, status: l.status })))
+  const notifyChosen = async () => { setBusy(true); for (const l of chosen) { try { await notify({ to: l.createdBy, title: 'Update on your LASMECO application', body: 'There is an update on your application ' + l.loanId + '. Please open the platform to review.', event: 'loan', phone: l.memberPhone }) } catch (e) { /* continue */ } } setBusy(false); toast('Notified ' + chosen.length + ' member' + (chosen.length === 1 ? '' : 's') + '.', 'success'); setSel(new Set()) }
   return (
     <div>
       <div className="table-filter">
@@ -2029,9 +2093,10 @@ function LoanTable({ loans, onOpen }) {
         <select value={st} onChange={(e) => setSt(e.target.value)} aria-label="Filter by status">{statuses.map((s) => <option key={s}>{s}</option>)}</select>
         <span className="table-count">{filtered.length} of {loans.length}</span>
       </div>
+      {sel.size > 0 && <div className="bulk-bar"><span>{sel.size} selected</span><button className="btn btn-outline btn-sm" onClick={exportCsv}>Export CSV</button><button className="btn btn-outline btn-sm" disabled={busy} onClick={notifyChosen}>Notify members</button><button className="link-inline" onClick={() => setSel(new Set())}>Clear</button></div>}
       {filtered.length ? <div className="rtable-wrap"><table className="rtable">
-        <thead><tr><th>Applicant</th><th>Loan ID</th><th>Cooperative</th><th>Sector</th><th>Requested</th><th>Status</th><th></th></tr></thead>
-        <tbody>{filtered.map((l) => (<tr key={l.loanId}><td className="td-name">{l.memberName}</td><td className="mono">{l.loanId}</td><td>{l.coop}</td><td>{l.sector}</td><td className="mono">{fmtNaira(l.amountApproved || l.amountRecommended || l.amountRequested)}</td><td><StatusChip status={l.status} kind="loan" /></td><td><button className="btn-open" onClick={() => onOpen(l)}>Open</button></td></tr>))}</tbody>
+        <thead><tr><th className="th-check"><input type="checkbox" checked={allOn} onChange={toggleAll} aria-label="Select all" /></th><th>Applicant</th><th>Loan ID</th><th>Cooperative</th><th>Sector</th><th>Requested</th><th>Status</th><th></th></tr></thead>
+        <tbody>{filtered.map((l) => (<tr key={l.loanId} className={cx(sel.has(l.loanId) && 'row-sel')}><td className="th-check"><input type="checkbox" checked={sel.has(l.loanId)} onChange={() => toggle(l.loanId)} aria-label={'Select ' + l.memberName} /></td><td className="td-name">{l.memberName}</td><td className="mono">{l.loanId}</td><td>{l.coop}</td><td>{l.sector}</td><td className="mono">{fmtNaira(l.amountApproved || l.amountRecommended || l.amountRequested)}</td><td><StatusChip status={l.status} kind="loan" /></td><td><button className="btn-open" onClick={() => onOpen(l)}>Open</button></td></tr>))}</tbody>
       </table></div> : <p className="muted-line">No applications match your search.</p>}
     </div>
   )
@@ -2107,7 +2172,7 @@ function LoanKycPanel({ loan, ctx }) {
     setBusy(true)
     const missing = chk.outstanding.map((i) => '\u2022 ' + i.label).join('\n')
     await notify({ to: loan.createdBy, title: 'Action needed on your LASMECO application', body: 'To continue, please submit or update:\n' + (missing || 'Documents pending verification'), event: 'loan', phone: loan.memberPhone })
-    setBusy(false); alert('The member has been notified (in-app' + (loan.memberPhone ? ' and SMS' : '') + ') of the outstanding items.')
+    setBusy(false); toast('The member has been notified (in-app' + (loan.memberPhone ? ' and SMS' : '') + ') of the outstanding items.')
   }
   if (member === undefined) return <div className="returns-box"><h4>Application documents &amp; KYC</h4><p className="muted-line">Loading\u2026</p></div>
   return (
@@ -2127,12 +2192,12 @@ function RevenuePanel({ ctx }) {
   const fixed = { 'Cooperative registration': COOP_FEES.registration, 'Annual returns filing': COOP_FEES.annualReturns, 'Directory & verification search': 2000 }
   const pay = (name) => async () => {
     const amt = Number(amounts[name] != null ? amounts[name] : (fixed[name] || 0)) || 0
-    if (amt <= 0) { alert('Enter an amount to collect for this stream.'); return }
+    if (amt <= 0) { toast('Enter an amount to collect for this stream.'); return }
     setBusy(name)
     const r = await collectPayment({ email: ctx.email, amountNaira: amt, purpose: name, metadata: { stream: name } })
     setBusy('')
-    if (r.ok) alert('Payment ' + (r.ref && String(r.ref).startsWith('DEMO') ? '(demo) ' : '') + 'received for ' + name + '.')
-    else if (!r.cancelled) alert('Payment could not be completed.')
+    if (r.ok) toast('Payment ' + (r.ref && String(r.ref).startsWith('DEMO') ? '(demo) ' : '') + 'received for ' + name + '.')
+    else if (!r.cancelled) toast('Payment could not be completed.')
   }
   if (!fig) return <p className="muted-line">Loading revenue\u2026</p>
   const accrued = { 'Cooperative registration': fig.regFees, 'Annual returns filing': fig.returnsFees, 'LASMECO disbursement portal': fig.portalFees, 'Digital wallet & payments': fig.walletFees }
@@ -2230,15 +2295,15 @@ function LoanDetail({ loan, ctx, onClose, onChanged }) {
   const isBorrower = role === 'member' && (l.createdBy === ctx.email || l.memberId === ctx.focusId)
   const canRecover = role === 'sterling' || role === 'leadership'
   const act = async (patch, action, needNote) => {
-    if (needNote && !note.trim()) { alert('Add a note for the record.'); return }
+    if (needNote && !note.trim()) { toast('Add a note for the record.'); return }
     setBusy(true); const next = await updateLoan(l.loanId, patch, ctx, action, note.trim()); setL(next); setNote(''); setRk((k) => k + 1); setBusy(false); onChanged && onChanged()
   }
-  const recommend = async () => { const a = Number(amt) || 0; if (a <= 0 || a > 10000000) { alert('Enter a recommended amount up to ₦10,000,000.'); return } await act({ status: 'Shortlisted', amountRecommended: a }, 'Shortlisted; amount recommended', false) }
-  const boiApprove = async () => { const a = Number(amt) || l.amountRecommended || 0; if (a <= 0) { alert('Enter the approved amount.'); return } await act({ status: 'BOI approved', amountApproved: a }, 'Final approval and funding (BOI)', true) }
+  const recommend = async () => { const a = Number(amt) || 0; if (a <= 0 || a > 10000000) { toast('Enter a recommended amount up to ₦10,000,000.'); return } await act({ status: 'Shortlisted', amountRecommended: a }, 'Shortlisted; amount recommended', false) }
+  const boiApprove = async () => { const a = Number(amt) || l.amountRecommended || 0; if (a <= 0) { toast('Enter the approved amount.'); return } await act({ status: 'BOI approved', amountApproved: a }, 'Final approval and funding (BOI)', true) }
   const doRepay = async (method) => {
-    const a = Number(repay) || 0; if (a <= 0) { alert('Enter a repayment amount.'); return }
+    const a = Number(repay) || 0; if (a <= 0) { toast('Enter a repayment amount.'); return }
     setBusy(true)
-    if (method === 'card') { const r = await collectPayment({ email: ctx.email, amountNaira: a, purpose: 'LASMECO repayment ' + l.loanId, metadata: { loanId: l.loanId } }); if (!r.ok) { setBusy(false); if (!r.cancelled) alert('Payment could not be completed.'); return } }
+    if (method === 'card') { const r = await collectPayment({ email: ctx.email, amountNaira: a, purpose: 'LASMECO repayment ' + l.loanId, metadata: { loanId: l.loanId } }); if (!r.ok) { setBusy(false); if (!r.cancelled) toast('Payment could not be completed.'); return } }
     const next = await recordRepayment(l, a, ctx, method === 'card' ? 'card' : 'manual'); setL(next); setRepay(''); setRk((k) => k + 1); setBusy(false); onChanged && onChanged()
   }
   const doRecover = async () => {
@@ -2314,7 +2379,7 @@ function LoanDetail({ loan, ctx, onClose, onChanged }) {
           {canOff && l.status === 'Shortlisted' && <button className="btn btn-gold btn-sm" disabled={busy} onClick={() => act({ status: 'Coop validated' }, 'Cooperative validated; 25% guarantee issued', true)}>Validate cooperative &amp; guarantee</button>}
           {canSterling && l.status === 'Coop validated' && <button className="btn btn-gold btn-sm" disabled={busy} onClick={() => act({ status: 'Bank assessment' }, 'KYC and assessment complete; 50% Sterling guarantee applied', true)}>Assess &amp; apply 50% guarantee</button>}
           {canBOI && l.status === 'Bank assessment' && <button className="btn btn-gold btn-sm" disabled={busy} onClick={boiApprove}>Grant final approval &amp; fund</button>}
-          {canSterling && l.status === 'BOI approved' && <button className="btn btn-gold btn-sm" disabled={busy} onClick={() => { if (!disb.sterlingAccount.trim()) { alert('Enter the beneficiary Sterling account for disbursement.'); return } if (!securityState(l).complete) { if (!window.confirm('Not all security items are perfected. Disburse anyway?')) return } const v = loanVariant(l.type); const t = v.tenor; const sched = buildSchedule(l.amountApproved || b.amount, t, 9, new Date().toISOString(), v.moratorium); act({ status: 'Disbursed', tenorMonths: t, moratoriumMonths: v.moratorium, disbursedAt: new Date().toISOString(), schedule: sched, disbursement: { ...disb } }, 'Funds disbursed to ' + (disb.supplier ? 'supplier ' + disb.supplier : 'beneficiary account ' + disb.sterlingAccount) + '; ' + t + '-month schedule (' + v.moratorium + '-month moratorium)', true) }}>Disburse to beneficiary</button>}
+          {canSterling && l.status === 'BOI approved' && <button className="btn btn-gold btn-sm" disabled={busy} onClick={async () => { if (!disb.sterlingAccount.trim()) { toast('Enter the beneficiary Sterling account for disbursement.', 'error'); return } if (!securityState(l).complete) { if (!(await confirmDialog('Not all security items are perfected. Disburse anyway?', { danger: true, confirmLabel: 'Disburse' }))) return } const v = loanVariant(l.type); const t = v.tenor; const sched = buildSchedule(l.amountApproved || b.amount, t, 9, new Date().toISOString(), v.moratorium); act({ status: 'Disbursed', tenorMonths: t, moratoriumMonths: v.moratorium, disbursedAt: new Date().toISOString(), schedule: sched, disbursement: { ...disb } }, 'Funds disbursed to ' + (disb.supplier ? 'supplier ' + disb.supplier : 'beneficiary account ' + disb.sterlingAccount) + '; ' + t + '-month schedule (' + v.moratorium + '-month moratorium)', true) }}>Disburse to beneficiary</button>}
           {canDecline && <button className="btn btn-outline btn-sm" disabled={busy} onClick={() => act({ status: 'Declined' }, 'Application declined', true)}>Decline</button>}
         </div>
       </div>
@@ -2332,7 +2397,7 @@ function AcceleratorWorkspace({ ctx, section }) {
   if (!loans || accel === undefined) return <p className="muted-line">Loading pipeline\u2026</p>
   if (!accel) {
     const toggle = (s) => setPick(pick.includes(s) ? pick.filter((x) => x !== s) : [...pick, s])
-    const save = async () => { if (!pick.length) { alert('Select at least one sector you support.'); return } setBusy(true); await saveAccelerator({ email: ctx.email, name: ctx.name, sectors: pick, uid: ctx.uid }); await loadAccel(); setBusy(false) }
+    const save = async () => { if (!pick.length) { toast('Select at least one sector you support.'); return } setBusy(true); await saveAccelerator({ email: ctx.email, name: ctx.name, sectors: pick, uid: ctx.uid }); await loadAccel(); setBusy(false) }
     return (
       <div className="panel">
         <div className="panel-head"><h3>Set up your Accelerator profile</h3></div>
@@ -2532,12 +2597,13 @@ async function uploadDocument(file, coopId, category, ctx) {
   return { ok: true, rec }
 }
 async function openDocument(d) {
+  let url = ''
   if (d.storage === 'supabase' && d.path && supa) {
-    try { const s = await supa.storage.from('coop-docs').createSignedUrl(d.path, 300); const u = s && s.data && s.data.signedUrl; if (u) { window.open(u, '_blank', 'noopener'); return true } } catch (e) { /* fall through */ }
-    alert('Could not open the document. You may not have access, or it has been removed.'); return false
-  }
-  if (d.url) { window.open(d.url, '_blank', 'noopener'); return true }
-  alert('This document is stored securely; open it from a device with access to the storage bucket.'); return false
+    try { const s = await supa.storage.from('coop-docs').createSignedUrl(d.path, 300); url = (s && s.data && s.data.signedUrl) || '' } catch (e) { /* fall through */ }
+    if (!url) { toast('Could not open the document. You may not have access, or it has been removed.', 'error'); return false }
+  } else if (d.url) { url = d.url }
+  else { toast('This document is stored securely; open it from a device with access to the storage bucket.'); return false }
+  showPreview(d, url); return true
 }
 async function setDocVerified(coopId, id, verified, ctx) { const d = await kvGet('doc:' + coopId + ':' + id); if (d) await kvSet('doc:' + coopId + ':' + id, { ...d, verified, verifiedBy: ctx.name, verifiedAt: new Date().toISOString() }) }
 async function deleteDocument(coopId, id) { const d = await kvGet('doc:' + coopId + ':' + id); if (d && supa && d.path) { try { await supa.storage.from('coop-docs').remove([d.path]) } catch (e) { /* ignore */ } } await kvDelete('doc:' + coopId + ':' + id) }
@@ -2566,7 +2632,7 @@ function RetentionPanel() {
   useEffect(() => { reload() }, [reload])
   const purge = async () => {
     if (!exp || !exp.length) return
-    if (!window.confirm('Permanently delete ' + exp.length + ' expired KYC document(s)? This cannot be undone.')) return
+    if (!(await confirmDialog('Permanently delete ' + exp.length + ' expired KYC document(s)? This cannot be undone.', { danger: true, confirmLabel: 'Delete' }))) return
     setBusy(true); const n = await purgeExpiredDocuments(); setDone(n); setBusy(false); reload()
   }
   return (
@@ -2632,8 +2698,8 @@ function MemberWallet({ member }) {
   useEffect(() => { reload() }, [reload])
   if (!w) return <p className="muted-line">Loading wallet\u2026</p>
   const coop = coops.find((c) => c.name === member.coop)
-  const topup = async () => { const a = Number(amt) || 0; if (a <= 0) return; setBusy(true); const r = await collectPayment({ email: member.createdBy || 'member@coopeco.ng', amountNaira: a, purpose: 'Wallet funding', metadata: { memberId: member.memberId } }); if (r.ok) { await walletTxn(id, 'topup', a, r.demo ? 'Card top-up (demo)' : 'Card top-up', member.name) } else if (!r.cancelled) { alert('Payment could not be completed. Please try again.') } await reload(); setAmt(''); setBusy(false) }
-  const save = async () => { const a = Number(amt) || 0; if (a <= 0) { alert('Enter an amount.'); return } if (a > w.balance) { alert('Insufficient wallet balance. Add funds first.'); return } if (!coop) { alert('Your cooperative is not on the platform yet.'); return } setBusy(true); await walletTransfer(id, cWallet(coop.trackingId), a, 'Savings to ' + coop.name, member.name); await reload(); setAmt(''); setBusy(false) }
+  const topup = async () => { const a = Number(amt) || 0; if (a <= 0) return; setBusy(true); const r = await collectPayment({ email: member.createdBy || 'member@coopeco.ng', amountNaira: a, purpose: 'Wallet funding', metadata: { memberId: member.memberId } }); if (r.ok) { await walletTxn(id, 'topup', a, r.demo ? 'Card top-up (demo)' : 'Card top-up', member.name) } else if (!r.cancelled) { toast('Payment could not be completed. Please try again.') } await reload(); setAmt(''); setBusy(false) }
+  const save = async () => { const a = Number(amt) || 0; if (a <= 0) { toast('Enter an amount.'); return } if (a > w.balance) { toast('Insufficient wallet balance. Add funds first.'); return } if (!coop) { toast('Your cooperative is not on the platform yet.'); return } setBusy(true); await walletTransfer(id, cWallet(coop.trackingId), a, 'Savings to ' + coop.name, member.name); await reload(); setAmt(''); setBusy(false) }
   return (
     <div className="wallet">
       <div className="wallet-top"><div><span className="wallet-lab">Wallet balance</span><span className="wallet-bal">{fmtNaira(w.balance)}</span></div><span className="wallet-chip">Digital wallet</span></div>
@@ -2658,7 +2724,7 @@ function CoopEsusu({ coop, ctx }) {
   const canManage = ctx.role === 'society' || ctx.role === 'leadership'
   const es = w.esusu && w.esusu.order ? w.esusu : null
   const startRotation = async () => {
-    if (roster.length < 2) { alert('You need at least 2 members to start a rotation.'); return }
+    if (roster.length < 2) { toast('You need at least 2 members to start a rotation.'); return }
     setBusy(true)
     const order = roster.map((m) => ({ memberId: m.memberId, name: m.name }))
     const cur = await getWallet(id); await kvSet('wallet:' + id, { ...cur, esusu: { order, startAt: new Date().toISOString(), freq: 'monthly', paid: [] } })
@@ -2670,7 +2736,7 @@ function CoopEsusu({ coop, ctx }) {
   const upcoming = sched.find((s) => !s.paid && new Date(s.dueDate).getTime() > Date.now())
   const processDue = async () => {
     if (!nextDue) return
-    if (w.balance <= 0) { alert('The savings pool is empty. Members need to save first.'); return }
+    if (w.balance <= 0) { toast('The savings pool is empty. Members need to save first.'); return }
     setBusy(true)
     const payout = w.balance
     await walletTxn(id, 'debit', payout, 'Esusu payout to ' + nextDue.name, ctx.name)
@@ -2775,7 +2841,7 @@ function TicketDetail({ ticket, ctx, onClose, onChanged }) {
   const [t, setT] = useState(ticket), [reply, setReply] = useState(''), [busy, setBusy] = useState(false)
   const staff = ctx.role === 'officer' || ctx.role === 'leadership'
   const act = async (patch, needReply) => {
-    if (needReply && !reply.trim()) { alert('Add a message.'); return }
+    if (needReply && !reply.trim()) { toast('Add a message.'); return }
     setBusy(true); const n = await updateTicket(t.ticketId, patch, ctx, reply.trim()); setT(n); setReply(''); setBusy(false); onChanged && onChanged()
   }
   return (
@@ -2916,6 +2982,55 @@ function Dashboard({ session, onSignOut, onHome }) {
 }
 
 /* ------------------------------- app ---------------------------------- */
+/* ---- Toasts & confirm modals (replace blocking alert/confirm) ------------ */
+const _toastBus = { listeners: new Set(), toasts: [] }
+let _toastId = 0
+function _emitToasts() { _toastBus.listeners.forEach((fn) => fn([..._toastBus.toasts])) }
+function dismissToast(id) { _toastBus.toasts = _toastBus.toasts.filter((t) => t.id !== id); _emitToasts() }
+function toast(message, kind = 'info') { const id = ++_toastId; _toastBus.toasts = [..._toastBus.toasts, { id, message: String(message), kind }]; _emitToasts(); setTimeout(() => dismissToast(id), kind === 'error' ? 6500 : 4200); return id }
+const _confirmBus = { listeners: new Set(), current: null }
+function _emitConfirm() { _confirmBus.listeners.forEach((fn) => fn(_confirmBus.current)) }
+function confirmDialog(message, opts = {}) { return new Promise((resolve) => { _confirmBus.current = { message: String(message), confirmLabel: opts.confirmLabel || 'Confirm', cancelLabel: opts.cancelLabel || 'Cancel', danger: !!opts.danger, resolve }; _emitConfirm() }) }
+function _resolveConfirm(v) { const c = _confirmBus.current; _confirmBus.current = null; _emitConfirm(); if (c) c.resolve(v) }
+const _previewBus = { listeners: new Set(), current: null }
+function _emitPreview() { _previewBus.listeners.forEach((fn) => fn(_previewBus.current)) }
+function showPreview(doc, url) { _previewBus.current = { name: doc.name, type: doc.type, url }; _emitPreview() }
+function closePreview() { _previewBus.current = null; _emitPreview() }
+function DocumentPreview() {
+  const [doc, setDoc] = useState(null)
+  useEffect(() => { const l = (d) => setDoc(d ? { ...d } : null); _previewBus.listeners.add(l); return () => _previewBus.listeners.delete(l) }, [])
+  useEffect(() => { if (!doc) return; const onKey = (e) => { if (e.key === 'Escape') closePreview() }; window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey) }, [doc])
+  if (!doc) return null
+  const isImg = (doc.type || '').indexOf('image/') === 0 || /\.(png|jpe?g|webp|gif)$/i.test(doc.name || '')
+  const isPdf = (doc.type || '') === 'application/pdf' || /\.pdf$/i.test(doc.name || '')
+  return (
+    <div className="modal-overlay" onClick={closePreview}>
+      <div className="preview" onClick={(e) => e.stopPropagation()}>
+        <div className="preview-bar"><strong>{doc.name}</strong><div className="preview-acts"><a className="link-inline" href={doc.url} target="_blank" rel="noreferrer">Open in new tab</a><button className="preview-x" onClick={closePreview} aria-label="Close preview">&times;</button></div></div>
+        <div className="preview-body">{isImg ? <img src={doc.url} alt={doc.name} /> : isPdf ? <iframe title={doc.name} src={doc.url} /> : <div className="preview-fallback"><p>Preview isn't available for this file type.</p><a className="btn btn-gold btn-sm" href={doc.url} target="_blank" rel="noreferrer" download>Download to view</a></div>}</div>
+      </div>
+    </div>
+  )
+}
+function ToastHost() {
+  const [toasts, setToasts] = useState([])
+  const [confirm, setConfirm] = useState(null)
+  useEffect(() => {
+    const tl = (t) => setToasts(t); _toastBus.listeners.add(tl); setToasts([..._toastBus.toasts])
+    const cl = (c) => setConfirm(c ? { ...c } : null); _confirmBus.listeners.add(cl)
+    return () => { _toastBus.listeners.delete(tl); _confirmBus.listeners.delete(cl) }
+  }, [])
+  useEffect(() => {
+    if (!confirm) return
+    const onKey = (e) => { if (e.key === 'Escape') _resolveConfirm(false); if (e.key === 'Enter') _resolveConfirm(true) }
+    window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey)
+  }, [confirm])
+  return (<>
+    <div className="toast-host" role="status" aria-live="polite">{toasts.map((t) => (<div key={t.id} className={cx('toast', 'toast-' + t.kind)} onClick={() => dismissToast(t.id)}><span>{t.message}</span><button className="toast-x" aria-label="Dismiss" onClick={(e) => { e.stopPropagation(); dismissToast(t.id) }}>&times;</button></div>))}</div>
+    {confirm && <div className="modal-overlay" onClick={() => _resolveConfirm(false)}><div className="modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}><p className="modal-msg">{confirm.message}</p><div className="modal-actions"><button className="btn btn-ghost btn-sm" onClick={() => _resolveConfirm(false)}>{confirm.cancelLabel}</button><button className={cx('btn', 'btn-sm', confirm.danger ? 'btn-danger' : 'btn-gold')} onClick={() => _resolveConfirm(true)} autoFocus>{confirm.confirmLabel}</button></div></div></div>}
+    <DocumentPreview />
+  </>)
+}
 export default function App() {
   const [area, setArea] = useState('state')
   const [view, setView] = useState('landing')
@@ -2939,6 +3054,16 @@ export default function App() {
   const pickRole = (id) => { setChosenRole(id); setView('auth') }
   const onAuthed = (res) => { setSession(res); setView('dashboard'); bgSeed() }
   const doSignOut = async () => { await signOutNow(); setSession(null); setView('landing') }
+  useEffect(() => {
+    if (!session) return
+    const SESSION_MS = 30 * 60 * 1000
+    let timer
+    const reset = () => { clearTimeout(timer); timer = setTimeout(() => { toast('Signed out after 30 minutes of inactivity.'); doSignOut() }, SESSION_MS) }
+    const evts = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart']
+    evts.forEach((e) => window.addEventListener(e, reset, { passive: true }))
+    reset()
+    return () => { clearTimeout(timer); evts.forEach((e) => window.removeEventListener(e, reset)) }
+  }, [session])
   const goHome = () => { setView('landing'); setLandingTab('home'); if (typeof window !== 'undefined') window.scrollTo({ top: 0 }) }
   const inApp = view === 'dashboard' && session
   return (
@@ -2970,6 +3095,7 @@ export default function App() {
         </footer>
       )}
       <ConsentBanner onOpenPrivacy={() => setView('privacy')} />
+      <ToastHost />
     </div>
   )
 }
@@ -3116,6 +3242,13 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .field select{appearance:none;cursor:pointer}
 .auth-err{color:var(--err);font-size:13px;line-height:1.5}
 .auth-submit{margin-top:4px;width:100%}.auth-toggle{font-size:13px;color:var(--sage-dim);text-align:center}
+.auth-forgot{background:none;border:none;color:var(--gold-soft);font-size:12.5px;text-align:right;cursor:pointer;padding:0;margin-top:-4px;align-self:flex-end}
+.auth-forgot:hover{text-decoration:underline}
+.bulk-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--green-panel);border:1px solid var(--green);border-radius:8px;padding:9px 14px;margin-bottom:12px}
+.bulk-bar span{font-size:13px;font-weight:600;color:var(--green)}
+.th-check{width:34px;text-align:center}
+.th-check input{cursor:pointer}
+.rtable tr.row-sel{background:rgba(28,138,79,.06)}
 .auth-toggle button{background:none;border:none;color:var(--gold-soft);cursor:pointer;font-size:13px;font-weight:600;padding:0}.auth-toggle button:hover{text-decoration:underline}
 .dash{flex:1;padding:52px 40px 90px}.dash-inner{max-width:1080px;margin:0 auto;animation:rise .5s ease both}
 .shell{flex:1;display:flex;width:100%;align-items:stretch}
@@ -3236,6 +3369,36 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .table-search:focus{outline:none;border-color:var(--green)}
 .table-filter select{padding:9px 13px;border:1px solid var(--line);border-radius:8px;background:var(--ink-2);color:var(--cream);font-size:13.5px}
 .table-count{font-family:var(--mono);font-size:11px;color:var(--sage-dim);white-space:nowrap}
+.action-queue{background:var(--green-panel);border:1px solid var(--green);border-radius:12px;padding:16px 20px;margin-bottom:18px}
+.action-queue h4{font-size:13px;margin:0 0 12px;color:var(--green);text-transform:uppercase;letter-spacing:.05em;font-family:var(--mono)}
+.aq-row{display:flex;flex-wrap:wrap;gap:22px}
+.aq-item{display:flex;align-items:baseline;gap:8px;min-width:0}
+.aq-n{font-family:var(--serif);font-size:26px;font-weight:600;color:var(--cream);line-height:1}
+.aq-lab{font-size:13px;color:var(--sage)}
+.toast-host{position:fixed;right:20px;bottom:20px;z-index:60;display:flex;flex-direction:column;gap:10px;max-width:min(380px,calc(100vw - 40px))}
+.toast{display:flex;align-items:flex-start;gap:10px;background:var(--ink-2);border:1px solid var(--line);border-left:4px solid var(--green);border-radius:10px;padding:13px 14px;box-shadow:0 8px 24px rgba(20,40,30,.16);cursor:pointer;animation:toastin .22s ease}
+.toast span{flex:1;font-size:13.5px;color:var(--cream);line-height:1.45}
+.toast-error{border-left-color:var(--err)}
+.toast-success{border-left-color:var(--green)}
+.toast-x{background:none;border:none;color:var(--sage-dim);font-size:18px;line-height:1;cursor:pointer;padding:0 2px}
+.toast-x:hover{color:var(--cream)}
+@keyframes toastin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.modal-overlay{position:fixed;inset:0;z-index:70;background:rgba(20,35,28,.5);display:flex;align-items:center;justify-content:center;padding:20px;animation:toastin .18s ease}
+.modal{background:var(--ink-2);border:1px solid var(--line);border-radius:14px;padding:24px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(20,40,30,.28)}
+.modal-msg{font-size:14.5px;color:var(--cream);line-height:1.5;margin:0 0 20px}
+.modal-actions{display:flex;justify-content:flex-end;gap:10px}
+.btn-danger{background:var(--err);color:#fff;border:1px solid var(--err)}.btn-danger:hover{filter:brightness(1.05)}
+.preview{background:var(--ink-2);border:1px solid var(--line);border-radius:14px;width:min(900px,96vw);height:min(86vh,900px);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(20,40,30,.3)}
+.preview-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 16px;border-bottom:1px solid var(--line-soft)}
+.preview-bar strong{font-size:14px;color:var(--cream);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.preview-acts{display:flex;align-items:center;gap:14px;flex-shrink:0}
+.preview-x{background:none;border:none;color:var(--sage);font-size:22px;line-height:1;cursor:pointer}
+.preview-x:hover{color:var(--cream)}
+.preview-body{flex:1;min-height:0;background:var(--ink);display:flex;align-items:center;justify-content:center}
+.preview-body iframe{width:100%;height:100%;border:none;background:#fff}
+.preview-body img{max-width:100%;max-height:100%;object-fit:contain}
+.preview-fallback{text-align:center;padding:30px;display:flex;flex-direction:column;gap:14px;align-items:center}
+.preview-fallback p{color:var(--sage);font-size:14px}
 a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--green);outline-offset:2px;border-radius:4px}
 @media(max-width:640px){.doc-guide ul{grid-template-columns:1fr}}
 @media(max-width:560px){.coop-hero{flex-direction:column;text-align:center}}
@@ -3287,8 +3450,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .ws{display:flex;flex-direction:column;gap:24px}.ws-h{font-size:18px}
 .muted-line{color:var(--sage-dim);font-size:14px;padding:8px 0}
 .statgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
-.stat{background:var(--ink-2);border:1px solid var(--line-soft);border-radius:6px;padding:22px 24px;display:flex;flex-direction:column;gap:8px}
-.stat-fig{font-family:var(--serif);color:var(--cream);font-size:32px;font-weight:600;line-height:1}.stat-lab{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--sage-dim)}
+.stat{background:var(--ink-2);border:1px solid var(--line-soft);border-radius:6px;padding:20px 18px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.stat-fig{font-family:var(--serif);color:var(--cream);font-size:clamp(20px,2.1vw,30px);font-weight:600;line-height:1.05;overflow-wrap:anywhere;word-break:break-word}.stat-lab{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--sage-dim)}
 .tabs{display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--line-soft);padding-bottom:0}
 .tab{background:none;border:none;border-bottom:2px solid transparent;color:var(--sage);font-family:var(--sans);font-size:14px;font-weight:600;padding:10px 4px;margin-right:14px;cursor:pointer}
 .tab:hover{color:var(--gold-soft)}.tab.on{color:var(--cream);border-bottom-color:var(--green)}
@@ -3438,8 +3601,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .switcher-sel{flex:1;min-width:240px;background:var(--ink);border:1px solid var(--line);border-radius:5px;padding:11px 12px;color:var(--cream);font-size:14px;font-family:var(--sans);cursor:pointer}
 .switcher-sel:focus{outline:none;border-color:var(--green)}
 .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}
-.kpi{background:var(--ink-2);border:1px solid var(--line-soft);border-radius:8px;padding:20px}
-.kpi-fig{display:block;font-family:var(--serif);color:var(--cream);font-size:26px;font-weight:600;line-height:1.1}
+.kpi{background:var(--ink-2);border:1px solid var(--line-soft);border-radius:8px;padding:20px;min-width:0}
+.kpi-fig{display:block;font-family:var(--serif);color:var(--cream);font-size:clamp(19px,2vw,26px);font-weight:600;line-height:1.1;overflow-wrap:anywhere;word-break:break-word}
 .kpi-lab{display:block;margin-top:6px;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--sage-dim)}
 .chart-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
 .chart-card{background:var(--ink-2);border:1px solid var(--line-soft);border-radius:8px;padding:20px 22px;display:flex;flex-direction:column;gap:16px;min-width:0}
