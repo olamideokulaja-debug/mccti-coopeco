@@ -416,7 +416,7 @@ function Landing({ area, setArea, onEnter, lang = 'en', tab = 'home', onTab }) {
             <h1>{lang === 'en' ? <>One State.<br />One cooperative economy.<br /><span className="underline">One system.</span></> : t('hero.h1', lang)}</h1>
             <p className="lead">13,000 registered cooperatives and 150,000+ members sit across two separate systems and a credit programme that cannot see them. MCCTI CoopEco consolidates the registry, member analytics, LASMECO financing, wallets and governance intelligence into a single, Ministry-owned platform.</p>
             <div className="hero-cta"><button className="btn btn-gold" onClick={onEnter}>{t('hero.cta', lang)}</button><button className="btn btn-ghost" onClick={() => onTab && onTab('modules')}>{t('hero.ghost', lang)}</button></div>
-            {lang !== 'en' && <p className="lang-note">Translations are provisional and pending review by the Ministry\u2019s language team. Detailed content remains in English for now.</p>}
+            {lang !== 'en' && <p className="lang-note">Translations are provisional and pending review by the Ministry’s language team. Detailed content remains in English for now.</p>}
             <p className="hero-foot">Ministry-owned &middot; SPV-operated &middot; self-funding from Year 1</p>
           </div>
           <LiveRegister areaId={area} />
@@ -703,7 +703,7 @@ function CoopTable({ coops, onOpen }) {
   return (
     <div>
       <div className="table-filter">
-        <input className="table-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search society, ID, area office or sector\u2026" aria-label="Search cooperatives" />
+        <input className="table-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search society, ID, area office or sector…" aria-label="Search cooperatives" />
         <select value={st} onChange={(e) => setSt(e.target.value)} aria-label="Filter by status">{statuses.map((s) => <option key={s}>{s}</option>)}</select>
         <span className="table-count">{filtered.length} of {coops.length}</span>
       </div>
@@ -741,7 +741,7 @@ function OfficerWorkspace({ ctx, section }) {
   const [coops, reload] = useRegistry()
   const [sel, setSel] = useState(null), [loanSel, setLoanSel] = useState(null)
   const [loans, reloadLoans] = useLoans()
-  if (!coops) return <p className="muted-line">Loading registry\u2026</p>
+  if (!coops) return <p className="muted-line">Loading registry…</p>
   if (sel) return <CoopDetail coop={sel} ctx={ctx} onClose={() => { setSel(null); reload() }} onChanged={reload} />
   if (loanSel) return <LoanDetail loan={loanSel} ctx={ctx} onClose={() => { setLoanSel(null); reloadLoans() }} onChanged={reloadLoans} />
   const queue = coops.filter((c) => ['Filed', 'Under review', 'Returned'].includes(c.status))
@@ -753,7 +753,7 @@ function OfficerWorkspace({ ctx, section }) {
       {section === 'queue' && <CoopTable coops={queue} onOpen={setSel} />}
       {section === 'all' && <CoopTable coops={coops} onOpen={setSel} />}
       {section === 'members' && <MembersAnalytics />}
-      {section === 'lasmeco' && (!loans ? <p className="muted-line">Loading\u2026</p> : <><p className="muted-line">Applications awaiting cooperative validation and 25% guarantee. Open one to validate.</p><LoanTable loans={lasmecoQueue.length ? lasmecoQueue : loans} onOpen={setLoanSel} /></>)}
+      {section === 'lasmeco' && (!loans ? <p className="muted-line">Loading…</p> : <><p className="muted-line">Applications awaiting cooperative validation and 25% guarantee. Open one to validate.</p><LoanTable loans={lasmecoQueue.length ? lasmecoQueue : loans} onOpen={setLoanSel} /></>)}
       {section === 'offices' && <div className="rtable-wrap"><table className="rtable"><thead><tr><th>Area office</th><th>Societies</th></tr></thead><tbody>{byOffice.map(([o, n]) => (<tr key={o}><td>{o}</td><td className="mono">{n}</td></tr>))}</tbody></table></div>}
       {section === 'audit' && <OfficerAuditLog />}
       {section === 'reports' && <ReportsPanel role="officer" />}
@@ -772,7 +772,7 @@ function OfficerAuditLog() {
 function AuditorWorkspace({ ctx, section }) {
   const [coops, reload] = useRegistry()
   const [sel, setSel] = useState(null)
-  if (!coops) return <p className="muted-line">Loading returns\u2026</p>
+  if (!coops) return <p className="muted-line">Loading returns…</p>
   if (sel) return <CoopDetail coop={sel} ctx={ctx} onClose={() => { setSel(null); reload() }} onChanged={reload} />
   const withReturns = coops.filter((c) => c.returns)
   return (
@@ -908,7 +908,7 @@ function MemberOverview({ mine, loans }) {
 function AnalyticsDashboard() {
   const [coops, setCoops] = useState(null), [members, setMembers] = useState([]), [loans, setLoans] = useState([]), [wallets, setWallets] = useState([]), [tickets, setTickets] = useState([])
   useEffect(() => { listCoops().then(setCoops); listMembers().then(setMembers); listLoans().then(setLoans); kvList('wallet:').then(setWallets); listTickets().then(setTickets) }, [])
-  if (!coops) return <p className="muted-line">Loading analytics\u2026</p>
+  if (!coops) return <p className="muted-line">Loading analytics…</p>
   const scored = members.map((m) => scoreMember(m))
   const disbursed = loans.filter((l) => ['Disbursed', 'Repaying', 'Completed'].includes(l.status))
   const disbursedValue = disbursed.reduce((a, l) => a + (l.amountApproved || 0), 0)
@@ -1032,7 +1032,7 @@ function ActionQueue() {
 function LeadershipOverview({ ctx, section, onViewAs }) {
   const [coops, reload] = useRegistry()
   const [sel, setSel] = useState(null)
-  if (!coops) return <p className="muted-line">Loading overview\u2026</p>
+  if (!coops) return <p className="muted-line">Loading overview…</p>
   if (sel) return <CoopDetail coop={sel} ctx={ctx} onClose={() => { setSel(null); reload() }} onChanged={reload} />
   const pending = coops.filter((c) => c.source !== 'SEKAT' && ['Filed', 'Under review', 'Returned'].includes(c.status))
   return (
@@ -1058,7 +1058,7 @@ function LeadershipOverview({ ctx, section, onViewAs }) {
 function SocietyWorkspace({ ctx, section }) {
   const [coops, reload] = useRegistry()
   const [mode, setMode] = useState('view') // view | register | returns
-  if (!coops) return <p className="muted-line">Loading\u2026</p>
+  if (!coops) return <p className="muted-line">Loading…</p>
   const mine = ctx.focusId ? coops.find((c) => c.trackingId === ctx.focusId) : coops.find((c) => c.createdBy === ctx.email)
   if (mode === 'register') return <RegistrationForm ctx={ctx} onCancel={() => setMode('view')} onDone={() => { setMode('view'); reload() }} />
   if (mode === 'returns' && mine) return <ReturnsForm coop={mine} ctx={ctx} onCancel={() => setMode('view')} onDone={() => { setMode('view'); reload() }} />
@@ -1235,7 +1235,7 @@ async function generateBoardPack() {
   .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px;font-family:Arial,sans-serif}
   .foot{margin-top:30px;color:#6b7671;font-size:10px;font-family:Arial,sans-serif}</style></head>
   <body><div class="wrap">
-  <div class="head"><img src="${origin}/lagos-seal.png" alt=""><div><h1>MCCTI CoopEco \u2014 Board Pack</h1><div class="sub">Ministry of Commerce, Cooperatives, Trade &amp; Investment, Lagos State &middot; ${fmtDate(new Date().toISOString())}</div></div></div>
+  <div class="head"><img src="${origin}/lagos-seal.png" alt=""><div><h1>MCCTI CoopEco — Board Pack</h1><div class="sub">Ministry of Commerce, Cooperatives, Trade &amp; Investment, Lagos State &middot; ${fmtDate(new Date().toISOString())}</div></div></div>
   <h2>Executive summary</h2>
   <div class="kpis">${kpi('Cooperative societies', coops.length)}${kpi('Members profiled', members.length)}${kpi('LASMECO disbursed', money(f.disbursedValue))}${kpi('Portfolio outstanding', money(f.outstanding))}${kpi('In arrears', money(f.arrears))}${kpi('Escrow accrued', money(f.accrued))}${kpi('Payments processed', money(f.funding))}${kpi('Open tickets', tickets.filter((t) => t.status !== 'Resolved').length)}${kpi('Approved societies', by(coops, 'status', 'Approved'))}</div>
   <h2>Registration status</h2><table><tr><th>Status</th><th style="text-align:right">Societies</th></tr>${statusRows}</table>
@@ -1261,7 +1261,7 @@ function ReportsPanel({ role }) {
         {isLeader && <div className="report-card"><h4>LASMECO portfolio</h4><p>All loans with status, approved amount, outstanding balance and arrears.</p><button className="btn btn-outline btn-sm" disabled={busy === 'loans'} onClick={run('loans', async () => downloadCSV('lasmeco-portfolio-' + stamp + '.csv', await reportLoans()))}>Download CSV</button></div>}
         {isLeader && <div className="report-card"><h4>Escrow &amp; distribution</h4><p>Revenue accrued by stream and the SPV sharing-formula distribution.</p><button className="btn btn-outline btn-sm" disabled={busy === 'escrow'} onClick={run('escrow', async () => downloadCSV('escrow-' + stamp + '.csv', await reportEscrow()))}>Download CSV</button></div>}
       </div>
-      {isLeader && <div className="report-boardpack"><div><h4>Board pack (PDF)</h4><p className="muted-line">A printable executive summary: KPIs, registration status, LASMECO pipeline and escrow, drawn from live data. Opens a print view \u2014 choose \u201cSave as PDF\u201d.</p></div><button className="btn btn-gold btn-sm" disabled={busy === 'pack'} onClick={run('pack', generateBoardPack)}>Generate board pack</button></div>}
+      {isLeader && <div className="report-boardpack"><div><h4>Board pack (PDF)</h4><p className="muted-line">A printable executive summary: KPIs, registration status, LASMECO pipeline and escrow, drawn from live data. Opens a print view — choose “Save as PDF”.</p></div><button className="btn btn-gold btn-sm" disabled={busy === 'pack'} onClick={run('pack', generateBoardPack)}>Generate board pack</button></div>}
       <p className="panel-note">CSV files open in Excel or Google Sheets. Exports reflect live platform data at the moment of download.</p>
     </div>
   )
@@ -1286,7 +1286,7 @@ function computeRiskFlags(members, loans) {
 function RiskPanel() {
   const [data, setData] = useState(null)
   useEffect(() => { Promise.all([listMembers(), listLoans()]).then(([m, l]) => setData(computeRiskFlags(m, l))) }, [])
-  if (!data) return <p className="muted-line">Assessing risk\u2026</p>
+  if (!data) return <p className="muted-line">Assessing risk…</p>
   const bySev = (s) => data.filter((f) => f.severity === s).length
   return (
     <div className="ws">
@@ -1297,7 +1297,7 @@ function RiskPanel() {
         <div className="stat"><span className="stat-fig">{bySev('low')}</span><span className="stat-lab">Low</span></div>
       </div>
       {data.length ? <div className="risk-list">{data.map((f, i) => (<div className="risk-item" key={i}><span className={cx('chip', f.severity === 'high' ? 'st-returned' : f.severity === 'medium' ? 'st-review' : 'st-filed')}>{f.severity}</span><div className="risk-body"><strong>{f.title}</strong><p>{f.type} &middot; {f.detail}</p></div></div>))}</div> : <div className="empty"><span className="empty-mark">&#9670;</span><h3>No risk flags</h3><p>No duplicate identifiers, arrears or anomalies detected in the current data.</p></div>}
-      <p className="panel-note">Heuristic monitoring on duplicate phones, repeated names, multiple applications, arrears and exposure. Production-grade duplicate BVN/NIN detection should run server-side through the KYC provider (numbers are not stored in the browser). Flags are advisory and warrant human review \u2014 not an accusation.</p>
+      <p className="panel-note">Heuristic monitoring on duplicate phones, repeated names, multiple applications, arrears and exposure. Production-grade duplicate BVN/NIN detection should run server-side through the KYC provider (numbers are not stored in the browser). Flags are advisory and warrant human review — not an accusation.</p>
     </div>
   )
 }
@@ -1345,7 +1345,7 @@ function SLABlock({ title, target, unit, m }) {
 function GovernanceSLA() {
   const [d, setD] = useState(null)
   useEffect(() => { Promise.all([listCoops(), listTickets(), listLoans()]).then(([c, t, l]) => setD(slaMetrics(c, t, l))) }, [])
-  if (!d) return <p className="muted-line">Computing service levels\u2026</p>
+  if (!d) return <p className="muted-line">Computing service levels…</p>
   return (
     <div className="ws">
       <div className="dash-grid">
@@ -1400,7 +1400,7 @@ function LoanCalculator() {
   return (
     <div className="returns-box"><h4>LASMECO repayment calculator</h4>
       <div className="calc-row"><label className="field"><span>Amount (₦)</span><input type="number" value={amt} onChange={(e) => setAmt(e.target.value)} /></label><label className="field"><span>Product</span><select value={type} onChange={(e) => setType(e.target.value)}>{LOAN_TYPES.map((x) => <option key={x}>{x}</option>)}</select></label></div>
-      <div className="statgrid"><div className="stat"><span className="stat-fig">{fmtNaira(morPay)}</span><span className="stat-lab">Moratorium months ({v.moratorium}) \u2014 interest only</span></div><div className="stat"><span className="stat-fig">{fmtNaira(monthly)}</span><span className="stat-lab">Then monthly (principal + interest)</span></div><div className="stat"><span className="stat-fig">{fmtNaira(total)}</span><span className="stat-lab">Total repayable over {t} months</span></div><div className="stat"><span className="stat-fig">{fmtNaira(b.netToBorrower)}</span><span className="stat-lab">Net to you after fees</span></div></div>
+      <div className="statgrid"><div className="stat"><span className="stat-fig">{fmtNaira(morPay)}</span><span className="stat-lab">Moratorium months ({v.moratorium}) — interest only</span></div><div className="stat"><span className="stat-fig">{fmtNaira(monthly)}</span><span className="stat-lab">Then monthly (principal + interest)</span></div><div className="stat"><span className="stat-fig">{fmtNaira(total)}</span><span className="stat-lab">Total repayable over {t} months</span></div><div className="stat"><span className="stat-fig">{fmtNaira(b.netToBorrower)}</span><span className="stat-lab">Net to you after fees</span></div></div>
       <p className="panel-note">Indicative only, at 9% reducing balance with a {v.moratorium}-month principal moratorium (interest-only), then equal principal over the remaining term. One-off fees: ₦200,000 Accelerator and 1% BOI appraisal. Not a loan offer.</p>
     </div>
   )
@@ -1425,10 +1425,10 @@ function PublicVerify({ onBack }) {
       {results && (results.length ? (
         <div className="verify-results">{results.slice(0, 8).map((c) => (
           <div className="verify-card" key={c.trackingId}>
-            <div className="verify-card-top"><div><h3>{c.name}</h3><p className="detail-sub">{c.trackingId}{c.regNo ? ' \u00b7 ' + c.regNo : ''} \u00b7 {c.areaOffice} area office \u00b7 {c.sector}</p></div><StatusChip status={c.status} /></div>
+            <div className="verify-card-top"><div><h3>{c.name}</h3><p className="detail-sub">{c.trackingId}{c.regNo ? ' \u00b7 ' + c.regNo : ''} · {c.areaOffice} area office · {c.sector}</p></div><StatusChip status={c.status} /></div>
             <div className="verify-facts"><div><span>Standing</span><strong>{verifyStanding(c.status)}</strong></div><div><span>CAP15 compliance</span><strong>{c.cap15 || '\u2014'}</strong></div><div><span>Register source</span><strong>{c.source === 'SEKAT' ? 'SEKAT legacy register' : 'MCCTI register'}</strong></div></div>
           </div>))}</div>
-      ) : <div className="verify-empty">No cooperative found for \u201c{q}\u201d. Check the number or name, or contact the Ministry to confirm.</div>)}
+      ) : <div className="verify-empty">No cooperative found for “{q}”. Check the number or name, or contact the Ministry to confirm.</div>)}
       <button className="link-back" onClick={onBack}>&larr; Back to home</button>
       <p className="panel-note">This public check shows registration standing only. It does not disclose members, bank or financial details. It is not a substitute for official written confirmation from the Ministry.</p>
     </div></main>
@@ -1484,7 +1484,7 @@ function QoopPanel({ ctx, onSynced }) {
       <div className="sekat-flow"><div className="node src qoop">QooP<span>Member &amp; MSME analytics source</span></div><div className="flow-arrow">&rarr;<span>one-way</span></div><div className="node dst">MCCTI CoopEco<span>Unified analytics</span></div></div>
       <div className="sekat-status"><div className="status-row"><span>Connection</span><span className={cx('pill', info?.live ? 'ok' : 'muted')}>{info?.live ? 'Live API' : 'Sample feed' + (hasSupabase ? '' : ' (demo)')}</span></div><div className="status-row"><span>Last sync</span><span className="mono">{info?.lastSync ? fmtDate(info.lastSync) : 'Never'}</span></div><div className="status-row"><span>Members ingested</span><span className="mono">{info?.count ?? 0}</span></div></div>
       <button className="btn btn-gold btn-sm" onClick={run} disabled={busy}>{busy ? 'Syncing…' : 'Run QooP sync'}</button>
-      <p className="panel-note">Data flows one way, from QooP into MCCTI. Synced members are read-only here. When QOOP_API_URL and QOOP_API_KEY are set, the platform pulls live QooP analytics automatically; until then it ingests a representative sample mirroring the QooP dataset: KYC, turnover and cash flow, plus QooP-held financial behaviour \u2014 wallet and BNPL usage, savings, credit purchases, borrowing and on-time repayment history. Compliance: KYC and NDPR/GDPR handling governed by the QooP data-sharing agreement. This is not legal advice.</p>
+      <p className="panel-note">Data flows one way, from QooP into MCCTI. Synced members are read-only here. When QOOP_API_URL and QOOP_API_KEY are set, the platform pulls live QooP analytics automatically; until then it ingests a representative sample mirroring the QooP dataset: KYC, turnover and cash flow, plus QooP-held financial behaviour — wallet and BNPL usage, savings, credit purchases, borrowing and on-time repayment history. Compliance: KYC and NDPR/GDPR handling governed by the QooP data-sharing agreement. This is not legal advice.</p>
     </div>
   )
 }
@@ -1538,7 +1538,7 @@ function BulkImport({ ctx, onDone }) {
       {objs ? <p className="muted-line">{valid.length} valid row{valid.length === 1 ? '' : 's'}{objs.length - valid.length ? ', ' + (objs.length - valid.length) + ' skipped (missing name)' : ''}.</p> : null}
       {valid.length ? <div className="rtable-wrap"><table className="rtable"><thead><tr>{Object.keys(valid[0]).slice(0, 6).map((h) => <th key={h}>{h}</th>)}</tr></thead><tbody>{valid.slice(0, 5).map((o, i) => <tr key={i}>{Object.keys(valid[0]).slice(0, 6).map((h) => <td key={h}>{o[h]}</td>)}</tr>)}</tbody></table></div> : null}
       {done != null ? <p className="panel-note" style={{ color: 'var(--green)' }}>Imported {done} record{done === 1 ? '' : 's'}. They now appear in the registry{type === 'members' ? ' and member analytics' : ''}.</p> : null}
-      <p className="panel-note">Bulk import creates new records tagged \u201cBulk import\u201d. Imported members are Unverified until KYC is run; imported cooperatives pass through the normal approval flow. De-duplicate and check the Risk &amp; fraud view before large batches.</p>
+      <p className="panel-note">Bulk import creates new records tagged “Bulk import”. Imported members are Unverified until KYC is run; imported cooperatives pass through the normal approval flow. De-duplicate and check the Risk &amp; fraud view before large batches.</p>
     </div>
   )
 }
@@ -1639,7 +1639,7 @@ function MemberWorkspace({ ctx, section }) {
   const [mode, setMode] = useState('view'), [sel, setSel] = useState(null)
   const reload = useCallback(() => { listMembers().then(setMembers); listCoops().then(setCoops); listLoans().then(setLoans) }, [])
   useEffect(() => { reload() }, [reload])
-  if (!members) return <p className="muted-line">Loading\u2026</p>
+  if (!members) return <p className="muted-line">Loading…</p>
   const mine = ctx.focusId ? members.find((m) => m.memberId === ctx.focusId) : members.find((m) => m.createdBy === ctx.email)
   const myLoans = mine ? loans.filter((l) => l.memberId === mine.memberId || (l.memberName === mine.name)) : []
   if (mode === 'onboard') return <MemberOnboardingForm ctx={ctx} coops={coops} onCancel={() => setMode('view')} onDone={() => { setMode('view'); reload() }} />
@@ -1851,7 +1851,7 @@ async function portfolioContributionSeries(months = 6) {
   return Object.keys(byMonth).sort().slice(-months).map((m) => ({ month: m, contributions: byMonth[m] }))
 }
 async function ensureCoopSnapshots() {
-  if (await kvGet('integration:snapshots-v1')) return
+  if (await kvGet('integration:snapshots-v1')) return false
   try {
     const coops = await listCoops()
     const factors = [0.68, 0.76, 0.83, 0.89, 0.95, 1], now = new Date()
@@ -1861,6 +1861,7 @@ async function ensureCoopSnapshots() {
     }
   } catch (e) { /* best-effort */ }
   await kvSet('integration:snapshots-v1', { done: true, at: new Date().toISOString() })
+  return true
 }
 async function ensureMonthlySnapshots() {
   const mk = monthKey(Date.now()), marker = 'snapsweep:' + mk
@@ -1915,7 +1916,8 @@ async function clearPriorSeed() {
   await kvDelete('integration:loandocs-v1'); await kvDelete('integration:loandocs-v2'); await kvDelete('integration:snapshots-v1')
 }
 async function seedDemoData() {
-  if (await kvGet('integration:seed-v7')) return
+  if (await kvGet('integration:seed-v7')) return false
+  await kvSet('integration:seed-v7', { claimed: true, at: new Date().toISOString() }) // claim first: prevents repeat clear/reseed storms if a later step fails
   try { await clearPriorSeed() } catch (e) { /* best-effort cleanup */ }
   const now = Date.now(), day = 86400000
   const isoAgo = (ms) => new Date(now - ms).toISOString()
@@ -2014,6 +2016,7 @@ async function seedDemoData() {
   await kvSet('doc:' + docCoop + ':Dseed1', { id: 'Dseed1', coopId: docCoop, name: 'by-laws.pdf', category: 'By-laws', size: 284000, type: 'application/pdf', url: '', path: '', storage: 'demo', uploadedBy: 'T. Coker', uploadedAt: isoAgo(9 * day), verified: true, verifiedBy: 'Area Registrar' })
   await kvSet('doc:' + docCoop + ':Dseed2', { id: 'Dseed2', coopId: docCoop, name: 'registration-certificate.pdf', category: 'Registration certificate', size: 156000, type: 'application/pdf', url: '', path: '', storage: 'demo', uploadedBy: 'T. Coker', uploadedAt: isoAgo(9 * day), verified: false })
   await kvSet('integration:seed-v7', { done: true, at: new Date().toISOString() })
+  return true
 }
 const ACCEL_SEEDS = [
   { email: 'accel.agric@coopeco.ng', name: 'Agriculture Accelerator', sectors: ['Agriculture'] },
@@ -2029,14 +2032,15 @@ async function getAccelerator(email) { return kvGet('accelerator:' + email) }
 async function saveAccelerator(rec) { const prior = await kvGet('accelerator:' + rec.email); const status = rec.status || (prior && prior.status) || 'Pending'; await kvSet('accelerator:' + rec.email, { ...rec, status, updatedAt: new Date().toISOString() }, rec.uid || null); return rec }
 async function acceleratorsForSector(sector) { return (await listAccelerators()).filter((a) => (a.sectors || []).includes(sector) && (a.status || 'Pending') === 'Appointed') }
 async function ensureAccelerators() {
-  if (await kvGet('integration:accel-v8')) return
+  if (await kvGet('integration:accel-v8')) return false
   const prior = await kvList('accelerator:')
   for (const a of prior) { if (a && a.email && a.email.startsWith('accel.') && a.email.endsWith('@coopeco.ng')) await kvDelete('accelerator:' + a.email) }
   for (const a of ACCEL_SEEDS) await kvSet('accelerator:' + a.email, { ...a, status: 'Appointed', createdAt: new Date().toISOString() })
   await kvSet('integration:accel-v8', { done: true, at: new Date().toISOString() })
+  return true
 }
 async function ensureLoanDocsSeed() {
-  if (await kvGet('integration:loandocs-v2')) return
+  if (await kvGet('integration:loandocs-v2')) return false
   try {
     const loans = await listLoans()
     const targets = loans.filter((l) => ['Coop validated', 'Bank assessment', 'BOI approved', 'Disbursed', 'Repaying'].includes(l.status)).slice(0, 4)
@@ -2049,14 +2053,31 @@ async function ensureLoanDocsSeed() {
     }
   } catch (e) { /* best-effort */ }
   await kvSet('integration:loandocs-v2', { done: true, at: new Date().toISOString() })
+  return true
 }
+let _seedInFlight = null
 async function ensureSeedData() {
-  try { await syncFromSekat({ name: 'SEKAT gateway', role: 'officer', email: 'sekat@system' }, true); await syncFromQoop({ name: 'QooP gateway', role: 'officer', email: 'qoop@system' }, true) } catch (e) { /* not configured */ }
-  try { await seedDemoData() } catch (e) { /* best-effort, once */ }
-  try { await ensureAccelerators() } catch (e) { /* keep accelerator directory current */ }
-  try { await ensureLoanDocsSeed() } catch (e) { /* seed loan documents once */ }
-  try { await ensureCoopSnapshots() } catch (e) { /* seed contribution history once */ }
-  try { await ensureMonthlySnapshots() } catch (e) { /* record all cooperatives once per month */ }
+  if (_seedInFlight) return _seedInFlight
+  _seedInFlight = (async () => {
+    let changed = false
+    // Registry sync is a heavy write burst: only re-run if it hasn't run today.
+    try {
+      const last = await kvGet('integration:sekat')
+      const stale = !last || !last.lastSync || (Date.now() - new Date(last.lastSync).getTime()) > 86400000
+      if (stale) {
+        await syncFromSekat({ name: 'SEKAT gateway', role: 'officer', email: 'sekat@system' }, true)
+        await syncFromQoop({ name: 'QooP gateway', role: 'officer', email: 'qoop@system' }, true)
+        changed = true
+      }
+    } catch (e) { /* not configured */ }
+    try { if (await seedDemoData()) changed = true } catch (e) { /* best-effort, once */ }
+    try { if (await ensureAccelerators()) changed = true } catch (e) { /* keep accelerator directory current */ }
+    try { if (await ensureLoanDocsSeed()) changed = true } catch (e) { /* seed loan documents once */ }
+    try { if (await ensureCoopSnapshots()) changed = true } catch (e) { /* seed contribution history once */ }
+    try { await ensureMonthlySnapshots() } catch (e) { /* record all cooperatives once per month */ }
+    return changed
+  })()
+  try { return await _seedInFlight } finally { _seedInFlight = null }
 }
 async function seedDemoLoans() {
   if (supa) return
@@ -2089,7 +2110,7 @@ function LoanTable({ loans, onOpen }) {
   return (
     <div>
       <div className="table-filter">
-        <input className="table-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search applicant, ID, cooperative or sector\u2026" aria-label="Search applications" />
+        <input className="table-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search applicant, ID, cooperative or sector…" aria-label="Search applications" />
         <select value={st} onChange={(e) => setSt(e.target.value)} aria-label="Filter by status">{statuses.map((s) => <option key={s}>{s}</option>)}</select>
         <span className="table-count">{filtered.length} of {loans.length}</span>
       </div>
@@ -2174,7 +2195,7 @@ function LoanKycPanel({ loan, ctx }) {
     await notify({ to: loan.createdBy, title: 'Action needed on your LASMECO application', body: 'To continue, please submit or update:\n' + (missing || 'Documents pending verification'), event: 'loan', phone: loan.memberPhone })
     setBusy(false); toast('The member has been notified (in-app' + (loan.memberPhone ? ' and SMS' : '') + ') of the outstanding items.')
   }
-  if (member === undefined) return <div className="returns-box"><h4>Application documents &amp; KYC</h4><p className="muted-line">Loading\u2026</p></div>
+  if (member === undefined) return <div className="returns-box"><h4>Application documents &amp; KYC</h4><p className="muted-line">Loading…</p></div>
   return (
     <div className="returns-box"><h4>Application documents &amp; KYC</h4>
       <p className="muted-line">{isBorrower ? 'Submit the documents below so your Accelerator and Sterling Bank can verify your KYC and process your application. You will be notified if anything is outstanding.' : 'Documents submitted by the applicant. Sterling Bank verifies each item for KYC; BOI sees the verified set.'}</p>
@@ -2199,7 +2220,7 @@ function RevenuePanel({ ctx }) {
     if (r.ok) toast('Payment ' + (r.ref && String(r.ref).startsWith('DEMO') ? '(demo) ' : '') + 'received for ' + name + '.')
     else if (!r.cancelled) toast('Payment could not be completed.')
   }
-  if (!fig) return <p className="muted-line">Loading revenue\u2026</p>
+  if (!fig) return <p className="muted-line">Loading revenue…</p>
   const accrued = { 'Cooperative registration': fig.regFees, 'Annual returns filing': fig.returnsFees, 'LASMECO disbursement portal': fig.portalFees, 'Digital wallet & payments': fig.walletFees }
   return (
     <div className="ws">
@@ -2219,7 +2240,7 @@ function RevenuePanel({ ctx }) {
 function PortfolioMonitoring() {
   const [m, setM] = useState(null), [gg, setGg] = useState(0)
   useEffect(() => { listLoans().then((l) => { setM(nplMetrics(l)); setGg(globalGuaranteeUsed(l)) }) }, [])
-  if (!m) return <p className="muted-line">Computing portfolio\u2026</p>
+  if (!m) return <p className="muted-line">Computing portfolio…</p>
   const pct = (x) => (x * 100).toFixed(1) + '%'
   const ggPct = gg / GLOBAL_GUARANTEE_LIMIT
   return (
@@ -2231,7 +2252,7 @@ function PortfolioMonitoring() {
         <div className="stat"><span className="stat-fig" style={m.lossNorm >= 0.01 ? { color: 'var(--err)' } : undefined}>{pct(m.lossNorm)}</span><span className="stat-lab">Loss norm (RAC cap 1%)</span></div>
         <div className="stat"><span className="stat-fig" style={ggPct >= 1 ? { color: 'var(--err)' } : undefined}>{pct(ggPct)}</span><span className="stat-lab">Global guarantee used ({fmtNaira(gg)} of ₦5bn)</span></div>
       </div>
-      {m.nplLoans.length ? <div className="risk-list">{m.nplLoans.map((x, i) => (<div className="risk-item" key={i}><span className={cx('chip', x.loan.status === 'Default' ? 'st-returned' : 'st-review')}>{x.loan.status === 'Default' ? 'Default' : x.overdue + ' overdue'}</span><div className="risk-body"><strong>{x.loan.memberName} \u2014 {x.loan.loanId}</strong><p>{x.loan.sector} &middot; outstanding {fmtNaira(x.outstanding)}</p></div></div>))}</div> : <div className="empty"><span className="empty-mark">&#9670;</span><h3>No non-performing loans</h3><p>All disbursed loans are performing.</p></div>}
+      {m.nplLoans.length ? <div className="risk-list">{m.nplLoans.map((x, i) => (<div className="risk-item" key={i}><span className={cx('chip', x.loan.status === 'Default' ? 'st-returned' : 'st-review')}>{x.loan.status === 'Default' ? 'Default' : x.overdue + ' overdue'}</span><div className="risk-body"><strong>{x.loan.memberName} — {x.loan.loanId}</strong><p>{x.loan.sector} &middot; outstanding {fmtNaira(x.outstanding)}</p></div></div>))}</div> : <div className="empty"><span className="empty-mark">&#9670;</span><h3>No non-performing loans</h3><p>All disbursed loans are performing.</p></div>}
       <p className="panel-note">NPL = loans in default or 3+ installments overdue, over total disbursed. Loss norm = crystallised guarantee losses over guaranteed exposure (RAC cap 1%). Global guarantee cap ₦5bn; single-obligor guarantee cap ₦5m (50% of the ₦10m loan ceiling). Thresholds: NPL review 5%, suspend 10%.</p>
     </div>
   )
@@ -2268,7 +2289,7 @@ function CoopTierPanel({ coop, ctx, onChanged }) {
       <div className="statgrid"><div className="stat"><span className="stat-fig">{nl.tier}</span><span className="stat-lab">Tier</span></div><div className="stat"><span className="stat-fig">{nl.limit}</span><span className="stat-lab">Nomination limit</span></div><div className="stat"><span className="stat-fig">{nl.used}</span><span className="stat-lab">Active nominations</span></div><div className="stat"><span className="stat-fig" style={nl.remaining === 0 ? { color: 'var(--err)' } : undefined}>{nl.remaining}</span><span className="stat-lab">Remaining</span></div></div>
       <div className="statgrid"><div className="stat"><span className="stat-fig">{fmtNaira(liab.contingent)}</span><span className="stat-lab">Contingent guarantee (25%)</span></div><div className="stat"><span className="stat-fig" style={liab.crystallised ? { color: 'var(--err)' } : undefined}>{fmtNaira(liab.crystallised)}</span><span className="stat-lab">Crystallised on default</span></div></div>
       {canEdit ? <div className="wallet-actions" style={{ marginTop: '12px' }}><select value={c.tier || 'C'} onChange={(e) => setTier(e.target.value)} disabled={busy}>{Object.keys(COOP_TIERS).map((t) => <option key={t} value={t}>{COOP_TIERS[t].label}</option>)}</select><input type="number" value={nav} onChange={(e) => setNav(e.target.value)} placeholder="Net asset value (₦)" /><button className="btn btn-outline btn-sm" disabled={busy} onClick={saveNav}>Save NAV</button></div> : null}
-      <p className="panel-note">MCCTI classifies the tier and records NAV. Tier caps: A {COOP_TIERS.A.cap}, B {COOP_TIERS.B.cap}, C {COOP_TIERS.C.cap} borrowers; actual limit = min(tier cap, NAV \u00f7 (25% \u00d7 ₦{NAV_REF_LOAN / 1e6}m reference loan)). On default the cooperative's 25% guarantee crystallises into a cash liability.</p>
+      <p className="panel-note">MCCTI classifies the tier and records NAV. Tier caps: A {COOP_TIERS.A.cap}, B {COOP_TIERS.B.cap}, C {COOP_TIERS.C.cap} borrowers; actual limit = min(tier cap, NAV ÷ (25% × ₦{NAV_REF_LOAN / 1e6}m reference loan)). On default the cooperative's 25% guarantee crystallises into a cash liability.</p>
     </div>
   )
 }
@@ -2277,12 +2298,12 @@ function AcceleratorAppointments({ ctx }) {
   const reload = useCallback(async () => { const l = await listAccelerators(); setList(l); const d = {}; for (const a of l) { try { d[a.email] = (await listDocs('accel:' + a.email)).length } catch (e) { d[a.email] = 0 } } setDocs(d) }, [])
   useEffect(() => { reload() }, [reload])
   const setStatus = (a, status) => async () => { setBusy(a.email); await saveAccelerator({ ...a, status }); setBusy(''); reload() }
-  if (!list) return <p className="muted-line">Loading accelerators\u2026</p>
+  if (!list) return <p className="muted-line">Loading accelerators…</p>
   return (
     <div className="ws">
       <p className="muted-line">The Ministry (MCCTI) formally appoints accelerators before they operate, following the Consortium call. Appointed accelerators can be routed applications by members in their sectors.</p>
       {list.length ? <div className="risk-list">{list.map((a) => { const appointed = a.status === 'Appointed'; return (<div className="risk-item" key={a.email}><span className={cx('chip', appointed ? 'st-approved' : 'st-review')}>{a.status || 'Pending'}</span><div className="risk-body"><strong>{a.name}</strong><p>{(a.sectors || []).join(', ') || 'No sectors set'} &middot; {a.email} &middot; {docs[a.email] || 0} document(s) submitted</p></div><div className="doc-actions">{!appointed ? <button className="link-inline" disabled={busy === a.email} onClick={setStatus(a, 'Appointed')}>Appoint</button> : <button className="link-inline danger" disabled={busy === a.email} onClick={setStatus(a, 'Suspended')}>Suspend</button>}</div></div>) })}</div> : <p className="muted-line">No accelerators have registered yet.</p>}
-      <p className="panel-note">RAC vetting before appointment: CAC registration, valid permits, 3+ years in enterprise development, sector track record, audited financials, and CVs of key staff. Required documents: {ACCEL_DOC_REQUIREMENTS.slice(0, 4).join(', ')}\u2026</p>
+      <p className="panel-note">RAC vetting before appointment: CAC registration, valid permits, 3+ years in enterprise development, sector track record, audited financials, and CVs of key staff. Required documents: {ACCEL_DOC_REQUIREMENTS.slice(0, 4).join(', ')}…</p>
     </div>
   )
 }
@@ -2371,7 +2392,7 @@ function LoanDetail({ loan, ctx, onClose, onChanged }) {
       <div className="action-box">
         <label className="field"><span>Note (recorded on the audit trail)</span><textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Decision, conditions or findings." /></label>
         {(canAP && l.status === 'In training') || (canBOI && l.status === 'Bank assessment') ? <label className="field"><span>Amount (₦)</span><input type="number" value={amt} onChange={(e) => setAmt(e.target.value)} placeholder={String(l.amountRecommended || l.amountRequested || '')} /></label> : null}
-        {canSterling && l.status === 'BOI approved' ? <p className="panel-note">Product: {loanVariant(l.type).label} \u2014 {loanVariant(l.type).tenor}-month tenor with a {loanVariant(l.type).moratorium}-month principal moratorium (fixed by the RAC). The schedule is generated automatically on disbursement.</p> : null}
+        {canSterling && l.status === 'BOI approved' ? <p className="panel-note">Product: {loanVariant(l.type).label} — {loanVariant(l.type).tenor}-month tenor with a {loanVariant(l.type).moratorium}-month principal moratorium (fixed by the RAC). The schedule is generated automatically on disbursement.</p> : null}
         {canSterling && l.status === 'BOI approved' ? <div className="form-grid"><label className="field"><span>Beneficiary Sterling account no.</span><input value={disb.sterlingAccount} onChange={(e) => setDisb({ ...disb, sterlingAccount: e.target.value })} placeholder="10-digit NUBAN" /></label>{loanVariant(l.type).label === 'Asset Finance' ? <><label className="field"><span>Supplier / vendor</span><input value={disb.supplier} onChange={(e) => setDisb({ ...disb, supplier: e.target.value })} placeholder="Equipment supplier" /></label><label className="field"><span>Supplier account no.</span><input value={disb.supplierAccount} onChange={(e) => setDisb({ ...disb, supplierAccount: e.target.value })} placeholder="Supplier NUBAN" /></label></> : null}</div> : null}
         <div className="action-row">
           {canAP && l.status === 'Applied' && <button className="btn btn-gold btn-sm" disabled={busy} onClick={() => act({ status: 'In training', apName: ctx.name }, 'Enrolled in capacity building')}>Begin capacity building</button>}
@@ -2394,7 +2415,7 @@ function AcceleratorWorkspace({ ctx, section }) {
   const [accel, setAccel] = useState(undefined), [pick, setPick] = useState([]), [busy, setBusy] = useState(false)
   const loadAccel = useCallback(() => getAccelerator(ctx.email).then((a) => { setAccel(a); if (a) setPick(a.sectors || []) }), [ctx.email])
   useEffect(() => { loadAccel() }, [loadAccel])
-  if (!loans || accel === undefined) return <p className="muted-line">Loading pipeline\u2026</p>
+  if (!loans || accel === undefined) return <p className="muted-line">Loading pipeline…</p>
   if (!accel) {
     const toggle = (s) => setPick(pick.includes(s) ? pick.filter((x) => x !== s) : [...pick, s])
     const save = async () => { if (!pick.length) { toast('Select at least one sector you support.'); return } setBusy(true); await saveAccelerator({ email: ctx.email, name: ctx.name, sectors: pick, uid: ctx.uid }); await loadAccel(); setBusy(false) }
@@ -2418,17 +2439,17 @@ function AcceleratorWorkspace({ ctx, section }) {
     <div className="ws">
       {section === 'overview' && (<>
         <div className="accel-sectors"><span>Serving: {(accel.sectors || []).join(', ') || 'no sectors set'} &middot; {accel.status || 'Pending'}</span><button className="link-inline" onClick={() => setAccel(null)}>Edit sectors</button></div>
-        {(accel.status || 'Pending') !== 'Appointed' ? <div className="returns-box"><h4>Appointment documents</h4><div className={cx('kyc-status', 'pending')}>Pending MCCTI appointment. Submit the documents below; members can be routed to you once MCCTI appoints you.</div><DocumentsPanel coopId={'accel:' + ctx.email} ctx={ctx} canVerify={false} canUpload={true} categories={ACCEL_DOC_REQUIREMENTS} /></div> : <div className="returns-box"><h4>Appointment</h4><div className={cx('kyc-status', 'ok')}>Appointed by MCCTI \u2014 you can receive applications in your sectors.</div></div>}
+        {(accel.status || 'Pending') !== 'Appointed' ? <div className="returns-box"><h4>Appointment documents</h4><div className={cx('kyc-status', 'pending')}>Pending MCCTI appointment. Submit the documents below; members can be routed to you once MCCTI appoints you.</div><DocumentsPanel coopId={'accel:' + ctx.email} ctx={ctx} canVerify={false} canUpload={true} categories={ACCEL_DOC_REQUIREMENTS} /></div> : <div className="returns-box"><h4>Appointment</h4><div className={cx('kyc-status', 'ok')}>Appointed by MCCTI — you can receive applications in your sectors.</div></div>}
         <LoanStageOverview loans={myLoans} cards={cards} />
       </>)}
-      {section === 'queue' && (<><p className="muted-line">Applications awaiting your action \u2014 new, in training and shortlisted.</p><LoanTable loans={queue} onOpen={setSel} /></>)}
+      {section === 'queue' && (<><p className="muted-line">Applications awaiting your action — new, in training and shortlisted.</p><LoanTable loans={queue} onOpen={setSel} /></>)}
       {section === 'all' && (<><p className="muted-line">Every application in your sectors, at all stages (including validated, funded, disbursed, repaying and closed).</p><LoanTable loans={myLoans} onOpen={setSel} /></>)}
     </div>
   )
 }
 function LoanRoleWorkspace({ ctx, section, statuses, cards }) {
   const [loans, reload] = useLoans(); const [sel, setSel] = useState(null)
-  if (!loans) return <p className="muted-line">Loading loans\u2026</p>
+  if (!loans) return <p className="muted-line">Loading loans…</p>
   if (sel) return <LoanDetail loan={sel} ctx={ctx} onClose={() => { setSel(null); reload() }} onChanged={reload} />
   const queue = loans.filter((l) => statuses.includes(l.status))
   return (
@@ -2454,7 +2475,7 @@ function AssetMatrixWorkspace({ ctx, section }) {
   const [coops, setCoops] = useState(null), [loans, setLoans] = useState([]), [wallets, setWallets] = useState([]), [last, setLast] = useState(null), [busy, setBusy] = useState(false)
   const reload = useCallback(() => { listCoops().then(setCoops); listLoans().then(setLoans); kvList('wallet:').then(setWallets); kvGet('escrow:last').then(setLast) }, [])
   useEffect(() => { reload() }, [reload])
-  if (!coops) return <p className="muted-line">Loading escrow\u2026</p>
+  if (!coops) return <p className="muted-line">Loading escrow…</p>
   const regFees = coops.filter((c) => c.feeStatus === 'Paid').length * COOP_FEES.registration
   const returnsFees = coops.filter((c) => c.returns).length * COOP_FEES.annualReturns
   const disbursedValue = loans.filter((l) => ['Disbursed', 'Repaying', 'Completed'].includes(l.status)).reduce((a, l) => a + (l.amountApproved || 0), 0)
@@ -2566,7 +2587,7 @@ function NotificationCenter({ ctx, onChange }) {
   const [items, setItems] = useState(null)
   const reload = useCallback(() => listNotifs(ctx).then((l) => { setItems(l); onChange && onChange() }), [ctx.email, ctx.role])
   useEffect(() => { reload() }, [reload])
-  if (!items) return <p className="muted-line">Loading notifications\u2026</p>
+  if (!items) return <p className="muted-line">Loading notifications…</p>
   const unread = items.filter((n) => !n.read).length
   return (
     <div className="ws">
@@ -2638,7 +2659,7 @@ function RetentionPanel() {
   return (
     <div className="ws">
       <div className="returns-box"><h4>KYC document retention</h4>
-        <p className="muted-line">Loan/KYC documents are retained for {Math.round(KYC_RETENTION_MONTHS / 12)} years ({KYC_RETENTION_MONTHS} months) after an application closes (completed, declined or defaulted), then deleted \u2014 aligned with financial-institution KYC record-keeping. Cooperative governance documents (by-laws, certificates) are retained on the registry. Adjust the period in KYC_RETENTION_MONTHS after confirming the schedule with your data-protection officer (NDPR).</p>
+        <p className="muted-line">Loan/KYC documents are retained for {Math.round(KYC_RETENTION_MONTHS / 12)} years ({KYC_RETENTION_MONTHS} months) after an application closes (completed, declined or defaulted), then deleted — aligned with financial-institution KYC record-keeping. Cooperative governance documents (by-laws, certificates) are retained on the registry. Adjust the period in KYC_RETENTION_MONTHS after confirming the schedule with your data-protection officer (NDPR).</p>
         <div className="statgrid"><div className="stat"><span className="stat-fig">{exp ? exp.length : '\u2026'}</span><span className="stat-lab">Documents past retention</span></div><div className="stat"><span className="stat-fig">{KYC_RETENTION_MONTHS} mo</span><span className="stat-lab">Retention after closure</span></div></div>
         {exp && exp.length ? <div className="docs-list" style={{ marginTop: '12px' }}>{exp.slice(0, 8).map((d) => (<div className="doc-row" key={d.id}><div className="doc-meta"><strong>{d.name}</strong><span>{d.category} &middot; loan {d.coopId} &middot; uploaded {fmtDate(d.uploadedAt)}</span></div></div>))}</div> : <p className="muted-line" style={{ marginTop: '10px' }}>Nothing is past retention right now.</p>}
         <div className="panel-actions"><button className="btn btn-outline btn-sm" disabled={busy || !exp || !exp.length} onClick={purge}>{busy ? 'Purging\u2026' : 'Purge expired documents'}</button></div>
@@ -2655,14 +2676,14 @@ function DocumentsPanel({ coopId, ctx, canVerify, canUpload = true, categories, 
   const reload = useCallback(() => listDocs(coopId).then((d) => { setDocs(d); onChange && onChange() }), [coopId, onChange])
   useEffect(() => { reload() }, [reload])
   const onUpload = async (e) => { const f = e.target.files[0]; if (!f) return; setErr(''); setBusy(true); const r = await uploadDocument(f, coopId, cat, ctx); setBusy(false); if (fileRef.current) fileRef.current.value = ''; if (!r.ok) setErr(r.error || 'Upload failed.'); else reload() }
-  if (!docs) return <p className="muted-line">Loading documents\u2026</p>
+  if (!docs) return <p className="muted-line">Loading documents…</p>
   return (
     <div className="docs">
       {canUpload && <div className="docs-upload"><select value={cat} onChange={(e) => setCat(e.target.value)}>{cats.map((c) => <option key={c}>{c}</option>)}</select><input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx" onChange={onUpload} disabled={busy} /></div>}
-      {busy && <p className="muted-line">Uploading\u2026</p>}
+      {busy && <p className="muted-line">Uploading…</p>}
       {err && <p className="auth-err">{err}</p>}
       {docs.length ? <div className="docs-list">{docs.map((d) => (<div className="doc-row" key={d.id}><div className="doc-meta"><strong>{d.name}</strong><span>{d.category} &middot; {fmtFileSize(d.size)} &middot; {d.uploadedBy} {d.verified ? <span className="chip st-approved">Verified</span> : null}</span></div><div className="doc-actions">{(d.url || (d.storage === 'supabase' && d.path)) ? <button className="link-inline" onClick={() => openDocument(d)}>View</button> : <span className="muted-line sm">Stored</span>}{canVerify && !d.verified ? <button className="link-inline" onClick={async () => { await setDocVerified(coopId, d.id, true, ctx); reload() }}>Verify</button> : null}{(canUpload || canVerify) ? <button className="link-inline danger" onClick={async () => { await deleteDocument(coopId, d.id); reload() }}>Remove</button> : null}</div></div>))}</div> : <p className="muted-line">No documents uploaded yet.</p>}
-      {!hasSupabase ? <p className="panel-note">Demo mode: small files preview in-browser only. Connect Supabase Storage (run supabase_setup.sql to create the private \u201ccoop-docs\u201d bucket) to store documents securely; they are then served only via short-lived signed links to signed-in staff.</p> : <p className="panel-note">Documents are stored in a private bucket and opened via short-lived signed links. Only signed-in platform users can view them.</p>}
+      {!hasSupabase ? <p className="panel-note">Demo mode: small files preview in-browser only. Connect Supabase Storage (run supabase_setup.sql to create the private “coop-docs” bucket) to store documents securely; they are then served only via short-lived signed links to signed-in staff.</p> : <p className="panel-note">Documents are stored in a private bucket and opened via short-lived signed links. Only signed-in platform users can view them.</p>}
     </div>
   )
 }
@@ -2696,7 +2717,7 @@ function MemberWallet({ member }) {
   const id = mWallet(member.memberId)
   const reload = useCallback(() => { getWallet(id).then(setW); listCoops().then(setCoops) }, [id])
   useEffect(() => { reload() }, [reload])
-  if (!w) return <p className="muted-line">Loading wallet\u2026</p>
+  if (!w) return <p className="muted-line">Loading wallet…</p>
   const coop = coops.find((c) => c.name === member.coop)
   const topup = async () => { const a = Number(amt) || 0; if (a <= 0) return; setBusy(true); const r = await collectPayment({ email: member.createdBy || 'member@coopeco.ng', amountNaira: a, purpose: 'Wallet funding', metadata: { memberId: member.memberId } }); if (r.ok) { await walletTxn(id, 'topup', a, r.demo ? 'Card top-up (demo)' : 'Card top-up', member.name) } else if (!r.cancelled) { toast('Payment could not be completed. Please try again.') } await reload(); setAmt(''); setBusy(false) }
   const save = async () => { const a = Number(amt) || 0; if (a <= 0) { toast('Enter an amount.'); return } if (a > w.balance) { toast('Insufficient wallet balance. Add funds first.'); return } if (!coop) { toast('Your cooperative is not on the platform yet.'); return } setBusy(true); await walletTransfer(id, cWallet(coop.trackingId), a, 'Savings to ' + coop.name, member.name); await reload(); setAmt(''); setBusy(false) }
@@ -2704,11 +2725,11 @@ function MemberWallet({ member }) {
     <div className="wallet">
       <div className="wallet-top"><div><span className="wallet-lab">Wallet balance</span><span className="wallet-bal">{fmtNaira(w.balance)}</span></div><span className="wallet-chip">Digital wallet</span></div>
       <div className="wallet-actions">
-        <input type="number" value={amt} onChange={(e) => setAmt(e.target.value)} placeholder="Amount (\u20A6)" />
+        <input type="number" value={amt} onChange={(e) => setAmt(e.target.value)} placeholder="Amount (₦)" />
         <button className="btn btn-gold btn-sm" onClick={topup} disabled={busy}>Add funds</button>
         <button className="btn btn-outline btn-sm" onClick={save} disabled={busy}>Save to cooperative</button>
       </div>
-      <p className="panel-note">{PAYSTACK_PUBLIC ? 'Card top-ups are processed securely through Paystack (test mode until live keys are set).' : 'Top-ups and transfers are demo movements until Paystack is connected.'} Savings move into your cooperative\u2019s pool.</p>
+      <p className="panel-note">{PAYSTACK_PUBLIC ? 'Card top-ups are processed securely through Paystack (test mode until live keys are set).' : 'Top-ups and transfers are demo movements until Paystack is connected.'} Savings move into your cooperative’s pool.</p>
       <h4 className="wallet-h">Recent transactions</h4>
       <TxnList txns={w.txns} />
     </div>
@@ -2719,7 +2740,7 @@ function CoopEsusu({ coop, ctx }) {
   const id = cWallet(coop.trackingId)
   const reload = useCallback(() => { getWallet(id).then(setW); listMembers().then(setMembers) }, [id])
   useEffect(() => { reload() }, [reload])
-  if (!w) return <p className="muted-line">Loading savings\u2026</p>
+  if (!w) return <p className="muted-line">Loading savings…</p>
   const roster = members.filter((m) => m.coop === coop.name)
   const canManage = ctx.role === 'society' || ctx.role === 'leadership'
   const es = w.esusu && w.esusu.order ? w.esusu : null
@@ -2833,7 +2854,7 @@ function RaiseTicketForm({ ctx, coop, onDone, onCancel }) {
       </div>
       {err && <p className="auth-err">{err}</p>}
       <div className="panel-actions"><button className="btn btn-gold" onClick={submit} disabled={busy}>{busy ? 'Submitting\u2026' : 'Submit ticket'}</button></div>
-      <p className="panel-note">Grievances are tracked and addressed by the Directorate within the programme\u2019s service timelines, and escalated to leadership where unresolved.</p>
+      <p className="panel-note">Grievances are tracked and addressed by the Directorate within the programme’s service timelines, and escalated to leadership where unresolved.</p>
     </div>
   )
 }
@@ -2867,7 +2888,7 @@ function SupportConcierge({ ctx }) {
   const [tickets, setTickets] = useState(null), [mode, setMode] = useState('home'), [sel, setSel] = useState(null)
   const reload = useCallback(() => { listTickets().then(setTickets) }, [])
   useEffect(() => { reload() }, [reload])
-  if (!tickets) return <p className="muted-line">Loading support\u2026</p>
+  if (!tickets) return <p className="muted-line">Loading support…</p>
   if (sel) return <TicketDetail ticket={sel} ctx={ctx} onClose={() => { setSel(null); reload() }} onChanged={reload} />
   if (mode === 'raise') return <RaiseTicketForm ctx={ctx} onCancel={() => setMode('home')} onDone={() => { setMode('home'); reload() }} />
   const mine = tickets.filter((t) => t.raisedBy === ctx.email)
@@ -2889,7 +2910,7 @@ function SupportConcierge({ ctx }) {
         </>
       ) : (
         <>
-          <div className="support-cta"><span>Can\u2019t find an answer? Raise a ticket and the Directorate will respond.</span><button className="btn btn-gold btn-sm" onClick={() => setMode('raise')}>Raise a ticket</button></div>
+          <div className="support-cta"><span>Can’t find an answer? Raise a ticket and the Directorate will respond.</span><button className="btn btn-gold btn-sm" onClick={() => setMode('raise')}>Raise a ticket</button></div>
           <h4 className="wallet-h">Frequently asked</h4>
           <Accordion items={FAQ} />
           <h4 className="wallet-h">My tickets</h4>
@@ -3038,7 +3059,7 @@ export default function App() {
   const [session, setSession] = useState(null)
   const [ready, setReady] = useState(false)
   const [seedTick, setSeedTick] = useState(0)
-  const bgSeed = useCallback(() => { ensureSeedData().then(() => setSeedTick((t) => t + 1)).catch(() => { }) }, [])
+  const bgSeed = useCallback(() => { ensureSeedData().then((changed) => { if (changed) setSeedTick((t) => t + 1) }).catch(() => { }) }, [])
   const [lang, setLang] = useState(() => LS.get('coopeco.lang', 'en'))
   useEffect(() => { LS.set('coopeco.lang', lang) }, [lang])
   const [landingTab, setLandingTab] = useState('home')
@@ -3057,11 +3078,12 @@ export default function App() {
   useEffect(() => {
     if (!session) return
     const SESSION_MS = 30 * 60 * 1000
-    let timer
-    const reset = () => { clearTimeout(timer); timer = setTimeout(() => { toast('Signed out after 30 minutes of inactivity.'); doSignOut() }, SESSION_MS) }
+    let timer, last = 0
+    const arm = () => { clearTimeout(timer); timer = setTimeout(() => { toast('Signed out after 30 minutes of inactivity.'); doSignOut() }, SESSION_MS) }
+    const reset = () => { const now = Date.now(); if (now - last < 5000) return; last = now; arm() } // throttle: at most once per 5s
     const evts = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart']
     evts.forEach((e) => window.addEventListener(e, reset, { passive: true }))
-    reset()
+    arm()
     return () => { clearTimeout(timer); evts.forEach((e) => window.removeEventListener(e, reset)) }
   }, [session])
   const goHome = () => { setView('landing'); setLandingTab('home'); if (typeof window !== 'undefined') window.scrollTo({ top: 0 }) }
