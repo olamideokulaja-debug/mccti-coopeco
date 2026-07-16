@@ -15,6 +15,11 @@ const SB_URL = import.meta.env.VITE_SUPABASE_URL
 const SB_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 const supa = SB_URL && SB_KEY ? createClient(SB_URL, SB_KEY) : null
 const hasSupabase = Boolean(supa)
+/* Demo/sample data.
+   - No Supabase (preview/demo build): always ON, so the app is explorable.
+   - Live Supabase: OFF unless VITE_DEMO_DATA="true". A production database must never be
+     seeded with fictional cooperatives, members or loans. */
+const DEMO_DATA = !hasSupabase || String(import.meta.env.VITE_DEMO_DATA || '').toLowerCase() === 'true'
 
 /* --------------------------- content data ----------------------------- */
 const AREA_LENS = [
@@ -264,6 +269,7 @@ async function fetchLiveRecords(endpoint) {
 }
 async function syncFromSekat(ctx, silent) {
   const live = await fetchLiveRecords('/api/sekat-sync')
+  if (!live && !DEMO_DATA) return 0 // live database: never ingest the sample feed
   const feed = live || SEKAT_FEED
   let n = 0
   for (const r of feed) {
@@ -682,7 +688,7 @@ function CoopDetail({ coop, ctx, onClose, onChanged }) {
       )}
 
       <CoopTierPanel coop={c} ctx={ctx} onChanged={onChanged} />
-      <div className="trail-box"><h4>Documents</h4>{isReviewer(ctx) ? <p className="panel-note">Documents are hidden in review access to protect personal and financial data (NDPR).</p> : <DocumentsPanel coopId={c.trackingId} ctx={ctx} canVerify={canExamine} canUpload={canExamine} />}</div>
+      <div className="trail-box"><h4>Documents</h4>{isReviewer(ctx) && !DEMO_DATA ? <p className="panel-note">Documents are hidden in review access because this database holds real data (NDPR).</p> : <DocumentsPanel coopId={c.trackingId} ctx={ctx} canVerify={canExamine} canUpload={canExamine} />}</div>
       <div className="trail-box"><h4>Audit trail</h4><AuditTrail trackingId={c.trackingId} refreshKey={rk} /></div>
     </div>
   )
@@ -1046,7 +1052,7 @@ function LeadershipOverview({ ctx, section, onViewAs }) {
   if (!coops) return <p className="muted-line">Loading overview…</p>
   if (sel) return <CoopDetail coop={sel} ctx={ctx} onClose={() => { setSel(null); reload() }} onChanged={reload} />
   const pending = coops.filter((c) => c.source !== 'SEKAT' && ['Filed', 'Under review', 'Returned'].includes(c.status))
-  const banner = isReviewer(ctx) ? <div className="review-banner"><strong>Review access &middot; read-only</strong><span>You can view the full Leadership workspace and export data, but cannot change records or open members' KYC documents. Access expires in {reviewDaysLeft()} day{reviewDaysLeft() === 1 ? '' : 's'} ({new Date(REVIEW_ACCESS_UNTIL).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}).</span></div> : null
+  const banner = isReviewer(ctx) ? <div className="review-banner"><strong>Review access &middot; read-only</strong><span>{DEMO_DATA ? 'This is sample data, not the live registry \u2014 explore freely, including documents. You can view and export everything, but cannot change records. ' : "You can view the full Leadership workspace and export data, but cannot change records or open members' KYC documents. "}Access expires in {reviewDaysLeft()} day{reviewDaysLeft() === 1 ? '' : 's'} ({new Date(REVIEW_ACCESS_UNTIL).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}).</span></div> : null
   return (
     <div className="ws">
       {banner}
@@ -1153,6 +1159,7 @@ async function createMember(rec, ctx) {
 }
 async function syncFromQoop(ctx, silent) {
   const live = await fetchLiveRecords('/api/qoop-sync')
+  if (!live && !DEMO_DATA) return 0 // live database: never ingest the sample feed
   const feed = live || QOOP_FEED
   let n = 0
   for (const r of feed) { const rec = qoopToMember(r); await kvSet('member:' + rec.memberId, rec); n++ }
@@ -2073,16 +2080,17 @@ async function ensureSeedData() {
   if (_seedInFlight) return _seedInFlight
   _seedInFlight = (async () => {
     let changed = false
-    // Registry sync is a heavy write burst: only re-run if it hasn't run today.
+    // Registry sync: on live, only ingest when a real API returns data (never the sample feed).
     try {
       const last = await kvGet('integration:sekat')
       const stale = !last || !last.lastSync || (Date.now() - new Date(last.lastSync).getTime()) > 86400000
       if (stale) {
-        await syncFromSekat({ name: 'SEKAT gateway', role: 'officer', email: 'sekat@system' }, true)
-        await syncFromQoop({ name: 'QooP gateway', role: 'officer', email: 'qoop@system' }, true)
-        changed = true
+        const a = await syncFromSekat({ name: 'SEKAT gateway', role: 'officer', email: 'sekat@system' }, true)
+        const b = await syncFromQoop({ name: 'QooP gateway', role: 'officer', email: 'qoop@system' }, true)
+        if (a || b) changed = true
       }
     } catch (e) { /* not configured */ }
+    if (!DEMO_DATA) return changed // live database: never seed fictional records
     try { if (await seedDemoData()) changed = true } catch (e) { /* best-effort, once */ }
     try { if (await ensureAccelerators()) changed = true } catch (e) { /* keep accelerator directory current */ }
     try { if (await ensureLoanDocsSeed()) changed = true } catch (e) { /* seed loan documents once */ }
@@ -2215,7 +2223,7 @@ function LoanKycPanel({ loan, ctx }) {
       <div className="kyc-check">{chk.items.map((it, i) => (<div className={cx('kyc-item', it.ok && 'ok')} key={i}><span className="kyc-mark">{it.ok ? '\u2713' : '\u25cb'}</span><span className="kyc-label">{it.label}{it.doc && it.ok ? (it.verified ? ' \u2014 verified' : ' \u2014 submitted, awaiting verification') : ''}</span></div>))}</div>
       <div className={cx('kyc-status', chk.qualifies ? 'ok' : 'pending')}>{chk.qualifies ? 'All requirements met \u2014 ready to proceed to assessment.' : chk.outstanding.length + ' item(s) outstanding' + (chk.unverifiedDocs.length ? ', ' + chk.unverifiedDocs.length + ' awaiting Sterling verification' : '') + '.'}</div>
       {isBorrower ? <div className="doc-guide"><h5>Documents to upload</h5><ul>{LASMECO_DOC_REQUIREMENTS.map((c) => { const has = docs.find((d) => d.category === c); return <li key={c} className={cx(has && 'done')}><span aria-hidden="true">{has ? '\u2713' : '\u2022'}</span> {c}{c.indexOf('asset finance') > -1 ? ' (only if applying for Asset Finance)' : ''}</li> })}</ul><p className="chart-note">Pick the matching type from the dropdown below, choose your file, and it uploads straight to your Accelerator and Sterling Bank for review.</p></div> : null}
-      {isReviewer(ctx) ? <p className="panel-note">Applicant documents are hidden in review access to protect members' personal data (NDPR). The qualification checklist above shows the review outcome without exposing the underlying KYC files.</p> : <DocumentsPanel coopId={loan.loanId} ctx={ctx} canVerify={canVerify} canUpload={isBorrower} categories={LASMECO_DOC_REQUIREMENTS} onChange={reloadDocs} />}
+      {isReviewer(ctx) && !DEMO_DATA ? <p className="panel-note">Applicant documents are hidden in review access because this database holds real member data (NDPR). The qualification checklist above shows the review outcome without exposing the underlying KYC files.</p> : <DocumentsPanel coopId={loan.loanId} ctx={ctx} canVerify={canVerify} canUpload={isBorrower} categories={LASMECO_DOC_REQUIREMENTS} onChange={reloadDocs} />}
       {!isBorrower && (role === 'accelerator' || role === 'sterling') && (chk.outstanding.length > 0) && <div className="panel-actions"><button className="btn btn-outline btn-sm" disabled={busy} onClick={requestFeedback}>Notify member of outstanding items</button></div>}
     </div>
   )
@@ -2971,6 +2979,7 @@ function Sidebar({ role, profile, sections, section, setSection, onSignOut, onHo
         </nav>
       </div>
       <div className="side-foot">
+        {DEMO_DATA && <div className="demo-badge" title={hasSupabase ? 'VITE_DEMO_DATA is true' : 'No database connected'}>Demo data</div>}
         <div className="side-user"><Avatar name={profile.name} photo={profile.photo} size={34} /><div className="side-user-text"><span className="side-name">{profile.name}</span><span className="side-role">{roleTitle(role)}</span></div></div>
         <button className="side-signout" onClick={onSignOut}>Sign out</button>
       </div>
@@ -3416,6 +3425,7 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .review-banner{display:flex;flex-direction:column;gap:4px;background:#fbf3e6;border:1px solid var(--gold-soft);border-left:4px solid var(--gold-soft);border-radius:10px;padding:13px 16px;margin-bottom:16px}
 .review-banner strong{font-size:12px;font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--gold-soft)}
 .review-banner span{font-size:13px;color:var(--sage);line-height:1.5}
+.demo-badge{align-self:flex-start;background:#fbf3e6;border:1px solid var(--gold-soft);color:var(--gold-soft);font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:5px}
 .toast-host{position:fixed;right:20px;bottom:20px;z-index:60;display:flex;flex-direction:column;gap:10px;max-width:min(380px,calc(100vw - 40px))}
 .toast{display:flex;align-items:flex-start;gap:10px;background:var(--ink-2);border:1px solid var(--line);border-left:4px solid var(--green);border-radius:10px;padding:13px 14px;box-shadow:0 8px 24px rgba(20,40,30,.16);cursor:pointer;animation:toastin .22s ease}
 .toast span{flex:1;font-size:13.5px;color:var(--cream);line-height:1.45}
