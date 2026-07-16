@@ -55,6 +55,7 @@ const ROLES = [
   { id: 'assetmatrix', icon: 'vault', title: 'Asset Matrix MFB', desc: 'Platform revenue escrow and distribution.', defaultTitle: 'Asset Matrix MFB' },
   { id: 'accelerator', icon: 'accelerator', title: 'Accelerator Programme', desc: 'Recruit, train and prepare MSMEs; recommend loan amounts.', defaultTitle: 'Accelerator Programme' },
   { id: 'leadership', icon: 'leadership', title: 'Leadership / Admin', desc: 'Real-time oversight of the cooperative economy.', defaultTitle: 'MCCTI Leadership' },
+  { id: 'reviewer', icon: 'leadership', title: 'Partner Reviewer', desc: 'Time-limited, read-only review of the Leadership workspace.', defaultTitle: 'Partner Reviewer' },
 ]
 const PERSONAS = [
   ['Cooperative societies', 'One registration, one record, one audit trail.'],
@@ -63,7 +64,14 @@ const PERSONAS = [
   ['Auditors', 'Returns examined, sign-off recorded.'],
   ['State leadership', 'The cooperative economy, in real time.'],
 ]
+/* Review access: time-limited, read-only Leadership view for partner review (QooP, SEKAT).
+   Change REVIEW_ACCESS_UNTIL to extend or revoke. Reviewers cannot open KYC documents or change any record. */
+const REVIEW_ACCESS_UNTIL = '2026-07-31T23:59:59+01:00'
+function reviewAccessExpired() { return Date.now() > new Date(REVIEW_ACCESS_UNTIL).getTime() }
+function reviewDaysLeft() { return Math.max(0, Math.ceil((new Date(REVIEW_ACCESS_UNTIL).getTime() - Date.now()) / 86400000)) }
 const OFFICIALS = {
+  'review.qoop@coopeco.ng': { name: 'QooP Review', title: 'Reviewer (QooP)', office: 'QooP', role: 'reviewer' },
+  'review.sekat@coopeco.ng': { name: 'SEKAT Review', title: 'Reviewer (SEKAT)', office: 'SEKAT', role: 'reviewer' },
   'commissioner@mccti.lg.gov.ng': { name: 'Honourable Commissioner', title: 'Honourable Commissioner', office: 'MCCTI', role: 'leadership' },
   'permsec@mccti.lg.gov.ng': { name: 'Permanent Secretary', title: 'Permanent Secretary', office: 'MCCTI', role: 'leadership' },
   'director@mccti.lg.gov.ng': { name: 'Director of Cooperatives', title: 'Director, Cooperative Services', office: 'Directorate of Cooperative Services', role: 'officer' },
@@ -108,6 +116,7 @@ const initials = (n) => (n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(
 const deriveName = (email) => ((email || '').split('@')[0] || 'Member').split(/[._-]+/).filter(Boolean).map((s) => s[0].toUpperCase() + s.slice(1)).join(' ')
 function greeting() { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' }
 const roleTitle = (id) => (ROLES.find((r) => r.id === id) || {}).title || id
+const isReviewer = (ctx) => !!ctx && ctx.role === 'reviewer'
 const fmtNaira = (n) => '₦' + Number(n || 0).toLocaleString('en-NG')
 const fmtDate = (iso) => { try { return new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) } catch { return iso } }
 function genTrackingId() { const yy = String(new Date().getFullYear()).slice(2); const n = String(Math.floor(Math.random() * 1000000)).padStart(6, '0'); return 'LAG-CS-' + yy + '-' + n }
@@ -159,6 +168,7 @@ async function loadSession() {
 }
 async function signUp(email, password, role, name) {
   email = email.trim().toLowerCase()
+  if (OFFICIALS[email] && OFFICIALS[email].role === 'reviewer' && reviewAccessExpired()) throw new Error('This review access expired on ' + new Date(REVIEW_ACCESS_UNTIL).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) + '. Contact MCCTI to extend it.')
   if (supa) {
     const { data, error } = await supa.auth.signUp({ email, password, options: { data: { role, name } } }); if (error) throw new Error(error.message)
     const user = data.user; const profile = buildProfile(email, role, name); if (user) await saveProfile(user.id, profile)
@@ -169,6 +179,7 @@ async function signUp(email, password, role, name) {
 }
 async function signIn(email, password, chosenRole) {
   email = email.trim().toLowerCase()
+  if (OFFICIALS[email] && OFFICIALS[email].role === 'reviewer' && reviewAccessExpired()) throw new Error('This review access expired on ' + new Date(REVIEW_ACCESS_UNTIL).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) + '. Contact MCCTI to extend it.')
   if (supa) {
     const { data, error } = await supa.auth.signInWithPassword({ email, password }); if (error) throw new Error(error.message)
     const user = data.user; const profile = await loadProfile(user.id, email, user.user_metadata)
@@ -671,7 +682,7 @@ function CoopDetail({ coop, ctx, onClose, onChanged }) {
       )}
 
       <CoopTierPanel coop={c} ctx={ctx} onChanged={onChanged} />
-      <div className="trail-box"><h4>Documents</h4><DocumentsPanel coopId={c.trackingId} ctx={ctx} canVerify={canExamine} canUpload={canExamine} /></div>
+      <div className="trail-box"><h4>Documents</h4>{isReviewer(ctx) ? <p className="panel-note">Documents are hidden in review access to protect personal and financial data (NDPR).</p> : <DocumentsPanel coopId={c.trackingId} ctx={ctx} canVerify={canExamine} canUpload={canExamine} />}</div>
       <div className="trail-box"><h4>Audit trail</h4><AuditTrail trackingId={c.trackingId} refreshKey={rk} /></div>
     </div>
   )
@@ -1035,8 +1046,10 @@ function LeadershipOverview({ ctx, section, onViewAs }) {
   if (!coops) return <p className="muted-line">Loading overview…</p>
   if (sel) return <CoopDetail coop={sel} ctx={ctx} onClose={() => { setSel(null); reload() }} onChanged={reload} />
   const pending = coops.filter((c) => c.source !== 'SEKAT' && ['Filed', 'Under review', 'Returned'].includes(c.status))
+  const banner = isReviewer(ctx) ? <div className="review-banner"><strong>Review access &middot; read-only</strong><span>You can view the full Leadership workspace and export data, but cannot change records or open members' KYC documents. Access expires in {reviewDaysLeft()} day{reviewDaysLeft() === 1 ? '' : 's'} ({new Date(REVIEW_ACCESS_UNTIL).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}).</span></div> : null
   return (
     <div className="ws">
+      {banner}
       {section === 'overview' && <ActionQueue />}
       {section === 'overview' && <PortfolioTrend />}
       {section === 'overview' && <AnalyticsDashboard />}
@@ -2096,7 +2109,7 @@ async function seedDemoLoans() {
   }
 }
 
-function LoanTable({ loans, onOpen }) {
+function LoanTable({ loans, onOpen, ctx }) {
   const [q, setQ] = useState(''), [st, setSt] = useState('All'), [sel, setSel] = useState(() => new Set()), [busy, setBusy] = useState(false)
   if (!loans.length) return <p className="muted-line">No applications to show.</p>
   const statuses = ['All', ...Array.from(new Set(loans.map((l) => l.status)))]
@@ -2114,7 +2127,7 @@ function LoanTable({ loans, onOpen }) {
         <select value={st} onChange={(e) => setSt(e.target.value)} aria-label="Filter by status">{statuses.map((s) => <option key={s}>{s}</option>)}</select>
         <span className="table-count">{filtered.length} of {loans.length}</span>
       </div>
-      {sel.size > 0 && <div className="bulk-bar"><span>{sel.size} selected</span><button className="btn btn-outline btn-sm" onClick={exportCsv}>Export CSV</button><button className="btn btn-outline btn-sm" disabled={busy} onClick={notifyChosen}>Notify members</button><button className="link-inline" onClick={() => setSel(new Set())}>Clear</button></div>}
+      {sel.size > 0 && <div className="bulk-bar"><span>{sel.size} selected</span><button className="btn btn-outline btn-sm" onClick={exportCsv}>Export CSV</button>{!isReviewer(ctx) && <button className="btn btn-outline btn-sm" disabled={busy} onClick={notifyChosen}>Notify members</button>}<button className="link-inline" onClick={() => setSel(new Set())}>Clear</button></div>}
       {filtered.length ? <div className="rtable-wrap"><table className="rtable">
         <thead><tr><th className="th-check"><input type="checkbox" checked={allOn} onChange={toggleAll} aria-label="Select all" /></th><th>Applicant</th><th>Loan ID</th><th>Cooperative</th><th>Sector</th><th>Requested</th><th>Status</th><th></th></tr></thead>
         <tbody>{filtered.map((l) => (<tr key={l.loanId} className={cx(sel.has(l.loanId) && 'row-sel')}><td className="th-check"><input type="checkbox" checked={sel.has(l.loanId)} onChange={() => toggle(l.loanId)} aria-label={'Select ' + l.memberName} /></td><td className="td-name">{l.memberName}</td><td className="mono">{l.loanId}</td><td>{l.coop}</td><td>{l.sector}</td><td className="mono">{fmtNaira(l.amountApproved || l.amountRecommended || l.amountRequested)}</td><td><StatusChip status={l.status} kind="loan" /></td><td><button className="btn-open" onClick={() => onOpen(l)}>Open</button></td></tr>))}</tbody>
@@ -2202,7 +2215,7 @@ function LoanKycPanel({ loan, ctx }) {
       <div className="kyc-check">{chk.items.map((it, i) => (<div className={cx('kyc-item', it.ok && 'ok')} key={i}><span className="kyc-mark">{it.ok ? '\u2713' : '\u25cb'}</span><span className="kyc-label">{it.label}{it.doc && it.ok ? (it.verified ? ' \u2014 verified' : ' \u2014 submitted, awaiting verification') : ''}</span></div>))}</div>
       <div className={cx('kyc-status', chk.qualifies ? 'ok' : 'pending')}>{chk.qualifies ? 'All requirements met \u2014 ready to proceed to assessment.' : chk.outstanding.length + ' item(s) outstanding' + (chk.unverifiedDocs.length ? ', ' + chk.unverifiedDocs.length + ' awaiting Sterling verification' : '') + '.'}</div>
       {isBorrower ? <div className="doc-guide"><h5>Documents to upload</h5><ul>{LASMECO_DOC_REQUIREMENTS.map((c) => { const has = docs.find((d) => d.category === c); return <li key={c} className={cx(has && 'done')}><span aria-hidden="true">{has ? '\u2713' : '\u2022'}</span> {c}{c.indexOf('asset finance') > -1 ? ' (only if applying for Asset Finance)' : ''}</li> })}</ul><p className="chart-note">Pick the matching type from the dropdown below, choose your file, and it uploads straight to your Accelerator and Sterling Bank for review.</p></div> : null}
-      <DocumentsPanel coopId={loan.loanId} ctx={ctx} canVerify={canVerify} canUpload={isBorrower} categories={LASMECO_DOC_REQUIREMENTS} onChange={reloadDocs} />
+      {isReviewer(ctx) ? <p className="panel-note">Applicant documents are hidden in review access to protect members' personal data (NDPR). The qualification checklist above shows the review outcome without exposing the underlying KYC files.</p> : <DocumentsPanel coopId={loan.loanId} ctx={ctx} canVerify={canVerify} canUpload={isBorrower} categories={LASMECO_DOC_REQUIREMENTS} onChange={reloadDocs} />}
       {!isBorrower && (role === 'accelerator' || role === 'sterling') && (chk.outstanding.length > 0) && <div className="panel-actions"><button className="btn btn-outline btn-sm" disabled={busy} onClick={requestFeedback}>Notify member of outstanding items</button></div>}
     </div>
   )
@@ -2231,7 +2244,7 @@ function RevenuePanel({ ctx }) {
           <p className="revenue-who">{pr.who}</p>
           <p className="revenue-body">{pr.body}</p>
           {accrued[pr.name] != null && <p className="revenue-accrued">Accrued to date: {fmtNaira(accrued[pr.name])}</p>}
-          <div className="revenue-pay"><input type="number" value={amounts[pr.name] != null ? amounts[pr.name] : (fixed[pr.name] || '')} onChange={(e) => setAmounts({ ...amounts, [pr.name]: e.target.value })} placeholder="Amount (₦)" /><button className="btn btn-gold btn-sm" disabled={busy === pr.name} onClick={pay(pr.name)}>{busy === pr.name ? 'Opening\u2026' : (PAYSTACK_PUBLIC ? 'Send pay link' : 'Collect (demo)')}</button></div>
+          {!isReviewer(ctx) && <div className="revenue-pay"><input type="number" value={amounts[pr.name] != null ? amounts[pr.name] : (fixed[pr.name] || '')} onChange={(e) => setAmounts({ ...amounts, [pr.name]: e.target.value })} placeholder="Amount (₦)" /><button className="btn btn-gold btn-sm" disabled={busy === pr.name} onClick={pay(pr.name)}>{busy === pr.name ? 'Opening\u2026' : (PAYSTACK_PUBLIC ? 'Send pay link' : 'Collect (demo)')}</button></div>}
         </div>))}</div>
       <p className="panel-note">Each stream can raise a payment on request through a secure Paystack checkout (test/demo until live keys are set). Percentage and custom streams also accrue automatically from platform activity; the amount field lets you raise a one-off charge or reconciliation for any stream.</p>
     </div>
@@ -2302,7 +2315,7 @@ function AcceleratorAppointments({ ctx }) {
   return (
     <div className="ws">
       <p className="muted-line">The Ministry (MCCTI) formally appoints accelerators before they operate, following the Consortium call. Appointed accelerators can be routed applications by members in their sectors.</p>
-      {list.length ? <div className="risk-list">{list.map((a) => { const appointed = a.status === 'Appointed'; return (<div className="risk-item" key={a.email}><span className={cx('chip', appointed ? 'st-approved' : 'st-review')}>{a.status || 'Pending'}</span><div className="risk-body"><strong>{a.name}</strong><p>{(a.sectors || []).join(', ') || 'No sectors set'} &middot; {a.email} &middot; {docs[a.email] || 0} document(s) submitted</p></div><div className="doc-actions">{!appointed ? <button className="link-inline" disabled={busy === a.email} onClick={setStatus(a, 'Appointed')}>Appoint</button> : <button className="link-inline danger" disabled={busy === a.email} onClick={setStatus(a, 'Suspended')}>Suspend</button>}</div></div>) })}</div> : <p className="muted-line">No accelerators have registered yet.</p>}
+      {list.length ? <div className="risk-list">{list.map((a) => { const appointed = a.status === 'Appointed'; return (<div className="risk-item" key={a.email}><span className={cx('chip', appointed ? 'st-approved' : 'st-review')}>{a.status || 'Pending'}</span><div className="risk-body"><strong>{a.name}</strong><p>{(a.sectors || []).join(', ') || 'No sectors set'} &middot; {a.email} &middot; {docs[a.email] || 0} document(s) submitted</p></div>{!isReviewer(ctx) && <div className="doc-actions">{!appointed ? <button className="link-inline" disabled={busy === a.email} onClick={setStatus(a, 'Appointed')}>Appoint</button> : <button className="link-inline danger" disabled={busy === a.email} onClick={setStatus(a, 'Suspended')}>Suspend</button>}</div>}</div>) })}</div> : <p className="muted-line">No accelerators have registered yet.</p>}
       <p className="panel-note">RAC vetting before appointment: CAC registration, valid permits, 3+ years in enterprise development, sector track record, audited financials, and CVs of key staff. Required documents: {ACCEL_DOC_REQUIREMENTS.slice(0, 4).join(', ')}…</p>
     </div>
   )
@@ -2521,7 +2534,7 @@ function LasmecoOverview({ ctx }) {
     <div className="ws">
       <div className="statgrid"><div className="stat"><span className="stat-fig">{loans.length}</span><span className="stat-lab">Applications</span></div><div className="stat"><span className="stat-fig">{disbursed.length}</span><span className="stat-lab">Disbursed</span></div><div className="stat"><span className="stat-fig">{fmtNaira(disbursedValue)}</span><span className="stat-lab">Disbursed value</span></div><div className="stat"><span className="stat-fig">{loans.filter((l) => !['Disbursed', 'Repaying', 'Completed', 'Declined'].includes(l.status)).length}</span><span className="stat-lab">In pipeline</span></div></div>
       <div className="band-dist">{bySector.map(([s, n]) => (<div className="bd" key={s}><span className="src-badge src-mccti">{s}</span><span className="bd-n">{n}</span></div>))}</div>
-      <LoanTable loans={loans} onOpen={setSel} />
+      <LoanTable loans={loans} onOpen={setSel} ctx={ctx} />
     </div>
   )
 }
@@ -2929,9 +2942,10 @@ const ROLE_NAV = {
   sterling: [['overview', 'Overview'], ['queue', 'My queue'], ['all', 'All loans'], ['monitoring', 'Portfolio monitoring']],
   boi: [['overview', 'Overview'], ['queue', 'My queue'], ['all', 'All loans'], ['monitoring', 'Portfolio monitoring']],
   assetmatrix: [['overview', 'Overview'], ['distribution', 'Distribution']],
+  reviewer: [['overview', 'Overview'], ['applications', 'Applications'], ['accelerators', 'Accelerators'], ['members', 'Members'], ['lasmeco', 'LASMECO'], ['monitoring', 'Portfolio monitoring'], ['sla', 'Service levels'], ['risk', 'Risk & fraud'], ['revenue', 'Revenue & billing'], ['reports', 'Reports & exports']],
   leadership: [['overview', 'Overview'], ['applications', 'Applications'], ['accelerators', 'Accelerators'], ['members', 'Members'], ['lasmeco', 'LASMECO'], ['monitoring', 'Portfolio monitoring'], ['sla', 'Service levels'], ['risk', 'Risk & fraud'], ['revenue', 'Revenue & billing'], ['reports', 'Reports & exports'], ['retention', 'Data retention'], ['integrations', 'Integrations']],
 }
-const WORKSPACES = { society: SocietyWorkspace, member: MemberWorkspace, officer: OfficerWorkspace, auditor: AuditorWorkspace, sterling: SterlingWorkspace, boi: BoiWorkspace, assetmatrix: AssetMatrixWorkspace, accelerator: AcceleratorWorkspace, leadership: LeadershipOverview }
+const WORKSPACES = { society: SocietyWorkspace, member: MemberWorkspace, officer: OfficerWorkspace, auditor: AuditorWorkspace, sterling: SterlingWorkspace, boi: BoiWorkspace, assetmatrix: AssetMatrixWorkspace, accelerator: AcceleratorWorkspace, leadership: LeadershipOverview, reviewer: LeadershipOverview }
 function SideIcon({ name }) {
   const p = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round' }
   const paths = {
@@ -3077,6 +3091,8 @@ export default function App() {
   const doSignOut = async () => { await signOutNow(); setSession(null); setView('landing') }
   useEffect(() => {
     if (!session) return
+    const p = session.profile || {}
+    if (p.role === 'reviewer' && reviewAccessExpired()) { toast('Review access has expired. Contact MCCTI to extend it.', 'error'); doSignOut(); return }
     const SESSION_MS = 30 * 60 * 1000
     let timer, last = 0
     const arm = () => { clearTimeout(timer); timer = setTimeout(() => { toast('Signed out after 30 minutes of inactivity.'); doSignOut() }, SESSION_MS) }
@@ -3397,6 +3413,9 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .aq-item{display:flex;align-items:baseline;gap:8px;min-width:0}
 .aq-n{font-family:var(--serif);font-size:26px;font-weight:600;color:var(--cream);line-height:1}
 .aq-lab{font-size:13px;color:var(--sage)}
+.review-banner{display:flex;flex-direction:column;gap:4px;background:#fbf3e6;border:1px solid var(--gold-soft);border-left:4px solid var(--gold-soft);border-radius:10px;padding:13px 16px;margin-bottom:16px}
+.review-banner strong{font-size:12px;font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--gold-soft)}
+.review-banner span{font-size:13px;color:var(--sage);line-height:1.5}
 .toast-host{position:fixed;right:20px;bottom:20px;z-index:60;display:flex;flex-direction:column;gap:10px;max-width:min(380px,calc(100vw - 40px))}
 .toast{display:flex;align-items:flex-start;gap:10px;background:var(--ink-2);border:1px solid var(--line);border-left:4px solid var(--green);border-radius:10px;padding:13px 14px;box-shadow:0 8px 24px rgba(20,40,30,.16);cursor:pointer;animation:toastin .22s ease}
 .toast span{flex:1;font-size:13.5px;color:var(--cream);line-height:1.45}
