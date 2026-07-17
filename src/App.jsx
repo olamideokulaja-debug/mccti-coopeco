@@ -1825,20 +1825,36 @@ async function rebuildDemoData() {
   for (const k of SEED_MARKERS) { try { await kvDelete(k) } catch (e) { /* continue */ } }
   return ensureSeedData()
 }
+async function removeDemoData() {
+  try { await clearPriorSeed() } catch (e) { /* best-effort */ }
+  for (const k of SEED_MARKERS) { try { await kvDelete(k) } catch (e) { /* continue */ } }
+}
 function DemoDataPanel({ ctx }) {
   const [busy, setBusy] = useState(false)
-  if (!DEMO_DATA || isReviewer(ctx)) return null
-  const run = async () => {
-    if (!(await confirmDialog('Rebuild the sample data? Existing demo records are replaced with a fresh, corrected set. Real records registered on the platform are not touched.', { confirmLabel: 'Rebuild' }))) return
+  if (isReviewer(ctx)) return null
+  const rebuild = async () => {
+    if (!(await confirmDialog('Rebuild the sample data? Existing demo records are replaced with a fresh, corrected set. Records created by real users are not touched.', { confirmLabel: 'Rebuild' }))) return
     setBusy(true)
     try { await rebuildDemoData(); toast('Sample data rebuilt. Reloading…', 'success'); setTimeout(() => window.location.reload(), 900) } catch (e) { toast('Rebuild failed: ' + (e.message || 'unknown error'), 'error'); setBusy(false) }
   }
+  const remove = async () => {
+    if (!(await confirmDialog('Delete every sample record from this database? Cooperatives, members and loans created by real users are kept. This cannot be undone.', { danger: true, confirmLabel: 'Delete sample data' }))) return
+    setBusy(true)
+    try { await removeDemoData(); toast('Sample data removed. Reloading…', 'success'); setTimeout(() => window.location.reload(), 900) } catch (e) { toast('Removal failed: ' + (e.message || 'unknown error'), 'error'); setBusy(false) }
+  }
   return (
     <div><h3 className="ws-h">Sample data</h3>
-      <div className="returns-box"><h4>Rebuild sample data</h4>
-        <p className="muted-line">Demo records are seeded once and then left alone. If this database was seeded by an older build, some sample records may be missing or incomplete — for example members without a LASMECO sector, which leaves the Health, Tourism and Digital Economy value chains empty. Rebuilding replaces the demo set with a corrected one.</p>
-        <div className="panel-actions"><button className="btn btn-outline btn-sm" disabled={busy} onClick={run}>{busy ? 'Rebuilding…' : 'Rebuild sample data'}</button></div>
-        <p className="panel-note">Only available while sample data is switched on (VITE_DEMO_DATA). It does not delete cooperatives, members or loans created by real users.</p>
+      <div className="returns-box">
+        <div className={cx('kyc-status', DEMO_DATA ? 'pending' : 'ok')}>Sample data is {DEMO_DATA ? 'ON' : 'OFF'} · {hasSupabase ? 'connected to your database' : 'demo mode, no database connected'}{hasSupabase ? (DEMO_DATA ? ' · VITE_DEMO_DATA=true' : ' · VITE_DEMO_DATA is not set') : ''}</div>
+        {DEMO_DATA ? (<>
+          <p className="muted-line">Demo records are seeded once and then left alone. If this database was seeded by an older build, some sample records may be incomplete — for example members with no LASMECO sector, which leaves the Health, Tourism and Digital Economy value chains empty. Rebuilding replaces the demo set with a corrected one.</p>
+          <div className="panel-actions"><button className="btn btn-outline btn-sm" disabled={busy} onClick={rebuild}>{busy ? 'Working…' : 'Rebuild sample data'}</button></div>
+        </>) : (<>
+          <p className="muted-line">The platform will not create any demo records. Note that demo records already saved in this database are <strong>not</strong> removed by switching sample data off — they stay until deleted.</p>
+          <p className="muted-line">To refresh or correct the sample set (for example to populate the Health value chain), add <strong>VITE_DEMO_DATA</strong> = <strong>true</strong> in Vercel → Settings → Environment Variables, redeploy, then return here and use “Rebuild sample data”.</p>
+          <div className="panel-actions"><button className="btn btn-outline btn-sm" disabled={busy} onClick={remove}>{busy ? 'Working…' : 'Remove sample data from this database'}</button></div>
+        </>)}
+        <p className="panel-note">Neither action touches cooperatives, members or loans created by real users on the platform.</p>
       </div>
     </div>
   )
