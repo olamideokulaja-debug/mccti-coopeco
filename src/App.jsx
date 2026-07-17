@@ -1257,7 +1257,11 @@ function ChainsPanel({ ctx }) {
   const [chains, setChains] = useState(null), [coops, setCoops] = useState([]), [members, setMembers] = useState([]), [loans, setLoans] = useState([])
   const [sel, setSel] = useState(null), [creating, setCreating] = useState(false), [f, setF] = useState({ name: '', sector: LASMECO_SECTORS[0] }), [busy, setBusy] = useState(false)
   const [accelSectors, setAccelSectors] = useState([])
-  const reload = useCallback(async () => { const [a, b, c, d] = await Promise.all([listChains(), listCoops(), listMembers(), listLoans()]); setChains(a); setCoops(b); setMembers(c); setLoans(d) }, [])
+  const reload = useCallback(async () => {
+    const [a, b, c, d] = await Promise.all([listChains(), listCoops(), listMembers(), listLoans()])
+    setChains(a); setCoops(b); setMembers(c); setLoans(d)
+    if (['leadership', 'officer', 'accelerator'].indexOf(ctx.role) > -1) { try { await refreshChainStats(a, b, c, d) } catch (e) { /* not fatal */ } }
+  }, [ctx.role])
   useEffect(() => { reload() }, [reload])
   useEffect(() => { if (ctx.role === 'accelerator') { kvGet('accelerator:' + ctx.email).then((a) => setAccelSectors((a && a.sectors) || [])).catch(() => { }) } }, [ctx.role, ctx.email])
   const ro = isReviewer(ctx)
@@ -1682,6 +1686,39 @@ function LoanCalculator() {
   )
 }
 function verifyStanding(s) { return s === 'Approved' ? 'Registered \u2014 approved' : ['Filed', 'Under review'].includes(s) ? 'Registration under review' : s === 'Returned' ? 'Returned for correction' : (s || '\u2014') }
+/* Public directory. Reads ONLY chain: records, which hold no personal or financial detail.
+   Aggregate counts are denormalised onto the chain by refreshChainStats() when staff view
+   the chains, so the public page never touches the cooperative or member tables. */
+async function refreshChainStats(chains, coops, members, loans) {
+  for (const c of chains) {
+    const m = chainMetrics(c, coops, members, loans)
+    const next = { coops: m.coops.length, members: m.members.length, jobs: m.jobs, turnover: m.turnover }
+    const prev = c.publicStats || {}
+    if (prev.coops !== next.coops || prev.members !== next.members || prev.jobs !== next.jobs || prev.turnover !== next.turnover) {
+      try { await kvSet('chain:' + c.chainId, { ...c, publicStats: next }) } catch (e) { /* not fatal */ }
+    }
+  }
+}
+function PublicChains() {
+  const [chains, setChains] = useState(null)
+  useEffect(() => { listChains().then((cs) => setChains(cs.filter((c) => c.status === 'Active'))).catch(() => setChains([])) }, [])
+  if (!chains || !chains.length) return null
+  return (
+    <section className="pub-chains">
+      <h2 className="pub-chains-h">Value chain cooperatives</h2>
+      <p className="pub-chains-sub">Registered cooperatives are organised into value chains so members can trade, buy inputs together and supply anchor buyers. If you are a buyer, supplier or investor looking to work with a chain, contact the Ministry.</p>
+      <div className="chain-grid">{chains.map((c) => (
+        <div className="chain-card static" key={c.chainId}>
+          <div className="chain-card-top"><h4>{c.name}</h4></div>
+          <p className="chain-card-sec">{c.sector}</p>
+          <p className="pub-stages">{(c.stages || []).join(' → ')}</p>
+          {c.publicStats && c.publicStats.coops ? <div className="chain-card-figs"><span><strong>{c.publicStats.coops}</strong> cooperatives</span><span><strong>{Number(c.publicStats.members || 0).toLocaleString('en-NG')}</strong> members</span><span><strong>{Number(c.publicStats.jobs || 0).toLocaleString('en-NG')}</strong> jobs</span></div> : <p className="muted-line sm">Open to cooperatives in this sector.</p>}
+          {c.anchor ? <p className="chain-card-turn">Anchor buyer: {c.anchor}</p> : null}
+        </div>))}</div>
+      <p className="panel-note">Chain listings show scale only. Member names, cooperative finances and contact details are not published.</p>
+    </section>
+  )
+}
 function PublicVerify({ onBack }) {
   const [q, setQ] = useState(''), [results, setResults] = useState(null), [busy, setBusy] = useState(false)
   const search = async () => {
@@ -1705,8 +1742,9 @@ function PublicVerify({ onBack }) {
             <div className="verify-facts"><div><span>Standing</span><strong>{verifyStanding(c.status)}</strong></div><div><span>CAP15 compliance</span><strong>{c.cap15 || '\u2014'}</strong></div><div><span>Register source</span><strong>{c.source === 'SEKAT' ? 'SEKAT legacy register' : 'MCCTI register'}</strong></div></div>
           </div>))}</div>
       ) : <div className="verify-empty">No cooperative found for “{q}”. Check the number or name, or contact the Ministry to confirm.</div>)}
-      <button className="link-back" onClick={onBack}>&larr; Back to home</button>
       <p className="panel-note">This public check shows registration standing only. It does not disclose members, bank or financial details. It is not a substitute for official written confirmation from the Ministry.</p>
+      <PublicChains />
+      <button className="link-back" onClick={onBack}>&larr; Back to home</button>
     </div></main>
   )
 }
@@ -3771,6 +3809,12 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .chain-node strong{display:block;font-size:13px;color:var(--cream)}
 .chain-node span{font-size:11.5px;color:var(--sage-dim)}
 .chain-node.firm strong{color:var(--gold-soft)}
+.chain-card.static{cursor:default}
+.chain-card.static:hover{border-color:var(--line-soft);transform:none}
+.pub-chains{margin:44px 0 10px;text-align:left}
+.pub-chains-h{font-family:var(--serif);font-size:24px;color:var(--cream);margin:0 0 8px}
+.pub-chains-sub{font-size:14px;color:var(--sage);line-height:1.6;margin:0 0 6px;max-width:70ch}
+.pub-stages{font-size:11.5px;color:var(--sage-dim);line-height:1.5;margin:4px 0}
 .node-src{display:inline-block;margin-top:3px;font-family:var(--mono);font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--sage-dim);background:var(--line-soft);border-radius:4px;padding:2px 6px}
 .node-src.accel{background:var(--green-panel);color:var(--green)}
 .node-acts{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0}
@@ -3853,7 +3897,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .side-signout{background:none;border:1px solid var(--line);border-radius:6px;padding:9px 12px;color:var(--sage);font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:border-color .18s ease,color .18s ease}
 .side-signout:hover{border-color:var(--err);color:var(--err)}
 .shell-main{flex:1;min-width:0;padding:44px 40px 80px}
-.shell-main .dash-inner{margin:0;max-width:1120px}
+.shell-main .dash-inner{margin:0;max-width:1560px}
 @media(max-width:860px){.shell{flex-direction:column}.side{width:100%;height:auto;position:sticky;top:0;z-index:30;flex-direction:row;align-items:center;gap:8px;padding:10px 14px;border-right:none;border-bottom:1px solid var(--line-soft);overflow:visible}.side-brand{display:none}.side-scroll{flex-direction:row;flex:1;min-width:0;overflow-x:auto;overflow-y:visible;gap:6px;align-items:center}.side-nav{flex-direction:row;flex:0 0 auto;gap:4px}.side-sep{display:none}.side-item{white-space:nowrap;padding:9px 12px}.side-foot{flex-direction:row;border-top:none;padding-top:0;margin-top:0;gap:8px;flex-shrink:0}.side-user{display:none}.shell-main{padding:26px 18px 70px}}
 .dash-hero{display:flex;align-items:center;gap:20px;padding-bottom:30px;margin-bottom:30px;border-bottom:1px solid var(--line-soft)}
 .dash-hero-text{flex:1;min-width:0}.dash-hero-text .eyebrow{margin-bottom:8px}.dash-name{font-size:clamp(26px,3.4vw,38px);line-height:1.1}.dash-meta{font-size:14px;color:var(--sage-dim);margin-top:6px}
@@ -3866,6 +3910,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .dash-foot{margin-top:26px;font-size:13px;color:var(--sage-dim);line-height:1.6}
 /* Stage 3 */
 .ws{display:flex;flex-direction:column;gap:24px}.ws-h{font-size:18px}
+.ws > .muted-line,.ws > .panel-note,.returns-box > .muted-line,.returns-box > .panel-note,.trail-box > .panel-note{max-width:95ch}
 .muted-line{color:var(--sage-dim);font-size:14px;padding:8px 0}
 .statgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
 .stat{background:var(--ink-2);border:1px solid var(--line-soft);border-radius:6px;padding:20px 18px;display:flex;flex-direction:column;gap:8px;min-width:0}

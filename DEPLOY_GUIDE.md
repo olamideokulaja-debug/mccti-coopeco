@@ -596,8 +596,22 @@ a price; the poster is notified and can close the opportunity. Reviewers see it 
 Cooperatives and members now have their own "Value chains" tab showing only the chains
 their cooperative belongs to.
 
-Still to build: public chain directory (chain listing visible without sign-in) and the
-chain registration fee in Revenue & billing.
+### Public chain directory (built)
+The public "Verify a cooperative" page now also lists Active value chains: name, sector,
+stages, anchor buyer and scale (cooperatives / members / jobs). No member names, no
+cooperative finances, no contacts.
+
+It reads ONLY chain: records. Aggregate counts are denormalised onto each chain by staff
+views, so the public page never touches the cooperative or member tables. supabase_setup.sql
+grants anonymous read on chain: only - to switch the directory off, drop the
+"chains public read" policy; signed-in pages keep working.
+
+Still to build: the chain registration fee in Revenue & billing (amounts not yet confirmed).
+
+## Layout width
+Dashboard content was capped at 1120px, which left roughly 230px unused on wide admin
+monitors. The cap is now 1560px, so tables, KPI rows and chart grids fill the screen.
+Prose is capped at 95 characters per line so it stays readable at that width.
 
 ## Environment variables
 See `.env.example`. For local testing copy it to `.env.local` and fill it in.

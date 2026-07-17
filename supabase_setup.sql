@@ -83,6 +83,18 @@ create policy "chains update" on kv for update to authenticated
 create policy "chains delete" on kv for delete to authenticated
   using (key like 'chain:%' or key like 'opp:%' or key like 'oppr:%' or key like 'snap:%' or key like 'snapsweep:%');
 
+-- 7) Public value chain directory (anonymous read) -----------------------------
+-- The public directory lists Active value chains to visitors who are not signed in.
+-- Chain records hold no personal or financial data: name, sector, stages, anchor,
+-- coordinator and aggregate counts only. Cooperative and member tables stay private.
+drop policy if exists "chains public read" on kv;
+create policy "chains public read" on kv for select to anon
+  using (key like 'chain:%');
+
+-- If you do NOT want a public chain directory, drop the policy above:
+--   drop policy if exists "chains public read" on kv;
+-- The signed-in Value chains pages keep working either way.
+
 -- Done. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel, redeploy,
 -- and the app will use this database instead of demo mode.
 
