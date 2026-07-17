@@ -1818,8 +1818,33 @@ function BulkImport({ ctx, onDone }) {
     </div>
   )
 }
+const SEED_MARKERS = ['integration:seed-v9', 'integration:accel-v8', 'integration:loandocs-v2', 'integration:snapshots-v1']
+/* Wipes the seed markers and re-runs seeding, so corrected sample data lands on a database
+   that was seeded by an older build. Only offered while DEMO_DATA is on. */
+async function rebuildDemoData() {
+  for (const k of SEED_MARKERS) { try { await kvDelete(k) } catch (e) { /* continue */ } }
+  return ensureSeedData()
+}
+function DemoDataPanel({ ctx }) {
+  const [busy, setBusy] = useState(false)
+  if (!DEMO_DATA || isReviewer(ctx)) return null
+  const run = async () => {
+    if (!(await confirmDialog('Rebuild the sample data? Existing demo records are replaced with a fresh, corrected set. Real records registered on the platform are not touched.', { confirmLabel: 'Rebuild' }))) return
+    setBusy(true)
+    try { await rebuildDemoData(); toast('Sample data rebuilt. Reloading…', 'success'); setTimeout(() => window.location.reload(), 900) } catch (e) { toast('Rebuild failed: ' + (e.message || 'unknown error'), 'error'); setBusy(false) }
+  }
+  return (
+    <div><h3 className="ws-h">Sample data</h3>
+      <div className="returns-box"><h4>Rebuild sample data</h4>
+        <p className="muted-line">Demo records are seeded once and then left alone. If this database was seeded by an older build, some sample records may be missing or incomplete — for example members without a LASMECO sector, which leaves the Health, Tourism and Digital Economy value chains empty. Rebuilding replaces the demo set with a corrected one.</p>
+        <div className="panel-actions"><button className="btn btn-outline btn-sm" disabled={busy} onClick={run}>{busy ? 'Rebuilding…' : 'Rebuild sample data'}</button></div>
+        <p className="panel-note">Only available while sample data is switched on (VITE_DEMO_DATA). It does not delete cooperatives, members or loans created by real users.</p>
+      </div>
+    </div>
+  )
+}
 function IntegrationsPanel({ ctx, onSynced }) {
-  return (<div className="ws"><p className="muted-line">SEKAT and QooP sync automatically each time the platform loads (one-way, read-only). You can also trigger a manual re-sync below.</p><div><h3 className="ws-h">SEKAT integration &middot; registry</h3><SekatPanel ctx={ctx} onSynced={onSynced} /></div><div><h3 className="ws-h">QooP integration &middot; member analytics</h3><QoopPanel ctx={ctx} onSynced={onSynced} /></div><div><h3 className="ws-h">Bulk import &middot; migrate from CSV</h3><BulkImport ctx={ctx} onDone={onSynced} /></div></div>)
+  return (<div className="ws"><p className="muted-line">SEKAT and QooP sync automatically each time the platform loads (one-way, read-only). You can also trigger a manual re-sync below.</p><div><h3 className="ws-h">SEKAT integration &middot; registry</h3><SekatPanel ctx={ctx} onSynced={onSynced} /></div><div><h3 className="ws-h">QooP integration &middot; member analytics</h3><QoopPanel ctx={ctx} onSynced={onSynced} /></div><div><h3 className="ws-h">Bulk import &middot; migrate from CSV</h3><BulkImport ctx={ctx} onDone={onSynced} /></div><DemoDataPanel ctx={ctx} /></div>)
 }
 function CreditScoreCard({ m }) {
   const r = scoreMember(m)
