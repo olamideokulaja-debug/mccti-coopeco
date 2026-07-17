@@ -66,6 +66,23 @@ create policy "loans write"  on kv for insert to authenticated
 create policy "loans update" on kv for update to authenticated
   using (key like 'loan:%' or key like 'escrow:%' or key like 'wallet:%' or key like 'ticket:%' or key like 'notif:%' or key like 'doc:%');
 
+-- 6) Value chains, opportunities and snapshots (chain:, opp:, oppr:, snap:) ----
+-- These prefixes were added with the Value Chain Cooperative feature. Without them the
+-- database silently rejects every write and the app shows "No value chains yet".
+drop policy if exists "chains read"   on kv;
+drop policy if exists "chains write"  on kv;
+drop policy if exists "chains update" on kv;
+drop policy if exists "chains delete" on kv;
+
+create policy "chains read"   on kv for select to authenticated
+  using (key like 'chain:%' or key like 'opp:%' or key like 'oppr:%' or key like 'snap:%' or key like 'snapsweep:%');
+create policy "chains write"  on kv for insert to authenticated
+  with check (key like 'chain:%' or key like 'opp:%' or key like 'oppr:%' or key like 'snap:%' or key like 'snapsweep:%');
+create policy "chains update" on kv for update to authenticated
+  using (key like 'chain:%' or key like 'opp:%' or key like 'oppr:%' or key like 'snap:%' or key like 'snapsweep:%');
+create policy "chains delete" on kv for delete to authenticated
+  using (key like 'chain:%' or key like 'opp:%' or key like 'oppr:%' or key like 'snap:%' or key like 'snapsweep:%');
+
 -- Done. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel, redeploy,
 -- and the app will use this database instead of demo mode.
 

@@ -212,10 +212,20 @@ async function kvGet(key) {
   if (supa) { const { data } = await supa.from('kv').select('value').eq('key', key).maybeSingle(); return data?.value ?? null }
   return MEM.read()[key] ?? null
 }
+let _kvBlocked = null // last write the database refused (usually a missing RLS policy for a key prefix)
 async function kvSet(key, value, uid) {
-  if (supa) { await supa.from('kv').upsert({ key, value, user_id: uid ?? null, updated_at: new Date().toISOString() }); return }
+  if (supa) {
+    const { error } = await supa.from('kv').upsert({ key, value, user_id: uid ?? null, updated_at: new Date().toISOString() })
+    if (error) {
+      _kvBlocked = { key, message: error.message, at: new Date().toISOString() }
+      console.warn('CoopEco: the database refused to save "' + key + '" — ' + error.message + '. Re-run supabase_setup.sql; the key prefix may have no RLS policy.')
+      throw new Error(error.message)
+    }
+    return
+  }
   const o = MEM.read(); o[key] = value; MEM.write(o)
 }
+function kvBlocked() { return _kvBlocked }
 async function kvList(prefix) {
   if (supa) { const { data } = await supa.from('kv').select('value').like('key', prefix + '%'); return (data || []).map((r) => r.value) }
   const o = MEM.read(); return Object.keys(o).filter((k) => k.startsWith(prefix)).map((k) => o[k])
@@ -1283,7 +1293,10 @@ function ChainsPanel({ ctx }) {
           <p className="chain-card-sec">{c.sector}</p>
           <div className="chain-card-figs"><span><strong>{m.coops.length}</strong> coops</span><span><strong>{m.members.length}</strong> members</span><span><strong>{m.jobs.toLocaleString('en-NG')}</strong> jobs</span></div>
           <p className="chain-card-turn">{fmtNaira(m.turnover)} combined turnover</p>
-        </button>) })}</div> : <div className="empty"><span className="empty-mark">&#9670;</span><h3>No value chains yet</h3><p>{canCreate ? 'Create one to start bundling cooperatives along a value chain.' : 'MCCTI has not set up any value chains yet.'}</p></div>}
+        </button>) })}</div> : (<>
+          <div className="empty"><span className="empty-mark">&#9670;</span><h3>No value chains yet</h3><p>{ctx.coopName ? 'Your cooperative has not been mapped to a value chain yet. It joins automatically once it registers in a chain sector, or applies for LASMECO through an accelerator.' : (canCreate ? 'Chains are normally created automatically, one per LASMECO sector.' : 'MCCTI has not set up any value chains yet.')}</p></div>
+          {hasSupabase && !ctx.coopName && <div className="kyc-status pending" style={{ marginTop: '4px' }}>Chains should appear here automatically. If this list stays empty, the database is likely refusing to save them: open Supabase → SQL Editor and re-run <strong>supabase_setup.sql</strong> (it adds permission for the chain:, opp: and snap: keys), then reload.{kvBlocked() ? ' Last error: ' + kvBlocked().message : ''}</div>}
+        </>)}
     </div>
   )
 }
