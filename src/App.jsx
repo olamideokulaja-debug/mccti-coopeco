@@ -94,6 +94,80 @@ const ROLE_CAPS = {
 const AREA_OFFICES = ['Alausa (HQ)', 'Ikeja', 'Mushin', 'Ikorodu', 'Epe', 'Badagry', 'Ibeju-Lekki', 'Lagos Island', 'Surulere', 'Ojo', 'Agege', 'Oshodi', 'Kosofe', 'Alimosho', 'Eti-Osa', 'Somolu', 'Apapa', 'Amuwo-Odofin', 'Ifako-Ijaiye', 'Lagos Mainland', 'Ajeromi']
 const SECTORS = ['Trade', 'Thrift & Credit', 'Artisan', 'Agriculture', 'Transport', 'Manufacturing', 'Processing', 'Services', 'Multipurpose']
 const LASMECO_SECTORS = ['Agriculture', 'Manufacturing', 'Health', 'Tourism', 'Service Delivery', 'Circular Economy', 'Digital Economy']
+/* ---- Value Chain Cooperatives -------------------------------------------
+   A Value Chain Cooperative bundles primary cooperatives, their MSME members and
+   non-cooperative firms (e.g. an anchor buyer) into one coordinated commercial unit,
+   organised by stage. Cooperatives are assigned AUTOMATICALLY from their sector;
+   MCCTI can add or remove any cooperative by hand.
+   Designed to be upgradeable to a registered secondary cooperative under CAP 15. */
+const CHAIN_STAGE_TEMPLATES = {
+  'Agriculture': ['Inputs & Supply', 'Production', 'Aggregation', 'Processing', 'Logistics & Storage', 'Distribution & Market'],
+  'Manufacturing': ['Raw Materials', 'Production', 'Packaging & Quality', 'Logistics & Storage', 'Distribution & Market', 'Support Services'],
+  'Health': ['Supply & Equipment', 'Care & Service Delivery', 'Pharmacy & Distribution', 'Logistics & Storage', 'Support Services'],
+  'Tourism': ['Accommodation', 'Transport & Mobility', 'Attractions & Experiences', 'Food & Hospitality', 'Marketing & Booking'],
+  'Service Delivery': ['Inputs & Tools', 'Service Provision', 'Logistics & Storage', 'Distribution & Market', 'Support Services'],
+  'Circular Economy': ['Collection', 'Sorting & Aggregation', 'Recycling & Processing', 'Remanufacturing', 'Distribution & Market'],
+  'Digital Economy': ['Infrastructure', 'Development & Production', 'Platforms & Services', 'Distribution & Market', 'Support Services'],
+}
+// Which value chain a cooperative's own sector belongs to. null = MCCTI assigns by hand.
+const COOP_SECTOR_TO_CHAIN = { 'Agriculture': 'Agriculture', 'Processing': 'Manufacturing', 'Manufacturing': 'Manufacturing', 'Artisan': 'Manufacturing', 'Trade': 'Service Delivery', 'Transport': 'Service Delivery', 'Services': 'Service Delivery', 'Thrift & Credit': null, 'Multipurpose': null }
+// Where in the chain a cooperative most likely sits, matched against that chain's stages.
+const COOP_SECTOR_TO_STAGE = { 'Agriculture': 'Production', 'Manufacturing': 'Production', 'Artisan': 'Production', 'Processing': 'Processing', 'Transport': 'Logistics', 'Trade': 'Distribution', 'Services': 'Support', 'Thrift & Credit': 'Support', 'Multipurpose': 'Distribution' }
+const CHAIN_FEES = { registration: 50000, annual: 25000 } // PLACEHOLDER - confirm with MCCTI before go-live
+const CHAIN_STATUSES = ['Proposed', 'Active', 'Suspended']
+function chainSectorForCoop(coop) { return COOP_SECTOR_TO_CHAIN[coop && coop.sector] || null }
+function inferChainStage(coop, chain) {
+  const stages = (chain && chain.stages) || []
+  if (chainSectorForCoop(coop) === chain.sector) { // its own trade tells us where it sits
+    const want = COOP_SECTOR_TO_STAGE[coop && coop.sector] || 'Production'
+    const hit = stages.find((s) => s.toLowerCase().indexOf(want.toLowerCase()) > -1)
+    if (hit) return hit
+  }
+  return stages[1] || stages[0] || '' // routed in via its accelerator: default to the core delivery stage
+}
+async function listChains() { return (await kvList('chain:')).filter(Boolean) }
+async function saveChain(rec, ctx, action) {
+  const id = rec.chainId || 'VC-' + Math.random().toString(36).slice(2, 7).toUpperCase()
+  const next = { ...rec, chainId: id, updatedAt: new Date().toISOString(), createdAt: rec.createdAt || new Date().toISOString(), createdBy: rec.createdBy || (ctx && ctx.email) }
+  await kvSet('chain:' + id, next)
+  if (action && ctx) await addAudit({ trackingId: id, action, by: ctx.name, role: ctx.role, note: rec.name || '' })
+  return next
+}
+/* A cooperative belongs to a chain if EITHER:
+   - its own registered sector maps to the chain's sector (COOP_SECTOR_TO_CHAIN), OR
+   - any of its members applied for LASMECO in that sector, i.e. through that sector's
+     accelerator (a hospital coop applying via the Health Accelerator joins Health), OR
+   - MCCTI added it by hand.
+   Manual removals always win. */
+function chainCoopsVia(chain, loans, members) {
+  const s = new Set()
+  ;(loans || []).forEach((l) => { if (l.sector === chain.sector && l.coop) s.add(l.coop) })       // applied for LASMECO in this sector
+  ;(members || []).forEach((m) => { if (m.lasmecoSector === chain.sector && m.coop) s.add(m.coop) }) // profiled under this sector's accelerator
+  return s
+}
+function chainCoops(chain, coops, loans, members) {
+  const added = chain.added || [], removed = chain.removed || [], via = chainCoopsVia(chain, loans, members)
+  return coops.filter((c) => (removed.indexOf(c.trackingId) === -1) && (chainSectorForCoop(c) === chain.sector || via.has(c.name) || added.indexOf(c.trackingId) > -1))
+}
+function chainCoopSource(chain, coop, loans, members) {
+  if (chainCoopsVia(chain, loans, members).has(coop.name)) return 'Via ' + chain.sector + ' Accelerator'
+  if ((chain.added || []).indexOf(coop.trackingId) > -1) return 'Added by MCCTI'
+  return 'By sector'
+}
+function chainMembers(chain, coops, members, loans) {
+  const names = chainCoops(chain, coops, loans, members).map((c) => c.name)
+  return members.filter((m) => names.indexOf(m.coop) > -1 || m.lasmecoSector === chain.sector)
+}
+function chainMetrics(chain, coops, members, loans) {
+  const cs = chainCoops(chain, coops, loans, members), ms = chainMembers(chain, coops, members, loans)
+  const names = cs.map((c) => c.name)
+  const ls = (loans || []).filter((l) => names.indexOf(l.coop) > -1)
+  const jobs = ms.reduce((a, m) => a + ((m.msme && m.msme.employees) || 0), 0)
+  const turnover = ms.reduce((a, m) => a + (((m.msme && m.msme.monthlyTurnover) || 0) * 12), 0)
+  const npl = nplMetrics(ls)
+  const nav = cs.reduce((a, c) => a + (c.nav || 0), 0)
+  return { coops: cs, members: ms, loans: ls, jobs, turnover, nav, npl, contributions: cs.reduce((a, c) => a + (c.contributions || 0), 0) }
+}
 const STATUS_CLASS = { 'Filed': 'st-filed', 'Under review': 'st-review', 'Approved': 'st-approved', 'Returned': 'st-returned' }
 const CAP15_CLASS = { 'Compliant': 'st-approved', 'Returns due': 'st-review', 'Under audit': 'st-filed' }
 const LOAN_STATUS_CLASS = { 'Applied': 'st-filed', 'In training': 'st-review', 'Shortlisted': 'st-review', 'Coop validated': 'st-review', 'Bank assessment': 'st-review', 'BOI approved': 'st-approved', 'Disbursed': 'st-approved', 'Repaying': 'st-approved', 'Completed': 'st-approved', 'Declined': 'st-returned', 'Default': 'st-returned' }
@@ -1046,6 +1120,173 @@ function ActionQueue() {
     </div>
   )
 }
+const OPP_TYPES = ['Request for quote', 'Offtake offer', 'Bulk purchase pool']
+async function listOpps(chainId) { return (await kvList('opp:' + chainId + ':')).filter(Boolean).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)) }
+async function saveOpp(rec, ctx) {
+  const id = rec.oppId || 'OP-' + Math.random().toString(36).slice(2, 7).toUpperCase()
+  const next = { ...rec, oppId: id, updatedAt: new Date().toISOString(), createdAt: rec.createdAt || new Date().toISOString() }
+  await kvSet('opp:' + rec.chainId + ':' + id, next)
+  return next
+}
+async function listOppReplies(chainId, oppId) { return (await kvList('oppr:' + chainId + ':' + oppId + ':')).filter(Boolean) }
+async function saveOppReply(chainId, oppId, rec) {
+  const id = 'R-' + Math.random().toString(36).slice(2, 7).toUpperCase()
+  await kvSet('oppr:' + chainId + ':' + oppId + ':' + id, { ...rec, id, chainId, oppId, at: new Date().toISOString() })
+}
+function OpportunityBoard({ chain, ctx }) {
+  const [opps, setOpps] = useState(null), [posting, setPosting] = useState(false), [busy, setBusy] = useState(false)
+  const [f, setF] = useState({ type: OPP_TYPES[0], title: '', detail: '', quantity: '', unit: '', priceNaira: '', deadline: '' })
+  const [open, setOpen] = useState(null), [replies, setReplies] = useState([]), [reply, setReply] = useState({ note: '', priceNaira: '' })
+  const ro = isReviewer(ctx)
+  const canPost = !ro && ['society', 'member', 'accelerator', 'leadership', 'officer'].indexOf(ctx.role) > -1
+  const reload = useCallback(() => listOpps(chain.chainId).then(setOpps), [chain.chainId])
+  useEffect(() => { reload() }, [reload])
+  useEffect(() => { if (open) listOppReplies(chain.chainId, open.oppId).then(setReplies); else setReplies([]) }, [open, chain.chainId])
+  const post = async () => {
+    if (!f.title.trim()) { toast('Give the opportunity a title.', 'error'); return }
+    setBusy(true)
+    await saveOpp({ ...f, chainId: chain.chainId, status: 'Open', postedBy: ctx.email, postedByName: ctx.name, postedByRole: ctx.role }, ctx)
+    setBusy(false); setPosting(false); setF({ type: OPP_TYPES[0], title: '', detail: '', quantity: '', unit: '', priceNaira: '', deadline: '' }); reload()
+    toast('Posted to the chain.', 'success')
+  }
+  const sendReply = async () => {
+    if (!reply.note.trim()) { toast('Add a note to your response.', 'error'); return }
+    setBusy(true)
+    await saveOppReply(chain.chainId, open.oppId, { by: ctx.email, byName: ctx.name, note: reply.note.trim(), priceNaira: Number(reply.priceNaira) || 0 })
+    try { await notify({ to: open.postedBy, title: 'Response to your ' + open.type.toLowerCase(), body: ctx.name + ' responded to "' + open.title + '" in ' + chain.name + '.', event: 'chain' }) } catch (e) { /* best-effort */ }
+    setBusy(false); setReply({ note: '', priceNaira: '' }); listOppReplies(chain.chainId, open.oppId).then(setReplies)
+    toast('Response sent.', 'success')
+  }
+  const close = async (o) => { await saveOpp({ ...o, status: 'Closed' }, ctx); reload(); setOpen(null); toast('Opportunity closed.') }
+  if (!opps) return <p className="muted-line">Loading opportunities…</p>
+  if (open) {
+    const mine = open.postedBy === ctx.email
+    return (
+      <div className="returns-box"><button className="back-link" onClick={() => setOpen(null)}>&larr; Back to opportunities</button>
+        <h4>{open.title}</h4>
+        <p className="muted-line">{open.type} · posted by {open.postedByName} · {fmtDate(open.createdAt)} · {open.status}</p>
+        {open.detail && <p className="opp-detail">{open.detail}</p>}
+        <div className="opp-meta">{open.quantity && <span>Quantity: <strong>{open.quantity} {open.unit}</strong></span>}{open.priceNaira && <span>Indicative: <strong>{fmtNaira(Number(open.priceNaira))}</strong></span>}{open.deadline && <span>Closes: <strong>{fmtDate(open.deadline)}</strong></span>}</div>
+        <h4 style={{ marginTop: '18px' }}>Responses ({replies.length})</h4>
+        {replies.length ? replies.map((r) => (<div className="opp-reply" key={r.id}><div><strong>{r.byName}</strong><span>{fmtDate(r.at)}{r.priceNaira ? ' · ' + fmtNaira(r.priceNaira) : ''}</span></div><p>{r.note}</p></div>)) : <p className="muted-line sm">No responses yet.</p>}
+        {!ro && open.status === 'Open' && !mine && <div className="returns-box" style={{ marginTop: '14px' }}><h4>Respond</h4><div className="form-grid"><label className="field span2"><span>Your response</span><textarea rows={2} value={reply.note} onChange={(e) => setReply({ ...reply, note: e.target.value })} placeholder="What you can supply, or what you need" /></label><label className="field"><span>Your price (₦, optional)</span><input type="number" value={reply.priceNaira} onChange={(e) => setReply({ ...reply, priceNaira: e.target.value })} /></label></div><div className="panel-actions"><button className="btn btn-gold btn-sm" disabled={busy} onClick={sendReply}>Send response</button></div></div>}
+        {!ro && mine && open.status === 'Open' && <div className="panel-actions"><button className="btn btn-outline btn-sm" onClick={() => close(open)}>Close this opportunity</button></div>}
+      </div>
+    )
+  }
+  return (
+    <div className="returns-box"><h4>Opportunities in this chain</h4>
+      <p className="muted-line">Post what you need or what you can supply. Everyone in the chain can see and respond, so cooperatives can buy inputs together, find offtakers and trade across stages.</p>
+      {canPost && !posting && <div className="panel-actions"><button className="btn btn-gold btn-sm" onClick={() => setPosting(true)}>Post an opportunity</button></div>}
+      {posting && <div className="returns-box"><div className="form-grid">
+        <label className="field"><span>Type</span><select value={f.type} onChange={(e) => setF({ ...f, type: e.target.value })}>{OPP_TYPES.map((t) => <option key={t}>{t}</option>)}</select></label>
+        <label className="field"><span>Title</span><input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="e.g. 200 bags of layer feed needed" /></label>
+        <label className="field span2"><span>Detail</span><textarea rows={2} value={f.detail} onChange={(e) => setF({ ...f, detail: e.target.value })} placeholder="Specification, quality, delivery location" /></label>
+        <label className="field"><span>Quantity</span><input value={f.quantity} onChange={(e) => setF({ ...f, quantity: e.target.value })} placeholder="200" /></label>
+        <label className="field"><span>Unit</span><input value={f.unit} onChange={(e) => setF({ ...f, unit: e.target.value })} placeholder="bags" /></label>
+        <label className="field"><span>Indicative value (₦)</span><input type="number" value={f.priceNaira} onChange={(e) => setF({ ...f, priceNaira: e.target.value })} /></label>
+        <label className="field"><span>Closes on</span><input type="date" value={f.deadline} onChange={(e) => setF({ ...f, deadline: e.target.value })} /></label>
+      </div><div className="panel-actions"><button className="btn btn-gold btn-sm" disabled={busy} onClick={post}>Post</button><button className="btn btn-ghost btn-sm" onClick={() => setPosting(false)}>Cancel</button></div></div>}
+      {opps.length ? <div className="opp-list">{opps.map((o) => (
+        <button className="opp-row" key={o.oppId} onClick={() => setOpen(o)}>
+          <span className={cx('opp-tag', o.type === 'Offtake offer' && 'offtake', o.type === 'Bulk purchase pool' && 'pool')}>{o.type}</span>
+          <div className="opp-body"><strong>{o.title}</strong><span>{o.postedByName} · {fmtDate(o.createdAt)}{o.quantity ? ' · ' + o.quantity + ' ' + o.unit : ''}{o.priceNaira ? ' · ' + fmtNaira(Number(o.priceNaira)) : ''}</span></div>
+          <StatusChip status={o.status} />
+        </button>))}</div> : <div className="empty"><span className="empty-mark">&#9670;</span><h3>No opportunities yet</h3><p>{canPost ? 'Post the first one to get the chain trading.' : 'Nothing posted in this chain yet.'}</p></div>}
+    </div>
+  )
+}
+function ChainDetail({ chain, ctx, coops, members, loans, onClose, onChanged }) {
+  const [c, setC] = useState(chain), [busy, setBusy] = useState(false), [addId, setAddId] = useState('')
+  const ro = isReviewer(ctx)
+  const canManage = !ro && (ctx.role === 'leadership' || ctx.role === 'officer')
+  const m = chainMetrics(c, coops, members, loans)
+  const inChain = m.coops.map((x) => x.trackingId)
+  const candidates = coops.filter((x) => inChain.indexOf(x.trackingId) === -1)
+  const save = async (patch, action) => { setBusy(true); const next = await saveChain({ ...c, ...patch }, ctx, action); setC(next); setBusy(false); onChanged && onChanged() }
+  const removeCoop = (id) => save({ removed: [...(c.removed || []), id], added: (c.added || []).filter((x) => x !== id) }, 'Cooperative removed from chain')
+  const addCoop = () => { if (!addId) return; save({ added: [...(c.added || []), addId], removed: (c.removed || []).filter((x) => x !== addId) }, 'Cooperative added to chain'); setAddId('') }
+  const byStage = {}; (c.stages || []).forEach((s) => { byStage[s] = [] })
+  m.coops.forEach((x) => { const s = (c.stageMap && c.stageMap[x.trackingId]) || inferChainStage(x, c); (byStage[s] = byStage[s] || []).push(x) })
+  return (
+    <div className="detail">
+      <button className="back-link" onClick={onClose}>&larr; Back to value chains</button>
+      <div className="detail-head"><div><h2>{c.name}</h2><p className="detail-sub">{c.sector} value chain · {c.chainId} · {m.coops.length} cooperative{m.coops.length === 1 ? '' : 's'} · {m.members.length} member{m.members.length === 1 ? '' : 's'}</p></div><StatusChip status={c.status} /></div>
+      <div className="statgrid">
+        <div className="stat"><span className="stat-fig">{m.jobs.toLocaleString('en-NG')}</span><span className="stat-lab">Jobs supported</span></div>
+        <div className="stat"><span className="stat-fig">{fmtNaira(m.turnover)}</span><span className="stat-lab">Combined annual turnover</span></div>
+        <div className="stat"><span className="stat-fig" style={m.npl.nplRatio >= 0.05 ? { color: 'var(--err)' } : undefined}>{(m.npl.nplRatio * 100).toFixed(1)}%</span><span className="stat-lab">NPL across chain</span></div>
+        <div className="stat"><span className="stat-fig">{fmtNaira(m.nav)}</span><span className="stat-lab">Combined NAV (indicative)</span></div>
+      </div>
+      <div className="chain-stages">{(c.stages || []).map((s) => (
+        <section className="chain-stage" key={s}>
+          <h4>{s}<span className="chain-count">{(byStage[s] || []).length}</span></h4>
+          {(byStage[s] || []).length ? (byStage[s] || []).map((x) => { const src = chainCoopSource(c, x, loans, members); return (<div className="chain-node" key={x.trackingId}><div><strong>{x.name}</strong><span>{x.areaOffice} · {Number(x.members || 0).toLocaleString('en-NG')} members</span><span className={cx('node-src', src.indexOf('Via') === 0 && 'accel')}>{src}</span></div>{canManage && <div className="node-acts"><select value={(c.stageMap && c.stageMap[x.trackingId]) || s} onChange={(e) => save({ stageMap: { ...(c.stageMap || {}), [x.trackingId]: e.target.value } }, 'Stage updated')} aria-label={'Stage for ' + x.name}>{(c.stages || []).map((st) => <option key={st}>{st}</option>)}</select><button className="link-inline danger" disabled={busy} onClick={() => removeCoop(x.trackingId)}>Remove</button></div>}</div>) }) : <p className="muted-line sm">No cooperative at this stage yet.</p>}
+          {(c.firms || []).filter((fm) => fm.stage === s).map((fm, i) => (<div className="chain-node firm" key={i}><div><strong>{fm.name}</strong><span>{fm.role || 'Partner firm'} · not a cooperative</span></div></div>))}
+        </section>))}
+      </div>
+      {c.anchor ? <p className="panel-note">Anchor / offtaker: <strong>{c.anchor}</strong>. Coordinated by {c.coordinator || 'the sector accelerator'}.</p> : <p className="panel-note">No anchor buyer recorded yet. Coordinated by {c.coordinator || 'the sector accelerator'}.</p>}
+      <OpportunityBoard chain={c} ctx={ctx} />
+      {canManage && <div className="returns-box"><h4>Manage chain</h4>
+        <div className="wallet-actions"><select value={addId} onChange={(e) => setAddId(e.target.value)}><option value="">Add a cooperative…</option>{candidates.map((x) => <option key={x.trackingId} value={x.trackingId}>{x.name} ({x.sector})</option>)}</select><button className="btn btn-outline btn-sm" disabled={busy || !addId} onClick={addCoop}>Add</button></div>
+        <div className="form-grid" style={{ marginTop: '12px' }}>
+          <label className="field"><span>Anchor / offtaker</span><input value={c.anchor || ''} onChange={(e) => setC({ ...c, anchor: e.target.value })} onBlur={() => save({ anchor: c.anchor }, 'Anchor updated')} placeholder="e.g. Lekki Foods Ltd" /></label>
+          <label className="field"><span>Coordinator</span><input value={c.coordinator || ''} onChange={(e) => setC({ ...c, coordinator: e.target.value })} onBlur={() => save({ coordinator: c.coordinator }, 'Coordinator updated')} placeholder="Accelerator name" /></label>
+        </div>
+        <div className="panel-actions">
+          {c.status !== 'Active' && <button className="btn btn-gold btn-sm" disabled={busy} onClick={() => save({ status: 'Active' }, 'Value chain approved')}>Approve chain</button>}
+          {c.status === 'Active' && <button className="btn btn-outline btn-sm" disabled={busy} onClick={() => save({ status: 'Suspended' }, 'Value chain suspended')}>Suspend</button>}
+        </div>
+        <p className="panel-note">Cooperatives are assigned automatically from their sector ({c.sector}). Additions and removals here override that. Registration fee {fmtNaira(CHAIN_FEES.registration)}, annual {fmtNaira(CHAIN_FEES.annual)} — confirm both with MCCTI before go-live.</p>
+      </div>}
+      <AuditTrail trackingId={c.chainId} />
+    </div>
+  )
+}
+function ChainsPanel({ ctx }) {
+  const [chains, setChains] = useState(null), [coops, setCoops] = useState([]), [members, setMembers] = useState([]), [loans, setLoans] = useState([])
+  const [sel, setSel] = useState(null), [creating, setCreating] = useState(false), [f, setF] = useState({ name: '', sector: LASMECO_SECTORS[0] }), [busy, setBusy] = useState(false)
+  const [accelSectors, setAccelSectors] = useState([])
+  const reload = useCallback(async () => { const [a, b, c, d] = await Promise.all([listChains(), listCoops(), listMembers(), listLoans()]); setChains(a); setCoops(b); setMembers(c); setLoans(d) }, [])
+  useEffect(() => { reload() }, [reload])
+  useEffect(() => { if (ctx.role === 'accelerator') { kvGet('accelerator:' + ctx.email).then((a) => setAccelSectors((a && a.sectors) || [])).catch(() => { }) } }, [ctx.role, ctx.email])
+  const ro = isReviewer(ctx)
+  const canCreate = !ro && (ctx.role === 'leadership' || ctx.role === 'accelerator')
+  if (!chains) return <p className="muted-line">Loading value chains…</p>
+  let mine = chains
+  if (ctx.role === 'accelerator') mine = chains.filter((c) => accelSectors.indexOf(c.sector) > -1 || c.createdBy === ctx.email)
+  else if (ctx.coopName) mine = chains.filter((c) => chainCoops(c, coops, loans, members).some((x) => x.name === ctx.coopName))
+  if (sel) { const fresh = chains.find((c) => c.chainId === sel.chainId) || sel; return <ChainDetail chain={fresh} ctx={ctx} coops={coops} members={members} loans={loans} onClose={() => { setSel(null); reload() }} onChanged={reload} /> }
+  const create = async () => {
+    if (!f.name.trim()) { toast('Give the value chain a name.', 'error'); return }
+    setBusy(true)
+    const proposing = ctx.role === 'accelerator'
+    await saveChain({ name: f.name.trim(), sector: f.sector, stages: CHAIN_STAGE_TEMPLATES[f.sector] || [], status: proposing ? 'Proposed' : 'Active', coordinator: proposing ? ctx.name : '', added: [], removed: [], firms: [], stageMap: {} }, ctx, proposing ? 'Value chain proposed' : 'Value chain created')
+    setBusy(false); setCreating(false); setF({ name: '', sector: LASMECO_SECTORS[0] }); reload()
+    toast(proposing ? 'Proposed to MCCTI for approval.' : 'Value chain created.', 'success')
+  }
+  return (
+    <div className="ws">
+      <p className="muted-line">Value Chain Cooperatives bundle primary cooperatives, their members and partner firms into one coordinated unit, stage by stage. Cooperatives join automatically based on their sector.</p>
+      {canCreate && !creating && <div className="panel-actions"><button className="btn btn-gold btn-sm" onClick={() => setCreating(true)}>{ctx.role === 'accelerator' ? 'Propose a value chain' : 'Create a value chain'}</button></div>}
+      {creating && <div className="returns-box"><h4>{ctx.role === 'accelerator' ? 'Propose a value chain' : 'New value chain'}</h4>
+        <div className="form-grid">
+          <label className="field"><span>Name</span><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="e.g. Lagos Poultry Value Chain" /></label>
+          <label className="field"><span>Sector</span><select value={f.sector} onChange={(e) => setF({ ...f, sector: e.target.value })}>{LASMECO_SECTORS.map((s) => <option key={s}>{s}</option>)}</select></label>
+        </div>
+        <p className="panel-note">Stages start from the {f.sector} template: {(CHAIN_STAGE_TEMPLATES[f.sector] || []).join(' → ')}. All {f.sector}-sector cooperatives join automatically.</p>
+        <div className="panel-actions"><button className="btn btn-gold btn-sm" disabled={busy} onClick={create}>{ctx.role === 'accelerator' ? 'Propose' : 'Create'}</button><button className="btn btn-ghost btn-sm" onClick={() => setCreating(false)}>Cancel</button></div>
+      </div>}
+      {mine.length ? <div className="chain-grid">{mine.map((c) => { const m = chainMetrics(c, coops, members, loans); return (
+        <button className="chain-card" key={c.chainId} onClick={() => setSel(c)}>
+          <div className="chain-card-top"><h4>{c.name}</h4><StatusChip status={c.status} /></div>
+          <p className="chain-card-sec">{c.sector}</p>
+          <div className="chain-card-figs"><span><strong>{m.coops.length}</strong> coops</span><span><strong>{m.members.length}</strong> members</span><span><strong>{m.jobs.toLocaleString('en-NG')}</strong> jobs</span></div>
+          <p className="chain-card-turn">{fmtNaira(m.turnover)} combined turnover</p>
+        </button>) })}</div> : <div className="empty"><span className="empty-mark">&#9670;</span><h3>No value chains yet</h3><p>{canCreate ? 'Create one to start bundling cooperatives along a value chain.' : 'MCCTI has not set up any value chains yet.'}</p></div>}
+    </div>
+  )
+}
 function LeadershipOverview({ ctx, section, onViewAs }) {
   const [coops, reload] = useRegistry()
   const [sel, setSel] = useState(null)
@@ -1067,6 +1308,7 @@ function LeadershipOverview({ ctx, section, onViewAs }) {
       {section === 'sla' && <GovernanceSLA />}
       {section === 'monitoring' && <PortfolioMonitoring />}
       {section === 'accelerators' && <AcceleratorAppointments ctx={ctx} />}
+      {section === 'chains' && <ChainsPanel ctx={ctx} />}
       {section === 'revenue' && <RevenuePanel ctx={ctx} />}
       {section === 'retention' && <RetentionPanel />}
       {section === 'viewas' && <ViewAsSwitcher onViewAs={onViewAs} />}
@@ -1107,6 +1349,7 @@ function SocietyWorkspace({ ctx, section }) {
         <div className="returns-box"><h4>Documents</h4><DocumentsPanel coopId={mine.trackingId} ctx={ctx} canVerify={false} canUpload={mine.source !== 'SEKAT'} /></div>
         <div className="trail-box"><h4>Audit trail</h4><AuditTrail trackingId={mine.trackingId} refreshKey={coops.length} /></div>
       </>)}
+      {section === 'chains' && <ChainsPanel ctx={{ ...ctx, coopName: mine.name }} />}
       {section === 'savings' && (mine.source !== 'SEKAT' ? <div className="returns-box"><h4>Savings &amp; esusu</h4><CoopEsusu coop={mine} ctx={ctx} /></div> : <p className="muted-line">Savings are managed in SEKAT for mirrored societies.</p>)}
     </div>
   )
@@ -1672,6 +1915,7 @@ function MemberWorkspace({ ctx, section }) {
     <div className="ws">
       {section === 'overview' && <MemberOverview mine={mine} loans={myLoans} />}
       {section === 'wallet' && <div className="returns-box"><h4>Wallet &amp; savings</h4><MemberWallet member={mine} /></div>}
+      {section === 'chains' && <ChainsPanel ctx={{ ...ctx, coopName: mine.coop }} />}
       {section === 'finance' && (<>
         <div className="society-card">
           <div className="society-top"><div><h3>{mine.name}</h3><p className="detail-sub">{mine.coop} &middot; {mine.sector}{mine.ref ? ' \u00b7 ' + mine.ref : ''}</p></div><div className="detail-chips"><StatusChip status={mine.kyc?.status || 'Unverified'} kind="cap15" /><SourceBadge source={mine.source} /></div></div>
@@ -1870,6 +2114,29 @@ async function portfolioContributionSeries(months = 6) {
   for (const r of rows) { if (!r || !r.month) continue; byMonth[r.month] = (byMonth[r.month] || 0) + (r.contributions || 0) }
   return Object.keys(byMonth).sort().slice(-months).map((m) => ({ month: m, contributions: byMonth[m] }))
 }
+// Demo-only anchor firms, attached when sample data is enabled.
+const CHAIN_DEMO_ANCHORS = { 'Agriculture': 'Lekki Foods Processing Ltd', 'Manufacturing': 'Idumota Textile Merchants', 'Circular Economy': 'Greencycle Nigeria', 'Digital Economy': 'Yaba Tech Hub' }
+/* Value chains are structural, not sample data: the app provisions one per RAC sector and
+   keeps them provisioned. Runs on every load and is idempotent, so a chain reappears if a
+   sector is ever added. MCCTI can still create extra chains and accelerators can propose. */
+async function ensureValueChains() {
+  let made = 0
+  try {
+    const existing = await listChains()
+    const have = existing.map((c) => c.sector)
+    const accels = await listAccelerators()
+    for (const sector of LASMECO_SECTORS) {
+      if (have.indexOf(sector) > -1) continue
+      const accel = accels.find((a) => (a.sectors || []).indexOf(sector) > -1 && (a.status || 'Pending') === 'Appointed')
+      const id = 'VC-' + sector.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() + '-' + Math.floor(100 + Math.random() * 900)
+      const anchor = DEMO_DATA ? (CHAIN_DEMO_ANCHORS[sector] || '') : ''
+      const stages = CHAIN_STAGE_TEMPLATES[sector] || []
+      await kvSet('chain:' + id, { chainId: id, name: 'Lagos ' + sector + ' Value Chain', sector, stages, status: 'Active', auto: true, coordinator: accel ? accel.name : '', anchor, added: [], removed: [], stageMap: {}, firms: anchor ? [{ name: anchor, role: 'Anchor / offtaker', stage: stages[3] || stages[0] || '' }] : [], createdBy: 'system', createdAt: new Date().toISOString() })
+      made++
+    }
+  } catch (e) { /* best-effort */ }
+  return made > 0
+}
 async function ensureCoopSnapshots() {
   if (await kvGet('integration:snapshots-v1')) return false
   try {
@@ -1932,12 +2199,13 @@ async function clearPriorSeed() {
   await del('doc:', (d) => 'doc:' + d.coopId + ':' + d.id, (d) => seedLoanIds.has(d.coopId) || String(d.id).indexOf('LD') === 0 || String(d.id).indexOf('Dseed') === 0)
   await del('wallet:', (w) => 'wallet:' + w.id, (w) => /^M:M-100\d/.test(w.id || '') || !!w.esusu)
   await del('snap:', (s) => 'snap:' + s.coopId + ':' + s.month, (s) => !!s.coopId)
+  await del('chain:', (x) => 'chain:' + x.chainId, (x) => x.createdBy === 'seed@mccti.lg.gov.ng' || x.createdBy === 'system')
   await del('snapsweep:', (s) => 'snapsweep:' + s.month, (s) => !!s.month)
   await kvDelete('integration:loandocs-v1'); await kvDelete('integration:loandocs-v2'); await kvDelete('integration:snapshots-v1')
 }
 async function seedDemoData() {
-  if (await kvGet('integration:seed-v7')) return false
-  await kvSet('integration:seed-v7', { claimed: true, at: new Date().toISOString() }) // claim first: prevents repeat clear/reseed storms if a later step fails
+  if (await kvGet('integration:seed-v9')) return false
+  await kvSet('integration:seed-v9', { claimed: true, at: new Date().toISOString() }) // claim first: prevents repeat clear/reseed storms if a later step fails
   try { await clearPriorSeed() } catch (e) { /* best-effort cleanup */ }
   const now = Date.now(), day = 86400000
   const isoAgo = (ms) => new Date(now - ms).toISOString()
@@ -1948,6 +2216,7 @@ async function seedDemoData() {
     { name: 'Agege Transport Union Coop', areaOffice: 'Agege', sector: 'Transport', custodian: 'S. Okoro', members: 160, contributions: 5400000, status: 'Under review', cap15: 'Under audit', feeStatus: 'Paid', tier: 'B', nav: 30000000 },
     { name: 'Alimosho Tailors Multipurpose', areaOffice: 'Alimosho', sector: 'Artisan', custodian: 'B. Yusuf', members: 95, contributions: 2100000, status: 'Returned', cap15: 'Returns due', tier: 'C', nav: 8000000 },
     { name: 'Kosofe Poultry Farmers Coop', areaOffice: 'Kosofe', sector: 'Agriculture', custodian: 'N. Eze', members: 130, contributions: 3900000, status: 'Filed', cap15: 'Under audit', tier: 'C', nav: 6000000 },
+    { name: 'Ikeja Hospital Staff Multipurpose Coop', areaOffice: 'Ikeja', sector: 'Services', custodian: 'Dr A. Balogun', members: 175, contributions: 6300000, status: 'Approved', cap15: 'Compliant', feeStatus: 'Paid', tier: 'B', nav: 42000000 },
     { name: 'Eti-Osa Fashion Enterprise Coop', areaOffice: 'Eti-Osa', sector: 'Services', custodian: 'T. Coker', members: 210, contributions: 8800000, status: 'Approved', cap15: 'Compliant', feeStatus: 'Paid', tier: 'A', nav: 120000000 },
   ]
   const coopMap = {}
@@ -1967,13 +2236,14 @@ async function seedDemoData() {
     { name: 'Aisha Bello', coop: 'Agege Transport Union Coop', sector: 'Transport', lasmecoSector: 'Service Delivery', accel: 'Service Delivery Accelerator', phone: '08031000003', gender: 'Female', bvn: 1, nin: 0, msme: { monthlyTurnover: 260000, employees: 2, cashFlow: 80000, customerBase: 70, yearsInOperation: 3 } },
     { name: 'Segun Ade', coop: 'Eti-Osa Fashion Enterprise Coop', sector: 'Services', lasmecoSector: 'Tourism', accel: 'Tourism Accelerator', phone: '08031000004', gender: 'Male', bvn: 1, nin: 1, msme: { monthlyTurnover: 1350000, employees: 9, cashFlow: 500000, customerBase: 380, yearsInOperation: 10 } },
     { name: 'Grace Umeh', coop: 'Kosofe Poultry Farmers Coop', sector: 'Agriculture', lasmecoSector: 'Agriculture', accel: 'Agriculture Accelerator', phone: '08031000005', gender: 'Female', bvn: 0, nin: 0, msme: { monthlyTurnover: 110000, employees: 1, cashFlow: 30000, customerBase: 40, yearsInOperation: 2 } },
+    { name: 'Ngozi Balogun', coop: 'Ikeja Hospital Staff Multipurpose Coop', sector: 'Services', lasmecoSector: 'Health', accel: 'Health Accelerator', phone: '08031000007', gender: 'Female', bvn: 1, nin: 1, msme: { monthlyTurnover: 1900000, employees: 12, cashFlow: 700000, customerBase: 540, yearsInOperation: 9 } },
     { name: 'Ibrahim Sule', coop: 'Alimosho Tailors Multipurpose', sector: 'Artisan', lasmecoSector: 'Manufacturing', accel: 'Manufacturing Accelerator', phone: '08031000006', gender: 'Male', bvn: 1, nin: 1, msme: { monthlyTurnover: 430000, employees: 3, cashFlow: 150000, customerBase: 120, yearsInOperation: 5 } },
   ]
   const memberMap = {}
   for (let i = 0; i < memberSeeds.length; i++) {
     const s = memberSeeds[i], id = 'M-' + String(100001 + i), email = 'demo.' + s.name.toLowerCase().replace(/[^a-z]+/g, '.') + '@coopeco.ng'
     const status = s.bvn && s.nin ? 'Verified' : (s.bvn || s.nin) ? 'Partial' : 'Unverified'
-    await kvSet('member:' + id, { memberId: id, source: 'MCCTI', name: s.name, coop: s.coop, sector: s.sector, phone: s.phone, gender: s.gender, kyc: { bvn: s.bvn ? 'on file' : '', nin: s.nin ? 'on file' : '', bvnVerified: !!s.bvn, ninVerified: !!s.nin, status }, msme: s.msme, createdBy: email, createdAt: isoAgo((10 - i) * day) })
+    await kvSet('member:' + id, { memberId: id, source: 'MCCTI', name: s.name, coop: s.coop, sector: s.sector, lasmecoSector: s.lasmecoSector, accel: s.accel, phone: s.phone, gender: s.gender, kyc: { bvn: s.bvn ? 'on file' : '', nin: s.nin ? 'on file' : '', bvnVerified: !!s.bvn, ninVerified: !!s.nin, status }, msme: s.msme, createdBy: email, createdAt: isoAgo((10 - i) * day) })
     memberMap[s.name] = { memberId: id, email, phone: s.phone, coop: s.coop, sector: s.sector, lasmecoSector: s.lasmecoSector, accel: s.accel }
   }
   // 3) Loans across every pipeline stage (with schedules, repayments, arrears, default)
@@ -2035,7 +2305,7 @@ async function seedDemoData() {
   const docCoop = coopMap['Eti-Osa Fashion Enterprise Coop']
   await kvSet('doc:' + docCoop + ':Dseed1', { id: 'Dseed1', coopId: docCoop, name: 'by-laws.pdf', category: 'By-laws', size: 284000, type: 'application/pdf', url: '', path: '', storage: 'demo', uploadedBy: 'T. Coker', uploadedAt: isoAgo(9 * day), verified: true, verifiedBy: 'Area Registrar' })
   await kvSet('doc:' + docCoop + ':Dseed2', { id: 'Dseed2', coopId: docCoop, name: 'registration-certificate.pdf', category: 'Registration certificate', size: 156000, type: 'application/pdf', url: '', path: '', storage: 'demo', uploadedBy: 'T. Coker', uploadedAt: isoAgo(9 * day), verified: false })
-  await kvSet('integration:seed-v7', { done: true, at: new Date().toISOString() })
+  await kvSet('integration:seed-v9', { done: true, at: new Date().toISOString() })
   return true
 }
 const ACCEL_SEEDS = [
@@ -2090,6 +2360,7 @@ async function ensureSeedData() {
         if (a || b) changed = true
       }
     } catch (e) { /* not configured */ }
+    try { if (await ensureValueChains()) changed = true } catch (e) { /* value chains are structural: provision in live too */ }
     if (!DEMO_DATA) return changed // live database: never seed fictional records
     try { if (await seedDemoData()) changed = true } catch (e) { /* best-effort, once */ }
     try { if (await ensureAccelerators()) changed = true } catch (e) { /* keep accelerator directory current */ }
@@ -2465,6 +2736,7 @@ function AcceleratorWorkspace({ ctx, section }) {
       </>)}
       {section === 'queue' && (<><p className="muted-line">Applications awaiting your action — new, in training and shortlisted.</p><LoanTable loans={queue} onOpen={setSel} /></>)}
       {section === 'all' && (<><p className="muted-line">Every application in your sectors, at all stages (including validated, funded, disbursed, repaying and closed).</p><LoanTable loans={myLoans} onOpen={setSel} /></>)}
+      {section === 'chains' && <ChainsPanel ctx={ctx} />}
     </div>
   )
 }
@@ -2942,16 +3214,16 @@ function SupportConcierge({ ctx }) {
   )
 }
 const ROLE_NAV = {
-  society: [['overview', 'Overview'], ['cooperative', 'My cooperative'], ['savings', 'Savings & esusu']],
-  member: [['overview', 'Overview'], ['wallet', 'Wallet & savings'], ['finance', 'LASMECO finance']],
+  society: [['overview', 'Overview'], ['cooperative', 'My cooperative'], ['chains', 'Value chains'], ['savings', 'Savings & esusu']],
+  member: [['overview', 'Overview'], ['wallet', 'Wallet & savings'], ['finance', 'LASMECO finance'], ['chains', 'Value chains']],
   officer: [['overview', 'Overview'], ['queue', 'Review queue'], ['all', 'All societies'], ['members', 'Members'], ['lasmeco', 'LASMECO'], ['offices', 'Area offices'], ['risk', 'Risk & fraud'], ['audit', 'Audit log'], ['reports', 'Reports'], ['integrations', 'Integrations']],
   auditor: [['overview', 'Overview'], ['returns', 'Returns to examine'], ['all', 'All societies']],
-  accelerator: [['overview', 'Overview'], ['queue', 'My pipeline'], ['all', 'All loans']],
+  accelerator: [['overview', 'Overview'], ['queue', 'My pipeline'], ['all', 'All loans'], ['chains', 'Value chains']],
   sterling: [['overview', 'Overview'], ['queue', 'My queue'], ['all', 'All loans'], ['monitoring', 'Portfolio monitoring']],
   boi: [['overview', 'Overview'], ['queue', 'My queue'], ['all', 'All loans'], ['monitoring', 'Portfolio monitoring']],
   assetmatrix: [['overview', 'Overview'], ['distribution', 'Distribution']],
-  reviewer: [['overview', 'Overview'], ['applications', 'Applications'], ['accelerators', 'Accelerators'], ['members', 'Members'], ['lasmeco', 'LASMECO'], ['monitoring', 'Portfolio monitoring'], ['sla', 'Service levels'], ['risk', 'Risk & fraud'], ['revenue', 'Revenue & billing'], ['reports', 'Reports & exports']],
-  leadership: [['overview', 'Overview'], ['applications', 'Applications'], ['accelerators', 'Accelerators'], ['members', 'Members'], ['lasmeco', 'LASMECO'], ['monitoring', 'Portfolio monitoring'], ['sla', 'Service levels'], ['risk', 'Risk & fraud'], ['revenue', 'Revenue & billing'], ['reports', 'Reports & exports'], ['retention', 'Data retention'], ['integrations', 'Integrations']],
+  reviewer: [['overview', 'Overview'], ['applications', 'Applications'], ['chains', 'Value chains'], ['accelerators', 'Accelerators'], ['members', 'Members'], ['lasmeco', 'LASMECO'], ['monitoring', 'Portfolio monitoring'], ['sla', 'Service levels'], ['risk', 'Risk & fraud'], ['revenue', 'Revenue & billing'], ['reports', 'Reports & exports']],
+  leadership: [['overview', 'Overview'], ['applications', 'Applications'], ['chains', 'Value chains'], ['accelerators', 'Accelerators'], ['members', 'Members'], ['lasmeco', 'LASMECO'], ['monitoring', 'Portfolio monitoring'], ['sla', 'Service levels'], ['risk', 'Risk & fraud'], ['revenue', 'Revenue & billing'], ['reports', 'Reports & exports'], ['retention', 'Data retention'], ['integrations', 'Integrations']],
 }
 const WORKSPACES = { society: SocietyWorkspace, member: MemberWorkspace, officer: OfficerWorkspace, auditor: AuditorWorkspace, sterling: SterlingWorkspace, boi: BoiWorkspace, assetmatrix: AssetMatrixWorkspace, accelerator: AcceleratorWorkspace, leadership: LeadershipOverview, reviewer: LeadershipOverview }
 function SideIcon({ name }) {
@@ -3426,6 +3698,47 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .review-banner strong{font-size:12px;font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--gold-soft)}
 .review-banner span{font-size:13px;color:var(--sage);line-height:1.5}
 .demo-badge{align-self:flex-start;background:#fbf3e6;border:1px solid var(--gold-soft);color:var(--gold-soft);font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:5px}
+.chain-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:16px;margin-top:16px}
+.chain-card{text-align:left;background:var(--ink-2);border:1px solid var(--line-soft);border-radius:12px;padding:18px;cursor:pointer;display:flex;flex-direction:column;gap:6px;transition:border-color .18s ease,transform .18s ease;font:inherit}
+.chain-card:hover{border-color:var(--green);transform:translateY(-2px)}
+.chain-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.chain-card-top h4{font-size:15px;margin:0}
+.chain-card-sec{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--sage-dim);margin:0}
+.chain-card-figs{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px}
+.chain-card-figs span{font-size:12.5px;color:var(--sage)}
+.chain-card-figs strong{color:var(--cream);font-family:var(--serif);font-size:15px}
+.chain-card-turn{font-size:12.5px;color:var(--green);font-weight:600;margin:4px 0 0;white-space:nowrap}
+.chain-stages{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin:18px 0}
+.chain-stage{background:var(--ink-2);border:1px solid var(--line-soft);border-radius:10px;padding:14px}
+.chain-stage h4{font-size:12px;font-family:var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--sage-dim);margin:0 0 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.chain-count{background:var(--green-panel);color:var(--green);border-radius:10px;padding:1px 7px;font-size:11px}
+.chain-node{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:8px 0;border-top:1px solid var(--line-soft)}
+.chain-node:first-of-type{border-top:none}
+.chain-node strong{display:block;font-size:13px;color:var(--cream)}
+.chain-node span{font-size:11.5px;color:var(--sage-dim)}
+.chain-node.firm strong{color:var(--gold-soft)}
+.node-src{display:inline-block;margin-top:3px;font-family:var(--mono);font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--sage-dim);background:var(--line-soft);border-radius:4px;padding:2px 6px}
+.node-src.accel{background:var(--green-panel);color:var(--green)}
+.node-acts{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0}
+.node-acts select{font-size:11px;padding:3px 6px;border:1px solid var(--line);border-radius:5px;background:var(--ink);color:var(--cream);max-width:130px}
+.opp-list{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.opp-row{display:flex;align-items:center;gap:12px;background:var(--ink-2);border:1px solid var(--line-soft);border-radius:9px;padding:12px 14px;cursor:pointer;text-align:left;font:inherit;transition:border-color .18s ease}
+.opp-row:hover{border-color:var(--green)}
+.opp-tag{flex-shrink:0;font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;background:var(--green-panel);color:var(--green);border-radius:5px;padding:3px 7px}
+.opp-tag.offtake{background:#fbf3e6;color:var(--gold-soft)}
+.opp-tag.pool{background:#e8f0f4;color:var(--teal-ink,#3d7a78)}
+.opp-body{flex:1;min-width:0}
+.opp-body strong{display:block;font-size:13.5px;color:var(--cream);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.opp-body span{font-size:11.5px;color:var(--sage-dim)}
+.opp-detail{font-size:13.5px;color:var(--sage);line-height:1.55;margin:8px 0}
+.opp-meta{display:flex;gap:18px;flex-wrap:wrap;margin:10px 0}
+.opp-meta span{font-size:12.5px;color:var(--sage-dim)}
+.opp-meta strong{color:var(--cream)}
+.opp-reply{border-top:1px solid var(--line-soft);padding:10px 0}
+.opp-reply div{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.opp-reply strong{font-size:13px;color:var(--cream)}
+.opp-reply span{font-size:11.5px;color:var(--sage-dim)}
+.opp-reply p{font-size:13px;color:var(--sage);margin:4px 0 0;line-height:1.5}
 .toast-host{position:fixed;right:20px;bottom:20px;z-index:60;display:flex;flex-direction:column;gap:10px;max-width:min(380px,calc(100vw - 40px))}
 .toast{display:flex;align-items:flex-start;gap:10px;background:var(--ink-2);border:1px solid var(--line);border-left:4px solid var(--green);border-radius:10px;padding:13px 14px;box-shadow:0 8px 24px rgba(20,40,30,.16);cursor:pointer;animation:toastin .22s ease}
 .toast span{flex:1;font-size:13.5px;color:var(--cream);line-height:1.45}

@@ -561,6 +561,44 @@ server-side with Supabase pg_cron (adapt/TEST before enabling):
     on conflict (key) do update set value = excluded.value;
   $$);
 
+## Value Chain Cooperatives
+A Value Chain Cooperative bundles primary cooperatives, their MSME members and partner
+firms (e.g. an anchor buyer) into one coordinated unit, organised by stage.
+
+- Cooperatives are assigned AUTOMATICALLY. A cooperative joins a chain if EITHER:
+  (a) its own registered sector maps to that chain (COOP_SECTOR_TO_CHAIN), OR
+  (b) any of its members applied for LASMECO in that sector, i.e. through that sector's
+      accelerator. A hospital cooperative registered under "Services" that applies via the
+      Health Accelerator therefore appears in the Health chain, at Care & Service Delivery.
+  Each cooperative shows WHY it is there ("Via Health Accelerator" / "By sector" /
+  "Added by MCCTI"). MCCTI can add, remove, or move a cooperative between stages by hand;
+  those overrides are remembered and always win.
+- This accelerator route is what populates Health, Tourism and Digital Economy chains,
+  since no cooperative registers under those names.
+- Stages come from a per-sector template (CHAIN_STAGE_TEMPLATES) and are editable.
+- Chains are PROVISIONED AUTOMATICALLY: one per RAC sector, created on load and kept in
+  place (idempotent). This runs in live too - chains are structural, not sample data.
+  MCCTI can still create extra chains; accelerators can propose (Proposed) for approval.
+- A cooperative may belong to several chains.
+- Metrics per chain: jobs supported, combined annual turnover, NPL across the chain,
+  and combined NAV (indicative only - it does NOT pool guarantees for credit).
+- Fees: CHAIN_FEES registration N50,000 / annual N25,000 are PLACEHOLDERS. Confirm the
+  real figures with MCCTI before go-live.
+- Sectors with no cooperative mapping (e.g. Circular Economy, Health, Tourism, Digital)
+  start empty by design; MCCTI adds cooperatives manually, or the mapping is extended.
+
+### Opportunity board (built)
+Every chain has an opportunity board. Cooperatives, members, accelerators and MCCTI can
+post a Request for quote, an Offtake offer or a Bulk purchase pool, with quantity, unit,
+indicative value and a closing date. Anyone else in the chain can respond with a note and
+a price; the poster is notified and can close the opportunity. Reviewers see it read-only.
+
+Cooperatives and members now have their own "Value chains" tab showing only the chains
+their cooperative belongs to.
+
+Still to build: public chain directory (chain listing visible without sign-in) and the
+chain registration fee in Revenue & billing.
+
 ## Environment variables
 See `.env.example`. For local testing copy it to `.env.local` and fill it in.
 - VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY - accounts and data (Stage 2).
