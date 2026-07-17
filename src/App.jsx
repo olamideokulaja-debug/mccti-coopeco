@@ -518,13 +518,12 @@ function Landing({ area, setArea, onEnter, lang = 'en', tab = 'home', onTab }) {
             <p className="lead">13,000 registered cooperatives and 150,000+ members sit across two separate systems and a credit programme that cannot see them. MCCTI CoopEco consolidates the registry, member analytics, LASMECO financing, wallets and governance intelligence into a single, Ministry-owned platform.</p>
             <div className="hero-cta"><button className="btn btn-gold" onClick={onEnter}>{t('hero.cta', lang)}</button><button className="btn btn-ghost" onClick={() => onTab && onTab('modules')}>{t('hero.ghost', lang)}</button></div>
             {lang !== 'en' && <p className="lang-note">Translations are provisional and pending review by the Ministry’s language team. Detailed content remains in English for now.</p>}
-            <p className="hero-foot">Ministry-owned &middot; SPV-operated &middot; self-funding from Year 1</p>
+            <p className="hero-foot">Ministry-owned &middot; SPV-operated &middot; built for the cooperative economy</p>
           </div>
           <LiveRegister areaId={area} />
         </section>
         <section className="band" aria-label="Headline figures">
-          {[[13000, '', 'Registered cooperatives'], [150000, '+', 'MSME members'], [97, '%', 'MSMEs currently informal'], [8, '', 'Platform revenue streams']].map(([n, suf, l]) => (<div className="band-item" key={l}><span className="band-fig"><CountUp end={n} suffix={suf} /></span><span className="band-lab">{l}</span></div>))}
-          <div className="band-item"><span className="band-fig">₦655M<span className="band-arrow"> &rarr; </span>₦1B+</span><span className="band-lab">Year 1 to Year 3</span></div>
+          {[[13000, '', 'Registered cooperatives'], [150000, '+', 'MSME members'], [97, '%', 'MSMEs currently informal'], [21, '', 'Cooperative area offices']].map(([n, suf, l]) => (<div className="band-item" key={l}><span className="band-fig"><CountUp end={n} suffix={suf} /></span><span className="band-lab">{l}</span></div>))}
         </section>
         <section className="lens" id="lens">
           <div className="section-head"><p className="eyebrow">Area office lens</p><h2>See the cooperative economy, office by office</h2><p className="section-sub">Switch between a State-wide view and any of the 21 cooperative area offices. The underserved Ikorodu, Epe, Badagry and Ibeju-Lekki corridors are where formalisation has furthest to travel.</p></div>
@@ -536,7 +535,7 @@ function Landing({ area, setArea, onEnter, lang = 'en', tab = 'home', onTab }) {
         </section>
         <section className="explore">
           <div className="section-head"><p className="eyebrow">Explore</p><h2>Take a closer look</h2></div>
-          <div className="explore-grid">{[['modules', 'Modules', 'The six modules the cooperative economy runs on'], ['platform', 'Platform', 'How the platform changes the arithmetic'], ['pricing', 'Pricing', 'Eight revenue streams, self-funding from Year 1'], ['leadership', 'Leadership', 'The stewards behind MCCTI CoopEco'], ['about', 'About', 'The institutions and programmes behind it']].map(([id, title, desc]) => (<button className="explore-card" key={id} onClick={() => onTab && onTab(id)}><span className="explore-title">{title}</span><span className="explore-desc">{desc}</span><span className="explore-arrow" aria-hidden="true">&rarr;</span></button>))}</div>
+          <div className="explore-grid">{[['modules', 'Modules', 'The six modules the cooperative economy runs on'], ['platform', 'Platform', 'How the platform changes the arithmetic'], ['leadership', 'Leadership', 'The stewards behind MCCTI CoopEco'], ['about', 'About', 'The institutions and programmes behind it']].map(([id, title, desc]) => (<button className="explore-card" key={id} onClick={() => onTab && onTab(id)}><span className="explore-title">{title}</span><span className="explore-desc">{desc}</span><span className="explore-arrow" aria-hidden="true">&rarr;</span></button>))}</div>
         </section>
         <section className="quote"><img className="quote-seal" src="/lagos-seal.png" alt="" aria-hidden="true" /><blockquote><p>&ldquo;This engagement marks a fundamental reset of the cooperative digitalisation agenda in Lagos State: one registry, one member record, one governance framework, owned by the Ministry.&rdquo;</p><cite>Directorate of Cooperative Services, MCCTI</cite></blockquote></section>
       </>)}
@@ -547,18 +546,14 @@ function Landing({ area, setArea, onEnter, lang = 'en', tab = 'home', onTab }) {
         <div className="persona-grid">{PERSONAS.map(([tt, d]) => (<div className="persona" key={tt}><span className="persona-t">{tt}</span><span className="persona-d">{d}</span></div>))}</div>
       </section>)}
       {tab === 'platform' && (<section className="arc page" id="arc">
-        <div className="section-head"><p className="eyebrow">From fragmentation to ₦1 billion</p><h2>How the platform changes the arithmetic</h2></div>
+        <div className="section-head"><p className="eyebrow">From fragmentation to one system</p><h2>How the platform changes the arithmetic</h2></div>
         <div className="arc-steps">
           <div className="arc-step"><span className="arc-n">01</span><h4>The problem: fragmentation</h4><p>The registry, the analytics layer and LASMECO operate in isolation. Data is duplicated, revenue is uncollected, fraud goes undetected, and Government cannot see its own economy.</p></div>
           <div className="arc-arrow" aria-hidden="true">&rarr;</div>
           <div className="arc-step"><span className="arc-n">02</span><h4>The solution: one unified platform</h4><p>Registry, KYC, analytics, wallets, disbursement and dashboards in a single Ministry-owned system. KYC at onboarding, timestamped trails, escrow flows, finance as the reward for compliance.</p></div>
           <div className="arc-arrow" aria-hidden="true">&rarr;</div>
-          <div className="arc-step"><span className="arc-n">03</span><h4>The return: self-funding IGR</h4><p>Eight revenue streams generate ₦655M in Year 1 and cross ₦1 billion by Year 3, at zero capital cost to the State, with full ownership retained by the Ministry.</p></div>
+          <div className="arc-step"><span className="arc-n">03</span><h4>The return: oversight and inclusion</h4><p>One register, one member record and one governance framework, at zero capital cost to the State, with full ownership retained by the Ministry. Cooperatives gain visibility, members gain access to finance, and Government gains a live view of the cooperative economy.</p></div>
         </div>
-      </section>)}
-      {tab === 'pricing' && (<section className="pricing page" id="pricing">
-        <div className="section-head"><p className="eyebrow"><span className="eb-dot" />Pricing</p><h2>Eight revenue streams, one self-funding platform</h2><p className="section-sub">Transparent, usage-based pricing that makes the platform self-funding from Year 1, at no capital cost to the State.</p></div>
-        <div className="price-grid">{PRICING.map((pr, i) => (<Reveal className="price-card" tag="article" key={pr.name} delay={i * 45}><div className="price-top"><span className="price-amt">{pr.price}</span><span className="price-unit">{pr.unit}</span></div><h3>{pr.name}</h3><p className="price-who">{pr.who}</p><p>{pr.body}</p></Reveal>))}</div>
       </section>)}
       {tab === 'leadership' && (<section className="leaders page" id="leadership">
         <div className="section-head"><p className="eyebrow"><span className="eb-dot" />Leadership</p><h2>Stewards of the cooperative economy</h2><p className="section-sub">The State and Ministry leadership provide the policy direction, oversight and governance behind MCCTI CoopEco.</p></div>
@@ -3487,7 +3482,7 @@ export default function App() {
       {!inApp && (
         <header className="nav">
           <button className="brand" onClick={goHome}><span className="brand-mark" aria-hidden="true">&#9670;</span><span className="brand-name">MCCTI <em>CoopEco</em></span></button>
-          <nav className="nav-links" aria-label="Primary">{view === 'landing' ? (<>{[['home', 'nav.home'], ['modules', 'nav.modules'], ['pricing', 'nav.pricing'], ['leadership', 'nav.leadership'], ['about', 'nav.about'], ['platform', 'nav.platform']].map(([id, k]) => <button key={id} className={cx('nav-page', landingTab === id && 'on')} onClick={() => goLanding(id)}>{t(k, lang)}</button>)}</>) : null}<button className="nav-verify" onClick={() => setView('verify')}>{t('nav.verify', lang)}</button><select className="lang-select" value={lang} onChange={(e) => setLang(e.target.value)} aria-label="Language">{LANGS.map(([code, label]) => <option key={code} value={code}>{label}</option>)}</select></nav>
+          <nav className="nav-links" aria-label="Primary">{view === 'landing' ? (<>{[['home', 'nav.home'], ['modules', 'nav.modules'], ['leadership', 'nav.leadership'], ['about', 'nav.about'], ['platform', 'nav.platform']].map(([id, k]) => <button key={id} className={cx('nav-page', landingTab === id && 'on')} onClick={() => goLanding(id)}>{t(k, lang)}</button>)}</>) : null}<button className="nav-verify" onClick={() => setView('verify')}>{t('nav.verify', lang)}</button><select className="lang-select" value={lang} onChange={(e) => setLang(e.target.value)} aria-label="Language">{LANGS.map(([code, label]) => <option key={code} value={code}>{label}</option>)}</select></nav>
           {ready && session ? (
             <div className="account"><button className="acct-btn" onClick={() => setView('dashboard')}><Avatar name={session.profile.name} photo={session.profile.photo} size={30} /><span className="acct-name">{session.profile.name.split(' ')[0]}</span></button><button className="signout" onClick={doSignOut}>Sign out</button></div>
           ) : (<button className="btn btn-gold nav-cta" onClick={enter}>{t('cta.enter', lang)}</button>)}

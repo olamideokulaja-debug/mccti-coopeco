@@ -613,6 +613,22 @@ Dashboard content was capped at 1120px, which left roughly 230px unused on wide 
 monitors. The cap is now 1560px, so tables, KPI rows and chart grids fill the screen.
 Prose is capped at 95 characters per line so it stays readable at that width.
 
+## Landing page: no commercial figures
+The public landing page no longer carries the platform's commercial model. Removed:
+- the Pricing page and its nav tab (the eight priced revenue streams)
+- the headline band item "N655M -> N1B+ Year 1 to Year 3"
+- the band item "8 Platform revenue streams" (now "21 Cooperative area offices")
+- "self-funding from Year 1" in the hero footer and the Platform page
+- the Platform page eyebrow "From fragmentation to N1 billion", and step 03 rewritten
+  from "self-funding IGR" to oversight and inclusion
+
+Pricing still lives where it belongs: leadership -> Revenue & billing (signed in).
+The PRICING constant is unchanged, so nothing else is affected.
+
+Deliberately kept (LASMECO programme facts, not platform pricing): the N10bn LASMECO
+initiative in the Governor's biography, and loans "up to N10,000,000 at 9%" in Modules
+and the FAQ. Say the word if these should go too.
+
 ## Environment variables
 See `.env.example`. For local testing copy it to `.env.local` and fill it in.
 - VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY - accounts and data (Stage 2).
