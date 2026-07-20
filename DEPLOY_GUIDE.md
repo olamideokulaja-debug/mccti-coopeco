@@ -629,6 +629,21 @@ Deliberately kept (LASMECO programme facts, not platform pricing): the N10bn LAS
 initiative in the Governor's biography, and loans "up to N10,000,000 at 9%" in Modules
 and the FAQ. Say the word if these should go too.
 
+## Accelerator rating
+Each accelerator now carries an approval rating: the share of the MSMEs it sponsored that
+were approved for a loan (reached bank assessment or beyond), out of those with a decided
+outcome. Shown as stars + percentage on MCCTI -> Accelerators. Applications still in
+training/coop-validation are counted as "in pipeline" and excluded until they have an
+outcome. Attribution: a loan belongs to an accelerator by apEmail/apName, or by sector.
+
+## Mandatory credit-clearance letter
+LASMECO documents now include a "Credit clearance letter (no outstanding loans)": a letter
+from a licensed credit bureau confirming the applicant is not owing money and has no other
+loan pending. The MEMBER uploads it alongside their other documents (same flow as before).
+It is MANDATORY: the qualification checklist will not pass until the letter is uploaded AND
+verified by Sterling Bank. It is marked "(mandatory)" in both the checklist and the member's
+upload guide.
+
 ## Environment variables
 See `.env.example`. For local testing copy it to `.env.local` and fill it in.
 - VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY - accounts and data (Stage 2).

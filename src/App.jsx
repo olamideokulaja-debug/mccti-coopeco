@@ -1851,7 +1851,7 @@ function BulkImport({ ctx, onDone }) {
     </div>
   )
 }
-const SEED_MARKERS = ['integration:seed-v9', 'integration:accel-v8', 'integration:loandocs-v2', 'integration:snapshots-v1']
+const SEED_MARKERS = ['integration:seed-v9', 'integration:accel-v8', 'integration:loandocs-v4', 'integration:snapshots-v1']
 /* Wipes the seed markers and re-runs seeding, so corrected sample data lands on a database
    that was seeded by an older build. Only offered while DEMO_DATA is on. */
 async function rebuildDemoData() {
@@ -2288,7 +2288,7 @@ async function clearPriorSeed() {
   await del('snap:', (s) => 'snap:' + s.coopId + ':' + s.month, (s) => !!s.coopId)
   await del('chain:', (x) => 'chain:' + x.chainId, (x) => x.createdBy === 'seed@mccti.lg.gov.ng' || x.createdBy === 'system')
   await del('snapsweep:', (s) => 'snapsweep:' + s.month, (s) => !!s.month)
-  await kvDelete('integration:loandocs-v1'); await kvDelete('integration:loandocs-v2'); await kvDelete('integration:snapshots-v1')
+  await kvDelete('integration:loandocs-v1'); await kvDelete('integration:loandocs-v4'); await kvDelete('integration:snapshots-v1')
 }
 async function seedDemoData() {
   if (await kvGet('integration:seed-v9')) return false
@@ -2405,6 +2405,26 @@ const ACCEL_SEEDS = [
   { email: 'accel.digital@coopeco.ng', name: 'Digital Economy Accelerator', sectors: ['Digital Economy'] },
 ]
 async function listAccelerators() { return (await kvList('accelerator:')).sort((a, b) => (a.name > b.name ? 1 : -1)) }
+/* Accelerator rating = share of the MSMEs it sponsored that were approved for a loan.
+   "Approved" = reached bank assessment or beyond (Bank assessment, BOI approved, Disbursed,
+   Repaying, Completed, Default). "Decided" excludes applications still early in the pipeline
+   (Applied, In training, Shortlisted, Coop validated), which have no outcome yet. */
+const ACCEL_APPROVED_STATES = ['Bank assessment', 'BOI approved', 'Disbursed', 'Repaying', 'Completed', 'Default']
+const ACCEL_PENDING_STATES = ['Applied', 'In training', 'Shortlisted', 'Coop validated']
+function accelLoans(accel, loans) {
+  const names = accel.sectors || []
+  return (loans || []).filter((l) => (accel.email && l.apEmail === accel.email) || (accel.name && l.apName === accel.name) || (names.indexOf(l.sector) > -1))
+}
+function accelRating(accel, loans) {
+  const ls = accelLoans(accel, loans)
+  const decided = ls.filter((l) => ACCEL_APPROVED_STATES.indexOf(l.status) > -1 || l.status === 'Declined')
+  const approved = ls.filter((l) => ACCEL_APPROVED_STATES.indexOf(l.status) > -1)
+  const pending = ls.filter((l) => ACCEL_PENDING_STATES.indexOf(l.status) > -1)
+  const rate = decided.length ? approved.length / decided.length : null // null = no decided outcomes yet
+  const stars = rate == null ? 0 : Math.max(1, Math.round(rate * 5))
+  const grade = rate == null ? 'Unrated' : rate >= 0.8 ? 'Excellent' : rate >= 0.6 ? 'Strong' : rate >= 0.4 ? 'Fair' : 'Developing'
+  return { sponsored: ls.length, decided: decided.length, approved: approved.length, pending: pending.length, rate, pct: rate == null ? null : Math.round(rate * 100), stars, grade }
+}
 async function getAccelerator(email) { return kvGet('accelerator:' + email) }
 async function saveAccelerator(rec) { const prior = await kvGet('accelerator:' + rec.email); const status = rec.status || (prior && prior.status) || 'Pending'; await kvSet('accelerator:' + rec.email, { ...rec, status, updatedAt: new Date().toISOString() }, rec.uid || null); return rec }
 async function acceleratorsForSector(sector) { return (await listAccelerators()).filter((a) => (a.sectors || []).includes(sector) && (a.status || 'Pending') === 'Appointed') }
@@ -2417,19 +2437,19 @@ async function ensureAccelerators() {
   return true
 }
 async function ensureLoanDocsSeed() {
-  if (await kvGet('integration:loandocs-v2')) return false
+  if (await kvGet('integration:loandocs-v4')) return false
   try {
     const loans = await listLoans()
     const targets = loans.filter((l) => ['Coop validated', 'Bank assessment', 'BOI approved', 'Disbursed', 'Repaying'].includes(l.status)).slice(0, 4)
     for (const l of targets) {
-      const cats = LASMECO_DOC_REQUIREMENTS.slice(0, 4)
+      const cats = ['Valid ID (NIN slip / passport)', 'BVN confirmation', '12-month bank statements (all accounts)', 'Credit bureau report (business & promoter)', CREDIT_CLEARANCE_DOC]
       for (let i = 0; i < cats.length; i++) {
         const id = 'LD' + String(l.loanId).replace(/[^0-9]/g, '') + i
-        await kvSet('doc:' + l.loanId + ':' + id, { id, coopId: l.loanId, name: cats[i].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.pdf', category: cats[i], size: 180000 + i * 24000, type: 'application/pdf', url: '', path: '', storage: 'demo', uploadedBy: l.memberName, uploadedAt: new Date().toISOString(), verified: (l.status !== 'Coop validated') && i < 2 })
+        await kvSet('doc:' + l.loanId + ':' + id, { id, coopId: l.loanId, name: cats[i].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.pdf', category: cats[i], size: 180000 + i * 24000, type: 'application/pdf', url: '', path: '', storage: 'demo', uploadedBy: l.memberName, uploadedByRole: 'member', uploadedAt: new Date().toISOString(), verified: (l.status !== 'Coop validated') && i < 3 })
       }
     }
   } catch (e) { /* best-effort */ }
-  await kvSet('integration:loandocs-v2', { done: true, at: new Date().toISOString() })
+  await kvSet('integration:loandocs-v4', { done: true, at: new Date().toISOString() })
   return true
 }
 let _seedInFlight = null
@@ -2542,7 +2562,8 @@ function LoanApplyForm({ ctx, member, onDone, onCancel }) {
     </div>
   )
 }
-const LASMECO_DOC_REQUIREMENTS = ['Valid ID (NIN slip / passport)', 'BVN confirmation', '12-month bank statements (all accounts)', 'Credit bureau report (business & promoter)', 'Cooperative letter of introduction', 'CAC / business registration certificate', 'Operating licences / permits', 'Cash-flow analysis with assumptions', "Promoter's statement of net worth", 'Asset register & vendor invoices (asset finance)', 'Insurance (asset + credit-life)', 'Passport photograph']
+const LASMECO_DOC_REQUIREMENTS = ['Valid ID (NIN slip / passport)', 'BVN confirmation', '12-month bank statements (all accounts)', 'Credit bureau report (business & promoter)', 'Credit clearance letter (no outstanding loans)', 'Cooperative letter of introduction', 'CAC / business registration certificate', 'Operating licences / permits', 'Cash-flow analysis with assumptions', "Promoter's statement of net worth", 'Asset register & vendor invoices (asset finance)', 'Insurance (asset + credit-life)', 'Passport photograph']
+const CREDIT_CLEARANCE_DOC = 'Credit clearance letter (no outstanding loans)'
 function lasmecoChecklist(loan, member, docs) {
   const has = (c) => docs.find((x) => x.category === c)
   const items = []
@@ -2553,6 +2574,9 @@ function lasmecoChecklist(loan, member, docs) {
   items.push({ label: 'Operating 12+ months (not a startup)', ok: !!(member && member.msme && (member.msme.yearsInOperation || 0) >= 1) })
   const score = member ? scoreMember(member).score : 0
   items.push({ label: 'Acceptable credit profile \u2014 score at least 500 (currently ' + score + ')', ok: score >= 500 })
+  // Mandatory credit-clearance letter from a credit bureau, uploaded by the member.
+  const cc = has(CREDIT_CLEARANCE_DOC)
+  items.push({ label: CREDIT_CLEARANCE_DOC, ok: !!cc && !!cc.verified, verified: cc ? cc.verified : false, doc: true, mandatory: true })
   const keyDocs = ['12-month bank statements (all accounts)', 'Credit bureau report (business & promoter)', 'Cooperative letter of introduction', 'Cash-flow analysis with assumptions', 'CAC / business registration certificate']
   keyDocs.forEach((c) => { const d = has(c); items.push({ label: c, ok: !!d, verified: d ? d.verified : false, doc: true }) })
   const outstanding = items.filter((i) => !i.ok)
@@ -2578,9 +2602,9 @@ function LoanKycPanel({ loan, ctx }) {
   return (
     <div className="returns-box"><h4>Application documents &amp; KYC</h4>
       <p className="muted-line">{isBorrower ? 'Submit the documents below so your Accelerator and Sterling Bank can verify your KYC and process your application. You will be notified if anything is outstanding.' : 'Documents submitted by the applicant. Sterling Bank verifies each item for KYC; BOI sees the verified set.'}</p>
-      <div className="kyc-check">{chk.items.map((it, i) => (<div className={cx('kyc-item', it.ok && 'ok')} key={i}><span className="kyc-mark">{it.ok ? '\u2713' : '\u25cb'}</span><span className="kyc-label">{it.label}{it.doc && it.ok ? (it.verified ? ' \u2014 verified' : ' \u2014 submitted, awaiting verification') : ''}</span></div>))}</div>
+      <div className="kyc-check">{chk.items.map((it, i) => (<div className={cx('kyc-item', it.ok && 'ok')} key={i}><span className="kyc-mark">{it.ok ? '\u2713' : '\u25cb'}</span><span className="kyc-label">{it.label}{it.mandatory ? ' (mandatory)' : ''}{it.doc && it.ok ? (it.verified ? ' \u2014 verified' : ' \u2014 submitted, awaiting verification') : ''}</span></div>))}</div>
       <div className={cx('kyc-status', chk.qualifies ? 'ok' : 'pending')}>{chk.qualifies ? 'All requirements met \u2014 ready to proceed to assessment.' : chk.outstanding.length + ' item(s) outstanding' + (chk.unverifiedDocs.length ? ', ' + chk.unverifiedDocs.length + ' awaiting Sterling verification' : '') + '.'}</div>
-      {isBorrower ? <div className="doc-guide"><h5>Documents to upload</h5><ul>{LASMECO_DOC_REQUIREMENTS.map((c) => { const has = docs.find((d) => d.category === c); return <li key={c} className={cx(has && 'done')}><span aria-hidden="true">{has ? '\u2713' : '\u2022'}</span> {c}{c.indexOf('asset finance') > -1 ? ' (only if applying for Asset Finance)' : ''}</li> })}</ul><p className="chart-note">Pick the matching type from the dropdown below, choose your file, and it uploads straight to your Accelerator and Sterling Bank for review.</p></div> : null}
+      {isBorrower ? <div className="doc-guide"><h5>Documents to upload</h5><ul>{LASMECO_DOC_REQUIREMENTS.map((c) => { const has = docs.find((d) => d.category === c); return <li key={c} className={cx(has && 'done')}><span aria-hidden="true">{has ? '\u2713' : '\u2022'}</span> {c}{c === CREDIT_CLEARANCE_DOC ? ' (mandatory — from a credit bureau, confirming no outstanding or pending loans)' : ''}{c.indexOf('asset finance') > -1 ? ' (only if applying for Asset Finance)' : ''}</li> })}</ul><p className="chart-note">Pick the matching type from the dropdown below, choose your file, and it uploads straight to your Accelerator and Sterling Bank for review.</p></div> : null}
       {isReviewer(ctx) && !DEMO_DATA ? <p className="panel-note">Applicant documents are hidden in review access because this database holds real member data (NDPR). The qualification checklist above shows the review outcome without exposing the underlying KYC files.</p> : <DocumentsPanel coopId={loan.loanId} ctx={ctx} canVerify={canVerify} canUpload={isBorrower} categories={LASMECO_DOC_REQUIREMENTS} onChange={reloadDocs} />}
       {!isBorrower && (role === 'accelerator' || role === 'sterling') && (chk.outstanding.length > 0) && <div className="panel-actions"><button className="btn btn-outline btn-sm" disabled={busy} onClick={requestFeedback}>Notify member of outstanding items</button></div>}
     </div>
@@ -2673,19 +2697,20 @@ function CoopTierPanel({ coop, ctx, onChanged }) {
   )
 }
 function AcceleratorAppointments({ ctx }) {
-  const [list, setList] = useState(null), [busy, setBusy] = useState(''), [docs, setDocs] = useState({})
-  const reload = useCallback(async () => { const l = await listAccelerators(); setList(l); const d = {}; for (const a of l) { try { d[a.email] = (await listDocs('accel:' + a.email)).length } catch (e) { d[a.email] = 0 } } setDocs(d) }, [])
+  const [list, setList] = useState(null), [busy, setBusy] = useState(''), [docs, setDocs] = useState({}), [loans, setLoans] = useState([])
+  const reload = useCallback(async () => { const l = await listAccelerators(); setList(l); setLoans(await listLoans()); const d = {}; for (const a of l) { try { d[a.email] = (await listDocs('accel:' + a.email)).length } catch (e) { d[a.email] = 0 } } setDocs(d) }, [])
   useEffect(() => { reload() }, [reload])
   const setStatus = (a, status) => async () => { setBusy(a.email); await saveAccelerator({ ...a, status }); setBusy(''); reload() }
   if (!list) return <p className="muted-line">Loading accelerators…</p>
   return (
     <div className="ws">
       <p className="muted-line">The Ministry (MCCTI) formally appoints accelerators before they operate, following the Consortium call. Appointed accelerators can be routed applications by members in their sectors.</p>
-      {list.length ? <div className="risk-list">{list.map((a) => { const appointed = a.status === 'Appointed'; return (<div className="risk-item" key={a.email}><span className={cx('chip', appointed ? 'st-approved' : 'st-review')}>{a.status || 'Pending'}</span><div className="risk-body"><strong>{a.name}</strong><p>{(a.sectors || []).join(', ') || 'No sectors set'} &middot; {a.email} &middot; {docs[a.email] || 0} document(s) submitted</p></div>{!isReviewer(ctx) && <div className="doc-actions">{!appointed ? <button className="link-inline" disabled={busy === a.email} onClick={setStatus(a, 'Appointed')}>Appoint</button> : <button className="link-inline danger" disabled={busy === a.email} onClick={setStatus(a, 'Suspended')}>Suspend</button>}</div>}</div>) })}</div> : <p className="muted-line">No accelerators have registered yet.</p>}
-      <p className="panel-note">RAC vetting before appointment: CAC registration, valid permits, 3+ years in enterprise development, sector track record, audited financials, and CVs of key staff. Required documents: {ACCEL_DOC_REQUIREMENTS.slice(0, 4).join(', ')}…</p>
+      {list.length ? <div className="risk-list">{list.map((a) => { const appointed = a.status === 'Appointed'; const r = accelRating(a, loans); return (<div className="risk-item" key={a.email}><span className={cx('chip', appointed ? 'st-approved' : 'st-review')}>{a.status || 'Pending'}</span><div className="risk-body"><strong>{a.name}</strong><p>{(a.sectors || []).join(', ') || 'No sectors set'} &middot; {a.email} &middot; {docs[a.email] || 0} document(s) submitted</p><div className="accel-rating"><Stars n={r.stars} /><span className="accel-grade">{r.pct == null ? 'Unrated' : r.pct + '% approved'}</span><span className="accel-sub">{r.approved}/{r.decided} decided · {r.sponsored} sponsored{r.pending ? ' · ' + r.pending + ' in pipeline' : ''}</span></div></div>{!isReviewer(ctx) && <div className="doc-actions">{!appointed ? <button className="link-inline" disabled={busy === a.email} onClick={setStatus(a, 'Appointed')}>Appoint</button> : <button className="link-inline danger" disabled={busy === a.email} onClick={setStatus(a, 'Suspended')}>Suspend</button>}</div>}</div>) })}</div> : <p className="muted-line">No accelerators have registered yet.</p>}
+      <p className="panel-note">Rating = share of sponsored MSMEs approved for a loan (reached bank assessment or beyond), out of those with a decided outcome. Applications still in training or coop validation are shown as “in pipeline” and do not yet count. RAC vetting before appointment: CAC registration, valid permits, 3+ years in enterprise development, sector track record, audited financials, and CVs of key staff.</p>
     </div>
   )
 }
+function Stars({ n }) { return (<span className="stars" aria-label={n + ' of 5'}>{[1, 2, 3, 4, 5].map((i) => <span key={i} className={cx('star', i <= n && 'on')}>{i <= n ? '\u2605' : '\u2606'}</span>)}</span>) }
 function LoanDetail({ loan, ctx, onClose, onChanged }) {
   const [l, setL] = useState(loan), [note, setNote] = useState(''), [amt, setAmt] = useState(''), [busy, setBusy] = useState(false), [rk, setRk] = useState(0), [tenorInput, setTenorInput] = useState('12'), [repay, setRepay] = useState('')
   const [disb, setDisb] = useState({ sterlingAccount: '', supplier: '', supplierAccount: '' })
@@ -3804,6 +3829,19 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .chain-node strong{display:block;font-size:13px;color:var(--cream)}
 .chain-node span{font-size:11.5px;color:var(--sage-dim)}
 .chain-node.firm strong{color:var(--gold-soft)}
+.accel-rating{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px}
+.stars{letter-spacing:1px}
+.star{color:var(--line);font-size:14px}
+.star.on{color:var(--gold-soft)}
+.accel-grade{font-size:12.5px;font-weight:600;color:var(--cream)}
+.accel-sub{font-size:11.5px;color:var(--sage-dim)}
+.clearance-box{border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:14px 0}
+.clearance-box.req{border-color:var(--err);background:rgba(192,83,58,.05)}
+.clearance-box.wait{border-color:var(--gold-soft);background:#fbf3e6}
+.clearance-box.ok{border-color:var(--green);background:var(--green-panel)}
+.clearance-box h5{font-size:13px;margin:0 0 6px;display:flex;align-items:center;gap:8px}
+.clearance-box p{font-size:13px;color:var(--sage);line-height:1.5;margin:0 0 10px}
+.req-tag{font-family:var(--mono);font-size:9px;letter-spacing:.06em;text-transform:uppercase;background:var(--err);color:#fff;border-radius:4px;padding:2px 7px}
 .chain-card.static{cursor:default}
 .chain-card.static:hover{border-color:var(--line-soft);transform:none}
 .pub-chains{margin:44px 0 10px;text-align:left}
