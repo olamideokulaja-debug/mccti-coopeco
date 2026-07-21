@@ -640,6 +640,20 @@ Charts reuse the shared primitives (Donut, Bars, MiniArea, CHART_C). The society
 leadership overviews already use these; Sterling and BOI use the loan-stage overview.
 The member overview is the remaining candidate for the same treatment.
 
+## Built-in vs AI assessment (important)
+The 'Assess this member' feature now ALWAYS works, with no external dependency:
+- By default it uses a BUILT-IN rule-based assessment computed on the member's tenure,
+  contribution total and consistency, and the cooperative's capacity. No API key, works
+  on Vercel and everywhere. Labelled 'Built-in assessment'.
+- If you set ANTHROPIC_API_KEY in Vercel, the app routes through /api/anthropic (your
+  server-side proxy; key never reaches the browser) and returns an AI-written assessment
+  labelled 'AI assessment'. If the AI call fails for any reason, it silently falls back to
+  the built-in one so the workflow never breaks.
+The guarantee letter behaves the same way: AI-written body when a key is present, a fixed
+professional body otherwise. Both render as a PDF on the cooperative letterhead.
+NOTE: the earlier version called api.anthropic.com directly from the browser, which only
+works inside the Claude artifact runtime and NOT on your own Vercel site. That is fixed.
+
 ## Document view, notifications, AI assessment & PDF letters
 - View before approving: every document row an approver sees has a View button that opens
   the file in a preview modal. Sample records show a representative preview so the flow is

@@ -2078,21 +2078,26 @@ function CoopLendingReadiness({ coop, ctx, onChanged }) {
   )
 }
 function GuaranteeAssessment({ gr, coop, loans, onUse }) {
-  const [member, setMember] = useState(null), [result, setResult] = useState(null), [busy, setBusy] = useState(false)
+  const [member, setMember] = useState(null), [result, setResult] = useState(null), [source, setSource] = useState(''), [busy, setBusy] = useState(false)
   useEffect(() => { listMembers().then((ms) => setMember(ms.find((m) => m.memberId === gr.memberId) || null)) }, [gr.memberId])
   const assess = async () => {
     if (!member) { toast('Member record not found.', 'error'); return }
     setBusy(true); setResult(null)
     const f = guaranteeAssessmentFacts(member, coop, loans)
     const prompt = 'You are advising the leadership of a Nigerian cooperative society deciding whether to grant a 25% loan guarantee to one of its members under the Lagos State LASMECO scheme. Give a brief, balanced assessment (about 90-130 words) of whether this member appears to merit the guarantee, then a final line "Suggestion: <lean approve / lean decline / borderline>". Be fair and factual; the human makes the final decision. Consider: time in the cooperative (rule: 6+ months), time in business (rule: 12+ months), contributions to the cooperative, business turnover and scale, and whether the cooperative has capacity. Facts (Naira amounts in NGN):\n' + JSON.stringify(f, null, 2) + '\nRequested facility: ' + gr.amount + ' (25% guarantee = ' + gr.guarantee + '). Do not invent facts beyond those given. If contributions data is zero or missing, note that it should be confirmed manually.'
-    try { const text = await callClaude(prompt, 600); setResult(text || 'No assessment returned.') }
-    catch (e) { setResult(null); toast('Could not generate the assessment. You can still approve manually.', 'error') }
-    finally { setBusy(false) }
+    try {
+      const text = await callClaude(prompt, 600)
+      setResult(text || ruleGuaranteeAssessment(member, coop, loans, gr)); setSource('ai')
+    } catch (e) {
+      setResult(ruleGuaranteeAssessment(member, coop, loans, gr)); setSource('rule')
+      if (!e || !e.noKey) toast('Used the built-in assessment (AI service was unavailable).', 'info')
+    } finally { setBusy(false) }
   }
+  const label = result ? (source === 'ai' ? 'AI assessment' : 'Built-in assessment') : 'Member assessment'
   return (
     <div className="ai-assess">
-      <div className="ai-assess-head"><span className="ai-tag">AI assessment</span><button className="btn btn-outline btn-sm" disabled={busy} onClick={assess}>{busy ? 'Assessing…' : result ? 'Re-assess' : 'Assess this member'}</button></div>
-      {result ? <div className="ai-assess-body"><p>{result}</p><div className="panel-actions"><button className="link-inline" onClick={() => onUse(result.replace(/\nSuggestion:.*/i, '').trim())}>Use as basis of approval</button></div><p className="ai-note">Advisory only. The decision and its recorded justification remain yours.</p></div> : <p className="ai-note">Generates a balanced view from the member’s tenure, contributions and business, to support your decision. It does not approve anything.</p>}
+      <div className="ai-assess-head"><span className="ai-tag">{label}</span><button className="btn btn-outline btn-sm" disabled={busy} onClick={assess}>{busy ? 'Assessing…' : result ? 'Re-assess' : 'Assess this member'}</button></div>
+      {result ? <div className="ai-assess-body"><p>{result}</p><div className="panel-actions"><button className="link-inline" onClick={() => onUse(result.replace(/\nSuggestion:.*/i, '').trim())}>Use as basis of approval</button></div><p className="ai-note">{source === 'ai' ? 'AI-generated. ' : 'Computed from tenure, contributions and capacity. '}Advisory only \u2014 the decision and its recorded justification remain yours.</p></div> : <p className="ai-note">Weighs the member\u2019s tenure, contributions and business against your cooperative\u2019s capacity, to support your decision. It does not approve anything.</p>}
     </div>
   )
 }
@@ -2443,12 +2448,32 @@ function coopLendingReady(coop, auditDocs) {
 }
 // Guarantee request workflow: member -> cooperative leadership approval -> letter.
 async function callClaude(prompt, maxTokens) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const res = await fetch('/api/anthropic', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: maxTokens || 1000, messages: [{ role: 'user', content: prompt }] }),
+    body: JSON.stringify({ max_tokens: maxTokens || 1000, messages: [{ role: 'user', content: prompt }] }),
   })
-  const data = await res.json()
+  const data = await res.json().catch(() => ({}))
+  if (res.status === 501 || data.stub) { const e = new Error('AI proxy not configured'); e.noKey = true; throw e }
+  if (!res.ok) throw new Error(data.error || ('AI request failed (' + res.status + ')'))
   return (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim()
+}
+// Rule-based guarantee assessment. No AI, no key, works everywhere. Mirrors the AI factors.
+function ruleGuaranteeAssessment(member, coop, loans, gr) {
+  const f = guaranteeAssessmentFacts(member, coop, loans)
+  const pts = []
+  let score = 0
+  if (f.meets6mo) { score += 1; pts.push('Member for ' + f.monthsInCoop + ' months (meets the 6-month rule).') } else pts.push('Only ' + f.monthsInCoop + ' months in the cooperative \u2014 below the 6-month rule.')
+  if (f.meets1yr) { score += 1; pts.push('In business ' + f.monthsInBusiness + ' months (meets the 1-year rule).') } else pts.push('In business only ' + f.monthsInBusiness + ' months \u2014 below the 1-year rule.')
+  if (f.contributionConsistencyPct >= 90) { score += 1; pts.push('Strong contribution consistency (' + f.contributionConsistencyPct + '%).') }
+  else if (f.contributionConsistencyPct >= 70) { score += 0.5; pts.push('Fair contribution consistency (' + f.contributionConsistencyPct + '%).') }
+  else if (f.contributionConsistencyPct > 0) pts.push('Weak contribution consistency (' + f.contributionConsistencyPct + '%).')
+  else pts.push('No contribution history on file \u2014 confirm manually.')
+  const contribVsGuarantee = f.totalContributionsNGN && gr ? f.totalContributionsNGN / gr.guarantee : 0
+  if (f.totalContributionsNGN) { pts.push('Total contributions ' + fmtNaira(f.totalContributionsNGN) + (gr ? ' vs 25% guarantee of ' + fmtNaira(gr.guarantee) + (contribVsGuarantee >= 1 ? ' (contributions exceed the guarantee).' : ' (contributions are below the guarantee).') : '.')); if (contribVsGuarantee >= 1) score += 1 }
+  if (f.coopAvailable >= (gr ? gr.guarantee : 0)) { score += 1; pts.push('Cooperative has capacity (' + fmtNaira(f.coopAvailable) + ' available).') } else pts.push('Cooperative capacity is tight (' + fmtNaira(f.coopAvailable) + ' available).')
+  const verdict = score >= 4 ? 'lean approve' : score >= 2.5 ? 'borderline' : 'lean decline'
+  const summary = pts.join(' ')
+  return summary + '\nSuggestion: ' + verdict
 }
 // Facts assembled for an AI guarantee assessment (all from the member's real record).
 function guaranteeAssessmentFacts(member, coop, loans) {
