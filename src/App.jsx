@@ -2519,7 +2519,8 @@ async function downloadGuaranteeLetter(gr, coop) {
   const d = new Date(gr.approvedAt || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
   const esc = (t) => String(t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const paras = body.split(/\n\n+/).map((p) => '<p>' + esc(p).replace(/\n/g, '<br>') + '</p>').join('')
-  const html = '<!doctype html><html><head><meta charset="utf-8"><title>Guarantee Letter ' + esc(gr.grId) + '</title><style>@page{size:A4;margin:22mm}body{font-family:Georgia,"Times New Roman",serif;color:#1a1a1a;line-height:1.6;font-size:12.5pt}.lh{border-bottom:3px double #1C8A4F;padding-bottom:12px;margin-bottom:6px}.lh .nm{font-size:19pt;font-weight:bold;color:#12673a;letter-spacing:.3px}.lh .meta{font-size:9.5pt;color:#555;margin-top:3px}.ref{display:flex;justify-content:space-between;font-size:10pt;color:#333;margin:18px 0 10px}.to{margin:6px 0 2px}.re{font-weight:bold;margin:14px 0}.sig{margin-top:40px}.sig .line{width:230px;border-top:1px solid #333;padding-top:5px;font-size:10.5pt}.foot{margin-top:28px;border-top:1px solid #ddd;padding-top:8px;font-size:8.5pt;color:#888;text-align:center}@media print{.noprint{display:none}}</style></head><body>' +
+  const html = '<!doctype html><html><head><meta charset="utf-8"><title>Guarantee Letter ' + esc(gr.grId) + '</title><style>@page{size:A4;margin:22mm}body{font-family:Georgia,"Times New Roman",serif;color:#1a1a1a;line-height:1.6;font-size:12.5pt;max-width:720px;margin:24px auto;padding:0 20px}.lh{border-bottom:3px double #1C8A4F;padding-bottom:12px;margin-bottom:6px}.lh .nm{font-size:19pt;font-weight:bold;color:#12673a;letter-spacing:.3px}.lh .meta{font-size:9.5pt;color:#555;margin-top:3px}.ref{display:flex;justify-content:space-between;font-size:10pt;color:#333;margin:18px 0 10px}.to{margin:6px 0 2px}.re{font-weight:bold;margin:14px 0}.sig{margin-top:40px}.sig .line{width:230px;border-top:1px solid #333;padding-top:5px;font-size:10.5pt}.foot{margin-top:28px;border-top:1px solid #ddd;padding-top:8px;font-size:8.5pt;color:#888;text-align:center}.bar{text-align:center;margin:0 0 18px;padding:10px;background:#f3f7f3;border-radius:8px}.bar button{padding:9px 20px;font-size:13px;background:#1C8A4F;color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit}@media print{.bar{display:none}body{margin:0}}</style></head><body>' +
+    '<div class="bar noprint"><button onclick="window.print()">Save as PDF / Print this letter</button></div>' +
     '<div class="lh"><div class="nm">' + esc(coop.name) + '</div><div class="meta">' + [coop.areaOffice ? 'Area Office: ' + esc(coop.areaOffice) : '', coop.regNo ? 'Reg. No: ' + esc(coop.regNo) : (coop.trackingId ? 'Ref: ' + esc(coop.trackingId) : ''), 'A registered cooperative society under the Lagos State MCCTI'].filter(Boolean).join(' &nbsp;&bull;&nbsp; ') + '</div></div>' +
     '<div class="ref"><span>Ref: ' + esc(gr.grId) + '</span><span>' + d + '</span></div>' +
     '<div class="to">The Credit Manager,<br>Sterling Bank Plc / Bank of Industry<br><em>Through: The Appointed Sector Accelerator, LASMECO</em></div>' +
@@ -2527,11 +2528,20 @@ async function downloadGuaranteeLetter(gr, coop) {
     paras +
     '<div class="sig"><div class="line">Authorised Signatory<br>For: ' + esc(coop.name) + '<br><span style="font-size:9pt;color:#666">' + esc(gr.approvedByName || 'Cooperative Leadership') + '</span></div></div>' +
     '<div class="foot">Generated via MCCTI CoopEco on ' + d + ' &bull; Ref ' + esc(gr.grId) + ' &bull; This letter is issued under the Lagos State LASMECO scheme.</div>' +
-    '<div class="noprint" style="text-align:center;margin-top:22px"><button onclick="window.print()" style="padding:10px 22px;font-size:13px;background:#1C8A4F;color:#fff;border:none;border-radius:6px;cursor:pointer">Save as PDF / Print</button></div>' +
-    '<script>setTimeout(function(){window.print()},400)</script></body></html>'
-  const w = window.open('', '_blank')
-  if (!w) { toast('Allow pop-ups to download the letter, then try again.', 'error'); return }
-  w.document.write(html); w.document.close()
+    '</body></html>'
+  // Reliable delivery: download as an HTML file (opens in any browser, print-to-PDF from there).
+  // No pop-up, so pop-up blockers cannot stop it. Also try to open a tab as a convenience.
+  try {
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'guarantee-letter-' + gr.grId + '.html'
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 4000)
+    toast('Guarantee letter downloaded. Open it and choose \u201CSave as PDF / Print\u201D.', 'success')
+  } catch (e) {
+    toast('Could not prepare the letter. Please try again.', 'error')
+  }
 }
 function globalGuaranteeUsed(loans) { return loans.filter((l) => ['Disbursed', 'Repaying'].includes(l.status)).reduce((a, l) => a + loanBreakdown(l.amountApproved || 0).sterlingGuarantee, 0) }
 function monthKey(d) { const x = new Date(d); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') }
@@ -4352,10 +4362,10 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .gr-head strong{font-size:14px;color:var(--cream)}
 .gr-head span{font-size:12.5px;color:var(--sage-dim)}
 .gr-sub{display:block;font-size:12px;color:var(--sage-dim);margin-top:4px}
-.ai-assess{border:1px solid var(--line-soft);background:var(--ink-2);border-radius:9px;padding:12px;margin:10px 0}
+.ai-assess{border:1px solid var(--line-soft);background:#f7f4fb;border-radius:9px;padding:12px;margin:10px 0}
 .ai-assess-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .ai-tag{font-family:var(--mono);font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--plum,#7a5b8a);background:#f0eaf4;border-radius:5px;padding:3px 8px}
-.ai-assess-body p{font-size:13px;color:var(--ink);line-height:1.6;margin:10px 0 4px;white-space:pre-wrap}
+.ai-assess-body p{font-size:13px;color:var(--cream);line-height:1.6;margin:10px 0 4px;white-space:pre-wrap}
 .ai-note{font-size:11px;color:var(--sage-dim);font-style:italic;margin:6px 0 0}
 .spark-axis{display:flex;justify-content:space-between;margin-top:4px}
 .spark-axis span{font-size:10.5px;color:var(--sage-dim);font-family:var(--mono)}
