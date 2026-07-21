@@ -629,6 +629,17 @@ Deliberately kept (LASMECO programme facts, not platform pricing): the N10bn LAS
 initiative in the Governor's biography, and loans "up to N10,000,000 at 9%" in Modules
 and the FAQ. Say the word if these should go too.
 
+## Accelerator dashboard (dynamic charts)
+The accelerator Overview now opens with a live dashboard computed from that accelerator's
+own loans: KPI row (sponsored MSMEs, disbursed value, earned to date, approval rate), an
+application-pipeline bar chart, an approval-outcomes donut, a by-sector donut, and a
+six-month disbursement-value trend line. All update automatically as loans move through
+the pipeline. Rating (stars) and Earnings/drawdown sit below it.
+
+Charts reuse the shared primitives (Donut, Bars, MiniArea, CHART_C). The society and
+leadership overviews already use these; Sterling and BOI use the loan-stage overview.
+The member overview is the remaining candidate for the same treatment.
+
 ## Accelerator earnings & drawdown
 Accelerators now see, on their Overview and a dedicated Earnings tab: total earned, amount
 transferred out, available balance, and the list of fee-earning loans. The fee is the

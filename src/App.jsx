@@ -2838,6 +2838,39 @@ function LoanDetail({ loan, ctx, onClose, onChanged }) {
   )
 }
 function useLoans() { const [loans, setLoans] = useState(null); const reload = useCallback(() => listLoans().then(setLoans), []); useEffect(() => { reload() }, [reload]); return [loans, reload] }
+function AccelDashboard({ accel, loans }) {
+  const mine = accelLoans(accel, loans)
+  const r = accelRating(accel, loans)
+  const e = accelEarnings(accel, loans)
+  const statusColors = { Repaying: CHART_C.green, Disbursed: CHART_C.teal, Completed: CHART_C.slate, Default: CHART_C.red, 'Bank assessment': CHART_C.gold, 'Coop validated': CHART_C.amber, 'BOI approved': CHART_C.plum, Applied: CHART_C.gold, 'In training': CHART_C.gold, Shortlisted: CHART_C.teal, Declined: CHART_C.red }
+  const stageOrder = ['Applied', 'In training', 'Shortlisted', 'Coop validated', 'Bank assessment', 'BOI approved', 'Disbursed', 'Repaying', 'Completed']
+  const pipeline = stageOrder.map((s) => ({ label: s, value: mine.filter((l) => l.status === s).length, color: statusColors[s] || CHART_C.gold })).filter((d) => d.value)
+  const sectors = Array.from(new Set(mine.map((l) => l.sector))).map((s, i) => ({ label: s || 'Unspecified', value: mine.filter((l) => l.sector === s).length, color: [CHART_C.green, CHART_C.teal, CHART_C.gold, CHART_C.plum, CHART_C.amber][i % 5] })).filter((d) => d.value)
+  const outcome = [{ label: 'Approved', value: r.approved, color: CHART_C.green }, { label: 'Declined', value: r.decided - r.approved, color: CHART_C.red }, { label: 'In pipeline', value: r.pending, color: CHART_C.gold }].filter((d) => d.value)
+  // Monthly disbursement value over the last 6 months, from disbursed loans
+  const months = []; const now = new Date()
+  for (let i = 5; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); months.push({ key: d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'), label: d.toLocaleString('en-NG', { month: 'short' }) }) }
+  const disb = mine.filter((l) => ACCEL_EARNED_STATES.indexOf(l.status) > -1)
+  const monthVals = months.map((m) => disb.filter((l) => (l.disbursedAt || '').slice(0, 7) === m.key).reduce((a, l) => a + (l.amountApproved || l.amountRequested || 0), 0))
+  const disbursedValue = disb.reduce((a, l) => a + (l.amountApproved || l.amountRequested || 0), 0)
+  const kpis = [
+    ['Sponsored MSMEs', String(mine.length)],
+    ['Disbursed value', fmtNaira(disbursedValue)],
+    ['Earned to date', fmtNaira(e.gross)],
+    ['Approval rate', r.pct == null ? '\u2014' : r.pct + '%'],
+  ]
+  return (
+    <div className="ws">
+      <div className="kpi-row">{kpis.map(([l, v]) => (<div className="kpi" key={l}><span className="kpi-fig">{v}</span><span className="kpi-lab">{l}</span></div>))}</div>
+      <div className="chart-grid">
+        <section className="chart-card"><h4>Application pipeline</h4>{pipeline.length ? <Bars data={pipeline} /> : <p className="muted-line">No applications yet.</p>}</section>
+        <section className="chart-card"><h4>Approval outcomes</h4>{outcome.length ? <Donut data={outcome} centerTop={r.pct == null ? '\u2014' : r.pct + '%'} centerBottom="approved" /> : <p className="muted-line">No decided outcomes yet.</p>}</section>
+        <section className="chart-card"><h4>By sector</h4>{sectors.length ? <Donut data={sectors} centerTop={String(mine.length)} centerBottom="loans" /> : <p className="muted-line">No loans yet.</p>}</section>
+      </div>
+      <section className="chart-card"><h4>Disbursement value \u2014 last 6 months</h4>{disbursedValue > 0 ? (<><MiniArea points={monthVals} color={CHART_C.green} /><div className="spark-axis">{months.map((m) => <span key={m.key}>{m.label}</span>)}</div></>) : <p className="muted-line">No disbursements in the last six months.</p>}</section>
+    </div>
+  )
+}
 function AccelEarnings({ accel, loans }) {
   const [wallet, setWallet] = useState(null), [busy, setBusy] = useState(false)
   const [amt, setAmt] = useState(''), [acct, setAcct] = useState({ bank: '', number: '', name: '' }), [open, setOpen] = useState(false)
@@ -2914,9 +2947,9 @@ function AcceleratorWorkspace({ ctx, section }) {
       {section === 'overview' && (<>
         <div className="accel-sectors"><span>Serving: {(accel.sectors || []).join(', ') || 'no sectors set'} &middot; {accel.status || 'Pending'}</span><button className="link-inline" onClick={() => setAccel(null)}>Edit sectors</button></div>
         {(accel.status || 'Pending') !== 'Appointed' ? <div className="returns-box"><h4>Appointment documents</h4><div className={cx('kyc-status', 'pending')}>Pending MCCTI appointment. Submit the documents below; members can be routed to you once MCCTI appoints you.</div><DocumentsPanel coopId={'accel:' + ctx.email} ctx={ctx} canVerify={false} canUpload={true} categories={ACCEL_DOC_REQUIREMENTS} /></div> : <div className="returns-box"><h4>Appointment</h4><div className={cx('kyc-status', 'ok')}>Appointed by MCCTI — you can receive applications in your sectors.</div></div>}
+        <AccelDashboard accel={accel} loans={loans} />
         {(() => { const r = accelRating(accel, loans); return (<div className="returns-box"><h4>Your approval rating</h4><div className="accel-rating"><Stars n={r.stars} /><span className="accel-grade">{r.pct == null ? 'Unrated yet' : r.pct + '% approved'}</span><span className="accel-sub">{r.approved}/{r.decided} decided · {r.sponsored} sponsored{r.pending ? ' · ' + r.pending + ' in pipeline' : ''}</span></div><p className="panel-note">Share of the MSMEs you sponsored that were approved for a loan (reached bank assessment or beyond), out of those with a decided outcome. Applications still in training or coop validation are not counted yet.</p></div>) })()}
         <AccelEarnings accel={accel} loans={loans} />
-        <LoanStageOverview loans={myLoans} cards={cards} />
       </>)}
       {section === 'earnings' && <AccelEarnings accel={accel} loans={loans} />}
       {section === 'queue' && (<><p className="muted-line">Applications awaiting your action — new, in training and shortlisted.</p><LoanTable loans={queue} onOpen={setSel} /></>)}
@@ -3902,6 +3935,8 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .chain-node strong{display:block;font-size:13px;color:var(--cream)}
 .chain-node span{font-size:11.5px;color:var(--sage-dim)}
 .chain-node.firm strong{color:var(--gold-soft)}
+.spark-axis{display:flex;justify-content:space-between;margin-top:4px}
+.spark-axis span{font-size:10.5px;color:var(--sage-dim);font-family:var(--mono)}
 .accel-rating{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px}
 .stars{letter-spacing:1px}
 .star{color:var(--line);font-size:14px}
