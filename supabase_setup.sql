@@ -75,13 +75,13 @@ drop policy if exists "chains update" on kv;
 drop policy if exists "chains delete" on kv;
 
 create policy "chains read"   on kv for select to authenticated
-  using (key like 'chain:%' or key like 'opp:%' or key like 'oppr:%' or key like 'snap:%' or key like 'snapsweep:%');
+  using (key like 'chain:%' or key like 'opp:%' or key like 'oppr:%' or key like 'snap:%' or key like 'snapsweep:%' or key like 'accelwallet:%');
 create policy "chains write"  on kv for insert to authenticated
-  with check (key like 'chain:%' or key like 'opp:%' or key like 'oppr:%' or key like 'snap:%' or key like 'snapsweep:%');
+  with check (key like 'chain:%' or key like 'opp:%' or key like 'oppr:%' or key like 'snap:%' or key like 'snapsweep:%' or key like 'accelwallet:%');
 create policy "chains update" on kv for update to authenticated
-  using (key like 'chain:%' or key like 'opp:%' or key like 'oppr:%' or key like 'snap:%' or key like 'snapsweep:%');
+  using (key like 'chain:%' or key like 'opp:%' or key like 'oppr:%' or key like 'snap:%' or key like 'snapsweep:%' or key like 'accelwallet:%');
 create policy "chains delete" on kv for delete to authenticated
-  using (key like 'chain:%' or key like 'opp:%' or key like 'oppr:%' or key like 'snap:%' or key like 'snapsweep:%');
+  using (key like 'chain:%' or key like 'opp:%' or key like 'oppr:%' or key like 'snap:%' or key like 'snapsweep:%' or key like 'accelwallet:%');
 
 -- 7) Public value chain directory (anonymous read) -----------------------------
 -- The public directory lists Active value chains to visitors who are not signed in.

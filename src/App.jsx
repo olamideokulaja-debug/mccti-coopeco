@@ -1851,7 +1851,7 @@ function BulkImport({ ctx, onDone }) {
     </div>
   )
 }
-const SEED_MARKERS = ['integration:seed-v9', 'integration:accel-v8', 'integration:loandocs-v4', 'integration:snapshots-v1']
+const SEED_MARKERS = ['integration:seed-v10', 'integration:accel-v8', 'integration:loandocs-v4', 'integration:snapshots-v1']
 /* Wipes the seed markers and re-runs seeding, so corrected sample data lands on a database
    that was seeded by an older build. Only offered while DEMO_DATA is on. */
 async function rebuildDemoData() {
@@ -2291,8 +2291,8 @@ async function clearPriorSeed() {
   await kvDelete('integration:loandocs-v1'); await kvDelete('integration:loandocs-v4'); await kvDelete('integration:snapshots-v1')
 }
 async function seedDemoData() {
-  if (await kvGet('integration:seed-v9')) return false
-  await kvSet('integration:seed-v9', { claimed: true, at: new Date().toISOString() }) // claim first: prevents repeat clear/reseed storms if a later step fails
+  if (await kvGet('integration:seed-v10')) return false
+  await kvSet('integration:seed-v10', { claimed: true, at: new Date().toISOString() }) // claim first: prevents repeat clear/reseed storms if a later step fails
   try { await clearPriorSeed() } catch (e) { /* best-effort cleanup */ }
   const now = Date.now(), day = 86400000
   const isoAgo = (ms) => new Date(now - ms).toISOString()
@@ -2354,6 +2354,10 @@ async function seedDemoData() {
   loanRecs.push(mkSchedLoan(M['Segun Ade'], 5000000, 36, 9, 9, 'Repaying', { purpose: 'Studio fit-out', type: LOAN_TYPES[1] }))                        // performing
   loanRecs.push(mkSchedLoan(M['Chidi Okafor'], 3200000, 36, 7, 7, 'Repaying', { purpose: 'Cold storage', type: LOAN_TYPES[1] }))                       // performing
   loanRecs.push(mkSchedLoan(M['Segun Ade'], 2400000, 24, 26, 24, 'Completed', { purpose: 'Studio equipment', type: LOAN_TYPES[0] }))                  // fully repaid
+  // Agriculture accelerator portfolio (so accel.agric@coopeco.ng has a rating + earnings to view)
+  loanRecs.push(mkSchedLoan(M['Grace Umeh'], 2500000, 24, 8, 8, 'Repaying', { purpose: 'Feed and layer stock', type: LOAN_TYPES[0] }))                 // performing
+  loanRecs.push(mkSchedLoan(M['Grace Umeh'], 4200000, 36, 12, 12, 'Repaying', { purpose: 'Cold chain for eggs (asset finance)', type: LOAN_TYPES[1] })) // performing
+  loanRecs.push(mkSchedLoan(M['Grace Umeh'], 1800000, 24, 26, 24, 'Completed', { purpose: 'Poultry expansion', type: LOAN_TYPES[0] }))                 // fully repaid
   const defLoan = mkSchedLoan(M['Ibrahim Sule'], 3600000, 36, 14, 1, 'Default', { purpose: 'Workshop machinery', type: LOAN_TYPES[1] })
   defLoan.recovery = recoveryPlan(loanRepayState(defLoan).outstanding, loanBreakdown(3600000))
   loanRecs.push(defLoan)
@@ -2392,7 +2396,7 @@ async function seedDemoData() {
   const docCoop = coopMap['Eti-Osa Fashion Enterprise Coop']
   await kvSet('doc:' + docCoop + ':Dseed1', { id: 'Dseed1', coopId: docCoop, name: 'by-laws.pdf', category: 'By-laws', size: 284000, type: 'application/pdf', url: '', path: '', storage: 'demo', uploadedBy: 'T. Coker', uploadedAt: isoAgo(9 * day), verified: true, verifiedBy: 'Area Registrar' })
   await kvSet('doc:' + docCoop + ':Dseed2', { id: 'Dseed2', coopId: docCoop, name: 'registration-certificate.pdf', category: 'Registration certificate', size: 156000, type: 'application/pdf', url: '', path: '', storage: 'demo', uploadedBy: 'T. Coker', uploadedAt: isoAgo(9 * day), verified: false })
-  await kvSet('integration:seed-v9', { done: true, at: new Date().toISOString() })
+  await kvSet('integration:seed-v10', { done: true, at: new Date().toISOString() })
   return true
 }
 const ACCEL_SEEDS = [
@@ -2414,6 +2418,26 @@ const ACCEL_PENDING_STATES = ['Applied', 'In training', 'Shortlisted', 'Coop val
 function accelLoans(accel, loans) {
   const names = accel.sectors || []
   return (loans || []).filter((l) => (accel.email && l.apEmail === accel.email) || (accel.name && l.apName === accel.name) || (names.indexOf(l.sector) > -1))
+}
+const ACCEL_EARNED_STATES = ['Disbursed', 'Repaying', 'Completed', 'Default'] // fee is earned once the loan is disbursed
+function accelEarnings(accel, loans) {
+  const earned = accelLoans(accel, loans).filter((l) => ACCEL_EARNED_STATES.indexOf(l.status) > -1)
+  const perLoan = earned.map((l) => ({ loanId: l.loanId, member: l.memberName, coop: l.coop, sector: l.sector, status: l.status, amount: l.amountApproved || l.amountRequested || 0, fee: (loanBreakdown(l.amountApproved || l.amountRequested || 0).apFee) || 0, at: l.disbursedAt || l.updatedAt }))
+  const gross = perLoan.reduce((a, x) => a + x.fee, 0)
+  return { count: earned.length, gross, perLoan }
+}
+async function accelWallet(email) {
+  const w = await kvGet('accelwallet:' + email)
+  return w || { id: email, withdrawn: 0, account: null, txns: [] }
+}
+async function saveAccelWallet(email, w) { await kvSet('accelwallet:' + email, { ...w, id: email }) }
+async function accelDrawdown(email, amount, account, gross) {
+  const w = await accelWallet(email)
+  const available = gross - (w.withdrawn || 0)
+  if (amount <= 0 || amount > available) throw new Error('Amount exceeds available earnings')
+  const txn = { tid: 'AW' + Math.random().toString(36).slice(2, 7).toUpperCase(), type: 'drawdown', amount, account, at: new Date().toISOString() }
+  await saveAccelWallet(email, { ...w, withdrawn: (w.withdrawn || 0) + amount, account, txns: [txn, ...(w.txns || [])] })
+  return txn
 }
 function accelRating(accel, loans) {
   const ls = accelLoans(accel, loans)
@@ -2814,6 +2838,52 @@ function LoanDetail({ loan, ctx, onClose, onChanged }) {
   )
 }
 function useLoans() { const [loans, setLoans] = useState(null); const reload = useCallback(() => listLoans().then(setLoans), []); useEffect(() => { reload() }, [reload]); return [loans, reload] }
+function AccelEarnings({ accel, loans }) {
+  const [wallet, setWallet] = useState(null), [busy, setBusy] = useState(false)
+  const [amt, setAmt] = useState(''), [acct, setAcct] = useState({ bank: '', number: '', name: '' }), [open, setOpen] = useState(false)
+  const e = accelEarnings(accel, loans)
+  const reload = useCallback(() => accelWallet(accel.email).then(setWallet), [accel.email])
+  useEffect(() => { reload() }, [reload])
+  if (!wallet) return <p className="muted-line">Loading earnings…</p>
+  const withdrawn = wallet.withdrawn || 0
+  const available = Math.max(0, e.gross - withdrawn)
+  const last = wallet.account
+  const submit = async () => {
+    const n = Number(amt)
+    if (!n || n <= 0) { toast('Enter an amount to transfer.', 'error'); return }
+    if (n > available) { toast('That is more than your available earnings.', 'error'); return }
+    if (!acct.bank || !acct.number || !acct.name) { toast('Enter the destination bank, account number and name.', 'error'); return }
+    setBusy(true)
+    try { await accelDrawdown(accel.email, n, acct, e.gross); toast('Transfer of ' + fmtNaira(n) + ' initiated to ' + acct.bank + ' ' + acct.number + '.', 'success'); setAmt(''); setOpen(false); reload() }
+    catch (err) { toast(err.message || 'Transfer failed.', 'error') } finally { setBusy(false) }
+  }
+  return (
+    <div className="returns-box"><h4>Earnings from disbursed loans</h4>
+      <p className="muted-line">You earn a facilitation fee of {fmtNaira(loanBreakdown(1000000).apFee)} for each MSME you sponsored that reaches disbursement. Earnings become available to draw down once the loan is disbursed.</p>
+      <div className="statgrid">
+        <div className="stat"><span className="stat-fig">{fmtNaira(e.gross)}</span><span className="stat-lab">Total earned</span></div>
+        <div className="stat"><span className="stat-fig">{fmtNaira(withdrawn)}</span><span className="stat-lab">Transferred out</span></div>
+        <div className="stat"><span className="stat-fig" style={{ color: 'var(--green)' }}>{fmtNaira(available)}</span><span className="stat-lab">Available to draw down</span></div>
+        <div className="stat"><span className="stat-fig">{e.count}</span><span className="stat-lab">Disbursed loans</span></div>
+      </div>
+      <div className="panel-actions"><button className="btn btn-gold btn-sm" disabled={available <= 0} onClick={() => setOpen(!open)}>{available <= 0 ? 'No earnings available yet' : 'Draw down / transfer to account'}</button></div>
+      {open && <div className="returns-box" style={{ marginTop: '12px' }}>
+        <h5>Transfer to a bank account</h5>
+        {last && <p className="chart-note">Last used: {last.bank} &middot; {last.number} &middot; {last.name}. <button className="link-inline" onClick={() => setAcct(last)}>Use again</button></p>}
+        <div className="form-grid">
+          <label className="field"><span>Amount (₦)</span><input type="number" value={amt} onChange={(e2) => setAmt(e2.target.value)} placeholder={String(available)} /></label>
+          <label className="field"><span>Bank</span><input value={acct.bank} onChange={(e2) => setAcct({ ...acct, bank: e2.target.value })} placeholder="e.g. Sterling Bank" /></label>
+          <label className="field"><span>Account number</span><input value={acct.number} onChange={(e2) => setAcct({ ...acct, number: e2.target.value })} placeholder="10-digit NUBAN" /></label>
+          <label className="field"><span>Account name</span><input value={acct.name} onChange={(e2) => setAcct({ ...acct, name: e2.target.value })} placeholder="Registered account name" /></label>
+        </div>
+        <div className="panel-actions"><button className="btn btn-gold btn-sm" disabled={busy} onClick={submit}>{busy ? 'Processing…' : 'Transfer ' + (Number(amt) ? fmtNaira(Number(amt)) : '')}</button><button className="btn btn-ghost btn-sm" onClick={() => setOpen(false)}>Cancel</button></div>
+        <p className="panel-note">Transfers are recorded here and reduce your available balance. In live operation this routes to the programme\u2019s settlement account for payout.</p>
+      </div>}
+      {e.perLoan.length ? <div className="doc-guide" style={{ marginTop: '14px' }}><h5>Fee-earning loans</h5><ul>{e.perLoan.map((x) => (<li key={x.loanId} className="done"><span aria-hidden="true">\u2713</span> {x.member} &middot; {x.coop} &middot; {fmtNaira(x.amount)} ({x.status}) &mdash; fee {fmtNaira(x.fee)}</li>))}</ul></div> : null}
+      {wallet.txns && wallet.txns.length ? <div className="doc-guide" style={{ marginTop: '10px' }}><h5>Transfer history</h5><ul>{wallet.txns.map((t) => (<li key={t.tid}><span aria-hidden="true">\u2192</span> {fmtNaira(t.amount)} to {t.account ? t.account.bank + ' ' + t.account.number : 'account'} &middot; {fmtDate(t.at)}</li>))}</ul></div> : null}
+    </div>
+  )
+}
 function AcceleratorWorkspace({ ctx, section }) {
   const [loans, reload] = useLoans(); const [sel, setSel] = useState(null)
   const [accel, setAccel] = useState(undefined), [pick, setPick] = useState([]), [busy, setBusy] = useState(false)
@@ -2844,8 +2914,11 @@ function AcceleratorWorkspace({ ctx, section }) {
       {section === 'overview' && (<>
         <div className="accel-sectors"><span>Serving: {(accel.sectors || []).join(', ') || 'no sectors set'} &middot; {accel.status || 'Pending'}</span><button className="link-inline" onClick={() => setAccel(null)}>Edit sectors</button></div>
         {(accel.status || 'Pending') !== 'Appointed' ? <div className="returns-box"><h4>Appointment documents</h4><div className={cx('kyc-status', 'pending')}>Pending MCCTI appointment. Submit the documents below; members can be routed to you once MCCTI appoints you.</div><DocumentsPanel coopId={'accel:' + ctx.email} ctx={ctx} canVerify={false} canUpload={true} categories={ACCEL_DOC_REQUIREMENTS} /></div> : <div className="returns-box"><h4>Appointment</h4><div className={cx('kyc-status', 'ok')}>Appointed by MCCTI — you can receive applications in your sectors.</div></div>}
+        {(() => { const r = accelRating(accel, loans); return (<div className="returns-box"><h4>Your approval rating</h4><div className="accel-rating"><Stars n={r.stars} /><span className="accel-grade">{r.pct == null ? 'Unrated yet' : r.pct + '% approved'}</span><span className="accel-sub">{r.approved}/{r.decided} decided · {r.sponsored} sponsored{r.pending ? ' · ' + r.pending + ' in pipeline' : ''}</span></div><p className="panel-note">Share of the MSMEs you sponsored that were approved for a loan (reached bank assessment or beyond), out of those with a decided outcome. Applications still in training or coop validation are not counted yet.</p></div>) })()}
+        <AccelEarnings accel={accel} loans={loans} />
         <LoanStageOverview loans={myLoans} cards={cards} />
       </>)}
+      {section === 'earnings' && <AccelEarnings accel={accel} loans={loans} />}
       {section === 'queue' && (<><p className="muted-line">Applications awaiting your action — new, in training and shortlisted.</p><LoanTable loans={queue} onOpen={setSel} /></>)}
       {section === 'all' && (<><p className="muted-line">Every application in your sectors, at all stages (including validated, funded, disbursed, repaying and closed).</p><LoanTable loans={myLoans} onOpen={setSel} /></>)}
       {section === 'chains' && <ChainsPanel ctx={ctx} />}
@@ -3330,7 +3403,7 @@ const ROLE_NAV = {
   member: [['overview', 'Overview'], ['wallet', 'Wallet & savings'], ['finance', 'LASMECO finance'], ['chains', 'Value chains']],
   officer: [['overview', 'Overview'], ['queue', 'Review queue'], ['all', 'All societies'], ['members', 'Members'], ['lasmeco', 'LASMECO'], ['offices', 'Area offices'], ['risk', 'Risk & fraud'], ['audit', 'Audit log'], ['reports', 'Reports'], ['integrations', 'Integrations']],
   auditor: [['overview', 'Overview'], ['returns', 'Returns to examine'], ['all', 'All societies']],
-  accelerator: [['overview', 'Overview'], ['queue', 'My pipeline'], ['all', 'All loans'], ['chains', 'Value chains']],
+  accelerator: [['overview', 'Overview'], ['queue', 'My pipeline'], ['all', 'All loans'], ['earnings', 'Earnings'], ['chains', 'Value chains']],
   sterling: [['overview', 'Overview'], ['queue', 'My queue'], ['all', 'All loans'], ['monitoring', 'Portfolio monitoring']],
   boi: [['overview', 'Overview'], ['queue', 'My queue'], ['all', 'All loans'], ['monitoring', 'Portfolio monitoring']],
   assetmatrix: [['overview', 'Overview'], ['distribution', 'Distribution']],

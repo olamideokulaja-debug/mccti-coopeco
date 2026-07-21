@@ -629,6 +629,16 @@ Deliberately kept (LASMECO programme facts, not platform pricing): the N10bn LAS
 initiative in the Governor's biography, and loans "up to N10,000,000 at 9%" in Modules
 and the FAQ. Say the word if these should go too.
 
+## Accelerator earnings & drawdown
+Accelerators now see, on their Overview and a dedicated Earnings tab: total earned, amount
+transferred out, available balance, and the list of fee-earning loans. The fee is the
+facilitation fee per disbursed loan (apFee in loanBreakdown), earned once a sponsored MSME's
+loan is disbursed. A "Draw down / transfer to account" action captures a destination bank
+account and records the transfer, reducing the available balance. Transfers are stored under
+the accelwallet: key prefix (a new prefix; its RLS policy is in supabase_setup.sql; re-run
+the SQL on live or transfers will be rejected). In live operation this routes to the
+programme settlement account for payout.
+
 ## Accelerator rating
 Each accelerator now carries an approval rating: the share of the MSMEs it sponsored that
 were approved for a loan (reached bank assessment or beyond), out of those with a decided
