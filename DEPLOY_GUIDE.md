@@ -650,7 +650,7 @@ The 'Assess this member' feature now ALWAYS works, with no external dependency:
   labelled 'AI assessment'. If the AI call fails for any reason, it silently falls back to
   the built-in one so the workflow never breaks.
 The guarantee letter behaves the same way: AI-written body when a key is present, a fixed
-professional body otherwise. The guarantee letter now downloads as an HTML file (no pop-up needed, so pop-up blockers cannot stop it); open it and choose Save as PDF / Print. It carries the cooperative letterhead.
+professional body otherwise. The guarantee letter now downloads as an HTML file (no pop-up needed, so pop-up blockers cannot stop it); open it and choose Save as PDF / Print. It carries the cooperative letterhead, the body text is justified, and if the approver uploads a signature image at approval time it is placed above the signatory line. AI output has markdown (e.g. **bold**) stripped so no stray asterisks appear.
 NOTE: the earlier version called api.anthropic.com directly from the browser, which only
 works inside the Claude artifact runtime and NOT on your own Vercel site. That is fixed.
 

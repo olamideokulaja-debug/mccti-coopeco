@@ -2067,7 +2067,7 @@ function CoopLendingReadiness({ coop, ctx, onChanged }) {
           <div className="stat"><span className="stat-fig">{fmtNaira(room.used)}</span><span className="stat-lab">Guarantees committed</span></div>
           <div className="stat"><span className="stat-fig" style={{ color: 'var(--green)' }}>{fmtNaira(room.available)}</span><span className="stat-lab">Available to guarantee</span></div>
         </div>
-        <p className="panel-note">Your cooperative can guarantee 25% of members\u2019 loans up to the size of its contributions. For example, a {fmtNaira(1000000)} pool can back four {fmtNaira(1000000)} facilities (each needs a {fmtNaira(250000)} guarantee). Completed loans free up capacity.</p>
+        <p className="panel-note">Your cooperative can guarantee 25% of members’ loans up to the size of its contributions. For example, a {fmtNaira(1000000)} pool can back four {fmtNaira(1000000)} facilities (each needs a {fmtNaira(250000)} guarantee). Completed loans free up capacity.</p>
       </div>
       {!aged && !ro && <div className="returns-box"><h4>Confirm year of establishment</h4><p className="muted-line">If your cooperative has existed for at least a year, record it here. MCCTI confirms before it takes effect.</p><div className="panel-actions"><button className="btn btn-outline btn-sm" disabled={busy} onClick={setEstablished}>Confirm 1+ year in existence</button></div></div>}
       <div className="returns-box"><h4>Independent audit</h4>
@@ -2087,7 +2087,7 @@ function GuaranteeAssessment({ gr, coop, loans, onUse }) {
     const prompt = 'You are advising the leadership of a Nigerian cooperative society deciding whether to grant a 25% loan guarantee to one of its members under the Lagos State LASMECO scheme. Give a brief, balanced assessment (about 90-130 words) of whether this member appears to merit the guarantee, then a final line "Suggestion: <lean approve / lean decline / borderline>". Be fair and factual; the human makes the final decision. Consider: time in the cooperative (rule: 6+ months), time in business (rule: 12+ months), contributions to the cooperative, business turnover and scale, and whether the cooperative has capacity. Facts (Naira amounts in NGN):\n' + JSON.stringify(f, null, 2) + '\nRequested facility: ' + gr.amount + ' (25% guarantee = ' + gr.guarantee + '). Do not invent facts beyond those given. If contributions data is zero or missing, note that it should be confirmed manually.'
     try {
       const text = await callClaude(prompt, 600)
-      setResult(text || ruleGuaranteeAssessment(member, coop, loans, gr)); setSource('ai')
+      setResult(stripMarkdown(text) || ruleGuaranteeAssessment(member, coop, loans, gr)); setSource('ai')
     } catch (e) {
       setResult(ruleGuaranteeAssessment(member, coop, loans, gr)); setSource('rule')
       if (e && e.noKey) { /* no key configured: silently use built-in */ }
@@ -2098,12 +2098,12 @@ function GuaranteeAssessment({ gr, coop, loans, onUse }) {
   return (
     <div className="ai-assess">
       <div className="ai-assess-head"><span className="ai-tag">{label}</span><button className="btn btn-outline btn-sm" disabled={busy} onClick={assess}>{busy ? 'Assessing…' : result ? 'Re-assess' : 'Assess this member'}</button></div>
-      {result ? <div className="ai-assess-body"><p>{result}</p><div className="panel-actions"><button className="link-inline" onClick={() => onUse(result.replace(/\nSuggestion:.*/i, '').trim())}>Use as basis of approval</button></div><p className="ai-note">{source === 'ai' ? 'AI-generated. ' : 'Computed from tenure, contributions and capacity. '}Advisory only \u2014 the decision and its recorded justification remain yours.</p></div> : <p className="ai-note">Weighs the member\u2019s tenure, contributions and business against your cooperative\u2019s capacity, to support your decision. It does not approve anything.</p>}
+      {result ? <div className="ai-assess-body"><p>{result}</p><div className="panel-actions"><button className="link-inline" onClick={() => onUse(result.replace(/\nSuggestion:.*/i, '').trim())}>Use as basis of approval</button></div><p className="ai-note">{source === 'ai' ? 'AI-generated. ' : 'Computed from tenure, contributions and capacity. '}Advisory only — the decision and its recorded justification remain yours.</p></div> : <p className="ai-note">Weighs the member’s tenure, contributions and business against your cooperative’s capacity, to support your decision. It does not approve anything.</p>}
     </div>
   )
 }
 function CoopGuaranteeApprovals({ coop, ctx }) {
-  const [reqs, setReqs] = useState(null), [loans, setLoans] = useState([]), [busy, setBusy] = useState(''), [evidence, setEvidence] = useState({})
+  const [reqs, setReqs] = useState(null), [loans, setLoans] = useState([]), [busy, setBusy] = useState(''), [evidence, setEvidence] = useState({}), [sigs, setSigs] = useState({})
   const reload = useCallback(() => { listGuaranteeRequests(coop.name).then(setReqs); listLoans().then(setLoans) }, [coop.name])
   useEffect(() => { reload() }, [reload])
   const ro = isReviewer(ctx)
@@ -2116,7 +2116,7 @@ function CoopGuaranteeApprovals({ coop, ctx }) {
       if (!(evidence[gr.grId] || '').trim()) { toast('Add the basis for approval (e.g. member contributions, standing) before approving.', 'error'); return }
     }
     setBusy(gr.grId)
-    await saveGuaranteeRequest({ ...gr, status: ok ? 'Approved' : 'Declined', approvedAt: ok ? new Date().toISOString() : undefined, approvedByName: ctx.name, evidence: ok ? evidence[gr.grId] : gr.evidence }, ctx, ok ? 'Guarantee approved' : 'Guarantee declined')
+    await saveGuaranteeRequest({ ...gr, status: ok ? 'Approved' : 'Declined', approvedAt: ok ? new Date().toISOString() : undefined, approvedByName: ctx.name, signature: ok ? (sigs[gr.grId] || gr.signature || '') : gr.signature, evidence: ok ? evidence[gr.grId] : gr.evidence }, ctx, ok ? 'Guarantee approved' : 'Guarantee declined')
     try { await notify({ to: gr.requestedBy, title: ok ? 'Guarantee approved' : 'Guarantee request declined', body: ok ? 'Your cooperative approved a 25% guarantee of ' + fmtNaira(gr.guarantee) + '. Download your guarantee letter and upload it with your LASMECO documents.' : 'Your guarantee request was not approved at this time. Please discuss with your cooperative leadership.', event: 'guarantee', link: { section: 'finance', label: 'Go to LASMECO finance' } }) } catch (e) { /* best-effort */ }
     setBusy(''); reload()
     toast(ok ? 'Approved. A guarantee letter is now available to the member.' : 'Request declined.', ok ? 'success' : 'info')
@@ -2133,6 +2133,7 @@ function CoopGuaranteeApprovals({ coop, ctx }) {
             <div className="gr-head"><strong>{gr.memberName}</strong><span>{fmtNaira(gr.amount)} facility · 25% guarantee {fmtNaira(gr.guarantee)}</span></div>
             {!chk.fits && <div className="kyc-status pending">This exceeds available capacity ({fmtNaira(chk.available)}). Cannot approve until capacity frees up.</div>}
             {canApprove && chk.fits && <><GuaranteeAssessment gr={gr} coop={coop} loans={loans} onUse={(text) => setEvidence({ ...evidence, [gr.grId]: ((evidence[gr.grId] || '') + (evidence[gr.grId] ? ' ' : '') + text).trim() })} /><label className="field"><span>Basis of approval (evidence)</span><textarea rows={2} value={evidence[gr.grId] || ''} onChange={(e) => setEvidence({ ...evidence, [gr.grId]: e.target.value })} placeholder="e.g. Member contributions of N320,000 over 18 months; consistent savings; good standing." /></label>
+            <label className="field"><span>Authorised signature (optional, image)</span><input type="file" accept="image/png,image/jpeg" onChange={async (e) => { const f = e.target.files && e.target.files[0]; if (!f) return; if (f.size > 400 * 1024) { toast('Signature image must be under 400KB.', 'error'); return } const dataUrl = await fileToDataURL(f); setSigs({ ...sigs, [gr.grId]: dataUrl }) }} />{sigs[gr.grId] ? <span className="sig-preview"><img src={sigs[gr.grId]} alt="Signature preview" /> Signature attached</span> : <span className="chart-note">If added, it is placed above the signatory line on the letter.</span>}</label>
             <div className="panel-actions"><button className="btn btn-gold btn-sm" disabled={busy === gr.grId} onClick={decide(gr, true)}>Approve &amp; generate letter</button><button className="btn btn-ghost btn-sm" disabled={busy === gr.grId} onClick={decide(gr, false)}>Decline</button></div></>}
           </div>) }) : <p className="muted-line">No requests awaiting approval.</p>}
       </div>
@@ -2168,7 +2169,7 @@ function MemberGuaranteeStatus({ member, coop, loans, ctx }) {
     <div className="guarantee-status">
       <div className="gs-line"><span>Cooperative guarantee capacity</span><strong>{fmtNaira(room.available)} available</strong></div>
       {(member.savingsTotal || member.monthlyContribution) ? <p className="chart-note">Your contributions: {fmtNaira(member.savingsTotal || 0)} total{member.monthlyContribution ? ' (' + fmtNaira(member.monthlyContribution) + '/month' : ''}{member.contributionConsistency ? ', ' + member.contributionConsistency + '% consistency)' : (member.monthlyContribution ? ')' : '')}. In your cooperative {memberCoopMonths(member)} months; in business {memberBusinessMonths(member)} months.</p> : null}
-      <p className="chart-note">Your cooperative can guarantee 25% of members\u2019 loans up to its contributions of {fmtNaira(room.pool)}. {fmtNaira(room.used)} is already committed.</p>
+      <p className="chart-note">Your cooperative can guarantee 25% of members’ loans up to its contributions of {fmtNaira(room.pool)}. {fmtNaira(room.used)} is already committed.</p>
       {approved ? (
         <div className="gs-approved"><span className="req-tag ok">Guarantee approved</span><p>Your 25% guarantee of {fmtNaira(approved.guarantee)} for a {fmtNaira(approved.amount)} facility has been approved by your cooperative. Download the letter and upload it with your LASMECO documents.</p><button className="btn btn-outline btn-sm" onClick={() => downloadGuaranteeLetter(approved, coop)}>Download guarantee letter</button></div>
       ) : pending ? (
@@ -2448,6 +2449,16 @@ function coopLendingReady(coop, auditDocs) {
   return { ready: admitted && audited && aged, admitted, audited, aged, reasons }
 }
 // Guarantee request workflow: member -> cooperative leadership approval -> letter.
+function stripMarkdown(t) {
+  if (!t) return t
+  return String(t)
+    .replace(/\*\*(.*?)\*\*/g, '$1') // bold
+    .replace(/\*(.*?)\*/g, '$1')     // italic
+    .replace(/^#{1,6}\s+/gm, '')      // headings
+    .replace(/`{1,3}([^`]*)`{1,3}/g, '$1') // code
+    .replace(/^\s*[-*]\s+/gm, '\u2022 ')   // bullets to a dot
+    .trim()
+}
 async function callClaude(prompt, maxTokens) {
   const res = await fetch('/api/anthropic', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2515,18 +2526,18 @@ function letterFallbackBody(gr, coop) {
 }
 async function downloadGuaranteeLetter(gr, coop) {
   toast('Preparing the guarantee letter…')
-  const body = (await generateLetterBody(gr, coop)) || letterFallbackBody(gr, coop)
+  const body = stripMarkdown((await generateLetterBody(gr, coop)) || letterFallbackBody(gr, coop))
   const d = new Date(gr.approvedAt || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
   const esc = (t) => String(t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const paras = body.split(/\n\n+/).map((p) => '<p>' + esc(p).replace(/\n/g, '<br>') + '</p>').join('')
-  const html = '<!doctype html><html><head><meta charset="utf-8"><title>Guarantee Letter ' + esc(gr.grId) + '</title><style>@page{size:A4;margin:22mm}body{font-family:Georgia,"Times New Roman",serif;color:#1a1a1a;line-height:1.6;font-size:12.5pt;max-width:720px;margin:24px auto;padding:0 20px}.lh{border-bottom:3px double #1C8A4F;padding-bottom:12px;margin-bottom:6px}.lh .nm{font-size:19pt;font-weight:bold;color:#12673a;letter-spacing:.3px}.lh .meta{font-size:9.5pt;color:#555;margin-top:3px}.ref{display:flex;justify-content:space-between;font-size:10pt;color:#333;margin:18px 0 10px}.to{margin:6px 0 2px}.re{font-weight:bold;margin:14px 0}.sig{margin-top:40px}.sig .line{width:230px;border-top:1px solid #333;padding-top:5px;font-size:10.5pt}.foot{margin-top:28px;border-top:1px solid #ddd;padding-top:8px;font-size:8.5pt;color:#888;text-align:center}.bar{text-align:center;margin:0 0 18px;padding:10px;background:#f3f7f3;border-radius:8px}.bar button{padding:9px 20px;font-size:13px;background:#1C8A4F;color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit}@media print{.bar{display:none}body{margin:0}}</style></head><body>' +
+  const html = '<!doctype html><html><head><meta charset="utf-8"><title>Guarantee Letter ' + esc(gr.grId) + '</title><style>@page{size:A4;margin:22mm}body{font-family:Georgia,"Times New Roman",serif;color:#1a1a1a;line-height:1.6;font-size:12.5pt;max-width:720px;margin:24px auto;padding:0 20px}.lh{border-bottom:3px double #1C8A4F;padding-bottom:12px;margin-bottom:6px}.lh .nm{font-size:19pt;font-weight:bold;color:#12673a;letter-spacing:.3px}.lh .meta{font-size:9.5pt;color:#555;margin-top:3px}.ref{display:flex;justify-content:space-between;font-size:10pt;color:#333;margin:18px 0 10px}.to{margin:6px 0 2px}.re{font-weight:bold;margin:14px 0}.body p{text-align:justify;text-justify:inter-word;margin:10px 0}.sig{margin-top:40px}.sig img{display:block;max-height:70px;margin-bottom:4px}.sig .line{width:230px;border-top:1px solid #333;padding-top:5px;font-size:10.5pt}.foot{margin-top:28px;border-top:1px solid #ddd;padding-top:8px;font-size:8.5pt;color:#888;text-align:center}.bar{text-align:center;margin:0 0 18px;padding:10px;background:#f3f7f3;border-radius:8px}.bar button{padding:9px 20px;font-size:13px;background:#1C8A4F;color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit}@media print{.bar{display:none}body{margin:0}}</style></head><body>' +
     '<div class="bar noprint"><button onclick="window.print()">Save as PDF / Print this letter</button></div>' +
     '<div class="lh"><div class="nm">' + esc(coop.name) + '</div><div class="meta">' + [coop.areaOffice ? 'Area Office: ' + esc(coop.areaOffice) : '', coop.regNo ? 'Reg. No: ' + esc(coop.regNo) : (coop.trackingId ? 'Ref: ' + esc(coop.trackingId) : ''), 'A registered cooperative society under the Lagos State MCCTI'].filter(Boolean).join(' &nbsp;&bull;&nbsp; ') + '</div></div>' +
     '<div class="ref"><span>Ref: ' + esc(gr.grId) + '</span><span>' + d + '</span></div>' +
     '<div class="to">The Credit Manager,<br>Sterling Bank Plc / Bank of Industry<br><em>Through: The Appointed Sector Accelerator, LASMECO</em></div>' +
     '<p class="re">RE: LETTER OF COOPERATIVE GUARANTEE &mdash; ' + esc(gr.memberName) + '</p>' +
-    paras +
-    '<div class="sig"><div class="line">Authorised Signatory<br>For: ' + esc(coop.name) + '<br><span style="font-size:9pt;color:#666">' + esc(gr.approvedByName || 'Cooperative Leadership') + '</span></div></div>' +
+    '<div class="body">' + paras + '</div>' +
+    '<div class="sig">' + (gr.signature ? '<img src="' + gr.signature + '" alt="Signature" />' : '') + '<div class="line">Authorised Signatory<br>For: ' + esc(coop.name) + '<br><span style="font-size:9pt;color:#666">' + esc(gr.approvedByName || 'Cooperative Leadership') + '</span></div></div>' +
     '<div class="foot">Generated via MCCTI CoopEco on ' + d + ' &bull; Ref ' + esc(gr.grId) + ' &bull; This letter is issued under the Lagos State LASMECO scheme.</div>' +
     '</body></html>'
   // Reliable delivery: download as an HTML file (opens in any browser, print-to-PDF from there).
@@ -4362,6 +4373,8 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .gr-head strong{font-size:14px;color:var(--cream)}
 .gr-head span{font-size:12.5px;color:var(--sage-dim)}
 .gr-sub{display:block;font-size:12px;color:var(--sage-dim);margin-top:4px}
+.sig-preview{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--green);margin-top:4px}
+.sig-preview img{max-height:34px;border:1px solid var(--line-soft);border-radius:4px;background:#fff;padding:2px}
 .ai-assess{border:1px solid var(--line-soft);background:#f7f4fb;border-radius:9px;padding:12px;margin:10px 0}
 .ai-assess-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .ai-tag{font-family:var(--mono);font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--plum,#7a5b8a);background:#f0eaf4;border-radius:5px;padding:3px 8px}
