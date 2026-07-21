@@ -662,8 +662,11 @@ Seeded members now carry a contribution history (total saved, monthly amount, mo
 and a consistency percentage), so the AI guarantee assessment has real figures and can be
 decisive. Four cooperatives are seeded lending-ready (approved + MCCTI-approved audit +
 1-year existence): Kosofe Poultry, Oshodi Market Women, Ikeja Hospital Staff, and Eti-Osa
-Fashion. Eligible test members include Grace Umeh (Kosofe), Folake Adisa & Chidi Okafor
-(Oshodi), and Ngozi Balogun (Ikeja). Seed is now seed-v12 - Rebuild sample data to load it.
+Fashion. Eligible test members now include 11 people across four cooperatives:
+Kosofe (Grace Umeh, Blessing Nwachukwu, Tunde Bakare), Oshodi (Folake Adisa,
+Chidi Okafor, Amaka Eze, Halima Yau), Ikeja Hospital (Ngozi Balogun, Emeka Obi),
+and Eti-Osa Fashion (Yetunde Sofela, Bola Ogundipe). Sign in as any with
+demo.<first.last>@coopeco.ng and any password. Seed is now seed-v13 - Rebuild sample data to load it.
 
 ## Guarantee eligibility & workflow
 Members can only apply for LASMECO finance when ALL of the following hold:

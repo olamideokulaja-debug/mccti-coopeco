@@ -1894,7 +1894,7 @@ function BulkImport({ ctx, onDone }) {
     </div>
   )
 }
-const SEED_MARKERS = ['integration:seed-v12', 'integration:accel-v8', 'integration:loandocs-v4', 'integration:snapshots-v1']
+const SEED_MARKERS = ['integration:seed-v13', 'integration:accel-v8', 'integration:loandocs-v4', 'integration:snapshots-v1']
 /* Wipes the seed markers and re-runs seeding, so corrected sample data lands on a database
    that was seeded by an older build. Only offered while DEMO_DATA is on. */
 async function rebuildDemoData() {
@@ -1907,7 +1907,7 @@ async function removeDemoData() {
 }
 function DemoDataPanel({ ctx }) {
   const [busy, setBusy] = useState(false), [dbSeed, setDbSeed] = useState('checking…')
-  const CURRENT_SEED = (SEED_MARKERS.find((m) => m.indexOf('seed-v') > -1) || 'integration:seed-v12').replace('integration:', '')
+  const CURRENT_SEED = (SEED_MARKERS.find((m) => m.indexOf('seed-v') > -1) || 'integration:seed-v13').replace('integration:', '')
   useEffect(() => { (async () => { const marks = []; for (let v = 20; v >= 1; v--) { if (await kvGet('integration:seed-v' + v)) { marks.push('seed-v' + v) } } setDbSeed(marks[0] || 'none') })() }, [])
   if (isReviewer(ctx)) return null
   const stale = dbSeed !== 'none' && dbSeed !== CURRENT_SEED && dbSeed !== 'checking…'
@@ -2615,8 +2615,8 @@ async function clearPriorSeed() {
   await kvDelete('integration:loandocs-v1'); await kvDelete('integration:loandocs-v4'); await kvDelete('integration:snapshots-v1')
 }
 async function seedDemoData() {
-  if (await kvGet('integration:seed-v12')) return false
-  await kvSet('integration:seed-v12', { claimed: true, at: new Date().toISOString() }) // claim first: prevents repeat clear/reseed storms if a later step fails
+  if (await kvGet('integration:seed-v13')) return false
+  await kvSet('integration:seed-v13', { claimed: true, at: new Date().toISOString() }) // claim first: prevents repeat clear/reseed storms if a later step fails
   try { await clearPriorSeed() } catch (e) { /* best-effort cleanup */ }
   const now = Date.now(), day = 86400000
   const isoAgo = (ms) => new Date(now - ms).toISOString()
@@ -2649,15 +2649,22 @@ async function seedDemoData() {
     { name: 'Grace Umeh', coop: 'Kosofe Poultry Farmers Coop', sector: 'Agriculture', lasmecoSector: 'Agriculture', accel: 'Agriculture Accelerator', phone: '08031000005', gender: 'Female', bvn: 0, nin: 0, msme: { monthlyTurnover: 110000, employees: 1, cashFlow: 30000, customerBase: 40, yearsInOperation: 2 } },
     { name: 'Ngozi Balogun', coop: 'Ikeja Hospital Staff Multipurpose Coop', sector: 'Services', lasmecoSector: 'Health', accel: 'Health Accelerator', phone: '08031000007', gender: 'Female', bvn: 1, nin: 1, msme: { monthlyTurnover: 1900000, employees: 12, cashFlow: 700000, customerBase: 540, yearsInOperation: 9 } },
     { name: 'Ibrahim Sule', coop: 'Alimosho Tailors Multipurpose', sector: 'Artisan', lasmecoSector: 'Manufacturing', accel: 'Manufacturing Accelerator', phone: '08031000006', gender: 'Male', bvn: 1, nin: 1, msme: { monthlyTurnover: 430000, employees: 3, cashFlow: 150000, customerBase: 120, yearsInOperation: 5 } },
+    { name: 'Blessing Nwachukwu', coop: 'Kosofe Poultry Farmers Coop', sector: 'Agriculture', lasmecoSector: 'Agriculture', accel: 'Agriculture Accelerator', phone: '08031000008', gender: 'Female', bvn: 1, nin: 1, msme: { monthlyTurnover: 320000, employees: 2, cashFlow: 95000, customerBase: 80, yearsInOperation: 3 } },
+    { name: 'Tunde Bakare', coop: 'Kosofe Poultry Farmers Coop', sector: 'Agriculture', lasmecoSector: 'Agriculture', accel: 'Agriculture Accelerator', phone: '08031000009', gender: 'Male', bvn: 1, nin: 1, msme: { monthlyTurnover: 540000, employees: 4, cashFlow: 180000, customerBase: 140, yearsInOperation: 4 } },
+    { name: 'Amaka Eze', coop: 'Oshodi Market Women Coop', sector: 'Trade', lasmecoSector: 'Service Delivery', accel: 'Service Delivery Accelerator', phone: '08031000010', gender: 'Female', bvn: 1, nin: 1, msme: { monthlyTurnover: 610000, employees: 3, cashFlow: 210000, customerBase: 220, yearsInOperation: 6 } },
+    { name: 'Halima Yau', coop: 'Oshodi Market Women Coop', sector: 'Trade', lasmecoSector: 'Service Delivery', accel: 'Service Delivery Accelerator', phone: '08031000011', gender: 'Female', bvn: 1, nin: 1, msme: { monthlyTurnover: 380000, employees: 2, cashFlow: 120000, customerBase: 150, yearsInOperation: 2 } },
+    { name: 'Emeka Obi', coop: 'Ikeja Hospital Staff Multipurpose Coop', sector: 'Services', lasmecoSector: 'Health', accel: 'Health Accelerator', phone: '08031000012', gender: 'Male', bvn: 1, nin: 1, msme: { monthlyTurnover: 1200000, employees: 8, cashFlow: 400000, customerBase: 320, yearsInOperation: 7 } },
+    { name: 'Yetunde Sofela', coop: 'Eti-Osa Fashion Enterprise Coop', sector: 'Services', lasmecoSector: 'Tourism', accel: 'Tourism Accelerator', phone: '08031000013', gender: 'Female', bvn: 1, nin: 1, msme: { monthlyTurnover: 720000, employees: 5, cashFlow: 250000, customerBase: 180, yearsInOperation: 5 } },
+    { name: 'Bola Ogundipe', coop: 'Eti-Osa Fashion Enterprise Coop', sector: 'Services', lasmecoSector: 'Tourism', accel: 'Tourism Accelerator', phone: '08031000014', gender: 'Male', bvn: 1, nin: 1, msme: { monthlyTurnover: 460000, employees: 3, cashFlow: 160000, customerBase: 130, yearsInOperation: 3 } },
   ]
   const memberMap = {}
   for (let i = 0; i < memberSeeds.length; i++) {
     const s = memberSeeds[i], id = 'M-' + String(100001 + i), email = 'demo.' + s.name.toLowerCase().replace(/[^a-z]+/g, '.') + '@coopeco.ng'
     const status = s.bvn && s.nin ? 'Verified' : (s.bvn || s.nin) ? 'Partial' : 'Unverified'
-    const coopM = { 'Grace Umeh': 10, 'Folake Adisa': 30, 'Chidi Okafor': 40, 'Aisha Bello': 4, 'Segun Ade': 60, 'Ngozi Balogun': 26, 'Ibrahim Sule': 18 }[s.name] || 12
+    const coopM = { 'Grace Umeh': 10, 'Folake Adisa': 30, 'Chidi Okafor': 40, 'Aisha Bello': 4, 'Segun Ade': 60, 'Ngozi Balogun': 26, 'Ibrahim Sule': 18, 'Blessing Nwachukwu': 14, 'Tunde Bakare': 22, 'Amaka Eze': 36, 'Halima Yau': 9, 'Emeka Obi': 48, 'Yetunde Sofela': 28, 'Bola Ogundipe': 16 }[s.name] || 12
     const bizM = Math.round((s.msme.yearsInOperation || 1) * 12)
     // Contribution history: a monthly amount over the member's tenure, with a consistency profile.
-    const contribProfile = { 'Grace Umeh': { monthly: 25000, missed: 0 }, 'Folake Adisa': { monthly: 40000, missed: 1 }, 'Chidi Okafor': { monthly: 60000, missed: 0 }, 'Aisha Bello': { monthly: 15000, missed: 2 }, 'Segun Ade': { monthly: 55000, missed: 0 }, 'Ngozi Balogun': { monthly: 80000, missed: 1 }, 'Ibrahim Sule': { monthly: 30000, missed: 3 } }[s.name] || { monthly: 20000, missed: 1 }
+    const contribProfile = { 'Grace Umeh': { monthly: 25000, missed: 0 }, 'Folake Adisa': { monthly: 40000, missed: 1 }, 'Chidi Okafor': { monthly: 60000, missed: 0 }, 'Aisha Bello': { monthly: 15000, missed: 2 }, 'Segun Ade': { monthly: 55000, missed: 0 }, 'Ngozi Balogun': { monthly: 80000, missed: 1 }, 'Ibrahim Sule': { monthly: 30000, missed: 3 }, 'Blessing Nwachukwu': { monthly: 35000, missed: 0 }, 'Tunde Bakare': { monthly: 50000, missed: 1 }, 'Amaka Eze': { monthly: 65000, missed: 0 }, 'Halima Yau': { monthly: 28000, missed: 1 }, 'Emeka Obi': { monthly: 100000, missed: 0 }, 'Yetunde Sofela': { monthly: 70000, missed: 0 }, 'Bola Ogundipe': { monthly: 42000, missed: 2 } }[s.name] || { monthly: 20000, missed: 1 }
     const paidMonths = Math.max(0, coopM - contribProfile.missed)
     const savingsTotal = paidMonths * contribProfile.monthly
     const consistency = coopM > 0 ? Math.round((paidMonths / coopM) * 100) : 0
@@ -2727,7 +2734,7 @@ async function seedDemoData() {
   const docCoop = coopMap['Eti-Osa Fashion Enterprise Coop']
   await kvSet('doc:' + docCoop + ':Dseed1', { id: 'Dseed1', coopId: docCoop, name: 'by-laws.pdf', category: 'By-laws', size: 284000, type: 'application/pdf', url: '', path: '', storage: 'demo', uploadedBy: 'T. Coker', uploadedAt: isoAgo(9 * day), verified: true, verifiedBy: 'Area Registrar' })
   await kvSet('doc:' + docCoop + ':Dseed2', { id: 'Dseed2', coopId: docCoop, name: 'registration-certificate.pdf', category: 'Registration certificate', size: 156000, type: 'application/pdf', url: '', path: '', storage: 'demo', uploadedBy: 'T. Coker', uploadedAt: isoAgo(9 * day), verified: false })
-  await kvSet('integration:seed-v12', { done: true, at: new Date().toISOString() })
+  await kvSet('integration:seed-v13', { done: true, at: new Date().toISOString() })
   return true
 }
 const ACCEL_SEEDS = [
