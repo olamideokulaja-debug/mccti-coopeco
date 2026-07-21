@@ -1907,9 +1907,9 @@ async function removeDemoData() {
 }
 function DemoDataPanel({ ctx }) {
   const [busy, setBusy] = useState(false), [dbSeed, setDbSeed] = useState('checking…')
-  useEffect(() => { (async () => { const marks = []; for (const v of ['seed-v10', 'seed-v9', 'seed-v8', 'seed-v7']) { if (await kvGet('integration:' + v)) marks.push(v) } setDbSeed(marks[0] || 'none') })() }, [])
+  const CURRENT_SEED = (SEED_MARKERS.find((m) => m.indexOf('seed-v') > -1) || 'integration:seed-v11').replace('integration:', '')
+  useEffect(() => { (async () => { const marks = []; for (let v = 20; v >= 1; v--) { if (await kvGet('integration:seed-v' + v)) { marks.push('seed-v' + v) } } setDbSeed(marks[0] || 'none') })() }, [])
   if (isReviewer(ctx)) return null
-  const CURRENT_SEED = 'seed-v10'
   const stale = dbSeed !== 'none' && dbSeed !== CURRENT_SEED && dbSeed !== 'checking…'
   const rebuild = async () => {
     if (!(await confirmDialog('Rebuild the sample data? Existing demo records are replaced with a fresh, corrected set. Records created by real users are not touched.', { confirmLabel: 'Rebuild' }))) return
