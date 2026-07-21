@@ -2077,6 +2077,25 @@ function CoopLendingReadiness({ coop, ctx, onChanged }) {
     </div>
   )
 }
+function GuaranteeAssessment({ gr, coop, loans, onUse }) {
+  const [member, setMember] = useState(null), [result, setResult] = useState(null), [busy, setBusy] = useState(false)
+  useEffect(() => { listMembers().then((ms) => setMember(ms.find((m) => m.memberId === gr.memberId) || null)) }, [gr.memberId])
+  const assess = async () => {
+    if (!member) { toast('Member record not found.', 'error'); return }
+    setBusy(true); setResult(null)
+    const f = guaranteeAssessmentFacts(member, coop, loans)
+    const prompt = 'You are advising the leadership of a Nigerian cooperative society deciding whether to grant a 25% loan guarantee to one of its members under the Lagos State LASMECO scheme. Give a brief, balanced assessment (about 90-130 words) of whether this member appears to merit the guarantee, then a final line "Suggestion: <lean approve / lean decline / borderline>". Be fair and factual; the human makes the final decision. Consider: time in the cooperative (rule: 6+ months), time in business (rule: 12+ months), contributions to the cooperative, business turnover and scale, and whether the cooperative has capacity. Facts (Naira amounts in NGN):\n' + JSON.stringify(f, null, 2) + '\nRequested facility: ' + gr.amount + ' (25% guarantee = ' + gr.guarantee + '). Do not invent facts beyond those given. If contributions data is zero or missing, note that it should be confirmed manually.'
+    try { const text = await callClaude(prompt, 600); setResult(text || 'No assessment returned.') }
+    catch (e) { setResult(null); toast('Could not generate the assessment. You can still approve manually.', 'error') }
+    finally { setBusy(false) }
+  }
+  return (
+    <div className="ai-assess">
+      <div className="ai-assess-head"><span className="ai-tag">AI assessment</span><button className="btn btn-outline btn-sm" disabled={busy} onClick={assess}>{busy ? 'Assessing…' : result ? 'Re-assess' : 'Assess this member'}</button></div>
+      {result ? <div className="ai-assess-body"><p>{result}</p><div className="panel-actions"><button className="link-inline" onClick={() => onUse(result.replace(/\nSuggestion:.*/i, '').trim())}>Use as basis of approval</button></div><p className="ai-note">Advisory only. The decision and its recorded justification remain yours.</p></div> : <p className="ai-note">Generates a balanced view from the member’s tenure, contributions and business, to support your decision. It does not approve anything.</p>}
+    </div>
+  )
+}
 function CoopGuaranteeApprovals({ coop, ctx }) {
   const [reqs, setReqs] = useState(null), [loans, setLoans] = useState([]), [busy, setBusy] = useState(''), [evidence, setEvidence] = useState({})
   const reload = useCallback(() => { listGuaranteeRequests(coop.name).then(setReqs); listLoans().then(setLoans) }, [coop.name])
@@ -2092,7 +2111,7 @@ function CoopGuaranteeApprovals({ coop, ctx }) {
     }
     setBusy(gr.grId)
     await saveGuaranteeRequest({ ...gr, status: ok ? 'Approved' : 'Declined', approvedAt: ok ? new Date().toISOString() : undefined, approvedByName: ctx.name, evidence: ok ? evidence[gr.grId] : gr.evidence }, ctx, ok ? 'Guarantee approved' : 'Guarantee declined')
-    try { await notify({ to: gr.requestedBy, title: ok ? 'Guarantee approved' : 'Guarantee request declined', body: ok ? 'Your cooperative approved a 25% guarantee of ' + fmtNaira(gr.guarantee) + '. Download your guarantee letter and upload it with your LASMECO documents.' : 'Your guarantee request was not approved at this time. Please discuss with your cooperative leadership.', event: 'guarantee' }) } catch (e) { /* best-effort */ }
+    try { await notify({ to: gr.requestedBy, title: ok ? 'Guarantee approved' : 'Guarantee request declined', body: ok ? 'Your cooperative approved a 25% guarantee of ' + fmtNaira(gr.guarantee) + '. Download your guarantee letter and upload it with your LASMECO documents.' : 'Your guarantee request was not approved at this time. Please discuss with your cooperative leadership.', event: 'guarantee', link: { section: 'finance', label: 'Go to LASMECO finance' } }) } catch (e) { /* best-effort */ }
     setBusy(''); reload()
     toast(ok ? 'Approved. A guarantee letter is now available to the member.' : 'Request declined.', ok ? 'success' : 'info')
   }
@@ -2107,7 +2126,7 @@ function CoopGuaranteeApprovals({ coop, ctx }) {
           <div className="gr-item" key={gr.grId}>
             <div className="gr-head"><strong>{gr.memberName}</strong><span>{fmtNaira(gr.amount)} facility · 25% guarantee {fmtNaira(gr.guarantee)}</span></div>
             {!chk.fits && <div className="kyc-status pending">This exceeds available capacity ({fmtNaira(chk.available)}). Cannot approve until capacity frees up.</div>}
-            {canApprove && chk.fits && <><label className="field"><span>Basis of approval (evidence)</span><textarea rows={2} value={evidence[gr.grId] || ''} onChange={(e) => setEvidence({ ...evidence, [gr.grId]: e.target.value })} placeholder="e.g. Member contributions of N320,000 over 18 months; consistent savings; good standing." /></label>
+            {canApprove && chk.fits && <><GuaranteeAssessment gr={gr} coop={coop} loans={loans} onUse={(text) => setEvidence({ ...evidence, [gr.grId]: ((evidence[gr.grId] || '') + (evidence[gr.grId] ? ' ' : '') + text).trim() })} /><label className="field"><span>Basis of approval (evidence)</span><textarea rows={2} value={evidence[gr.grId] || ''} onChange={(e) => setEvidence({ ...evidence, [gr.grId]: e.target.value })} placeholder="e.g. Member contributions of N320,000 over 18 months; consistent savings; good standing." /></label>
             <div className="panel-actions"><button className="btn btn-gold btn-sm" disabled={busy === gr.grId} onClick={decide(gr, true)}>Approve &amp; generate letter</button><button className="btn btn-ghost btn-sm" disabled={busy === gr.grId} onClick={decide(gr, false)}>Decline</button></div></>}
           </div>) }) : <p className="muted-line">No requests awaiting approval.</p>}
       </div>
@@ -2131,7 +2150,7 @@ function MemberGuaranteeStatus({ member, coop, loans, ctx }) {
     }
     setBusy(true)
     await saveGuaranteeRequest({ memberId: member.memberId, memberName: member.name, coop: member.coop, amount: n, guarantee: chk.need, status: 'Pending', requestedBy: ctx.email }, ctx, 'Guarantee requested')
-    try { await notify({ to: 'society@' + (coop.trackingId || 'coop'), title: 'Guarantee request', body: member.name + ' has requested a 25% guarantee for ' + fmtNaira(n) + '.', event: 'guarantee' }) } catch (e) { /* best-effort */ }
+    try { await notify({ to: 'society@' + (coop.trackingId || 'coop'), title: 'Guarantee request', body: member.name + ' has requested a 25% guarantee for ' + fmtNaira(n) + '.', event: 'guarantee', link: { section: 'guarantees', label: 'Review guarantee requests' } }) } catch (e) { /* best-effort */ }
     setBusy(false); setAmt(''); reload()
     toast('Guarantee request sent to your cooperative leadership for approval.', 'success')
   }
@@ -2422,6 +2441,32 @@ function coopLendingReady(coop, auditDocs) {
   return { ready: admitted && audited && aged, admitted, audited, aged, reasons }
 }
 // Guarantee request workflow: member -> cooperative leadership approval -> letter.
+async function callClaude(prompt, maxTokens) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: maxTokens || 1000, messages: [{ role: 'user', content: prompt }] }),
+  })
+  const data = await res.json()
+  return (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim()
+}
+// Facts assembled for an AI guarantee assessment (all from the member's real record).
+function guaranteeAssessmentFacts(member, coop, loans) {
+  const coopMonths = memberCoopMonths(member), bizMonths = memberBusinessMonths(member)
+  const contributions = (member && member.contributions) || (member && member.msme && member.msme.monthlyTurnover ? 0 : 0)
+  const room = coopGuaranteeRoom(coop, loans)
+  const memberContrib = (member && member.savingsTotal) || (member && member.contributions) || 0
+  return {
+    name: member.name,
+    coop: member.coop,
+    monthsInCoop: coopMonths, meets6mo: coopMonths >= 6,
+    monthsInBusiness: bizMonths, meets1yr: bizMonths >= 12,
+    memberContributions: memberContrib,
+    coopPool: room.pool, coopAvailable: room.available,
+    monthlyTurnover: (member.msme && member.msme.monthlyTurnover) || 0,
+    employees: (member.msme && member.msme.employees) || 0,
+    yearsInOperation: (member.msme && member.msme.yearsInOperation) || 0,
+  }
+}
 async function listGuaranteeRequests(coopName) { return (await kvList('guarantee:')).filter((g) => !coopName || g.coop === coopName).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)) }
 async function getGuaranteeRequest(id) { return kvGet('guarantee:' + id) }
 async function saveGuaranteeRequest(rec, ctx, action) {
@@ -2431,32 +2476,33 @@ async function saveGuaranteeRequest(rec, ctx, action) {
   if (action && ctx) { try { await addAudit({ trackingId: id, action, by: ctx.name, role: ctx.role, note: rec.memberName || '' }) } catch (e) { /* best-effort */ } }
   return next
 }
-function guaranteeLetterText(gr, coop) {
-  const ref = gr.grId
-  const d = new Date(gr.approvedAt || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
-  return [
-    'LETTER OF COOPERATIVE GUARANTEE',
-    'Ref: ' + ref + '    Date: ' + d,
-    '',
-    'To: Sterling Bank / Bank of Industry, via the appointed sector Accelerator',
-    'Re: LASMECO facility for ' + gr.memberName + ' (' + (gr.memberId || '') + ')',
-    '',
-    'On behalf of ' + gr.coop + ', we confirm that the above-named is a member in good',
-    'standing and that this cooperative undertakes to guarantee twenty-five per cent (25%)',
-    'of the requested facility of ' + fmtNaira(gr.amount) + ', being ' + fmtNaira(gr.guarantee) + '.',
-    '',
-    'This guarantee is supported by the cooperative\u2019s members\u2019 contributions of ' + fmtNaira((coop && coop.contributions) || 0) + '.',
-    'It has been approved by the leadership of the cooperative on the date shown above.',
-    '',
-    'Approved by: ' + (gr.approvedByName || 'Cooperative leadership') + ' (' + gr.coop + ')',
-    gr.evidence ? 'Basis of approval: ' + gr.evidence : '',
-  ].filter((x) => x !== undefined).join('\n')
+async function generateLetterBody(gr, coop) {
+  const facts = { member: gr.memberName, cooperative: gr.coop, facility: gr.amount, guarantee: gr.guarantee, basis: gr.evidence || '', coopContributions: (coop && coop.contributions) || 0, ref: gr.grId }
+  const prompt = 'Write the body of a formal Letter of Cooperative Guarantee, in British English, from a Nigerian cooperative society to Sterling Bank and the Bank of Industry (via the appointed sector accelerator), for the Lagos State LASMECO financing scheme. It should: confirm the named person is a member in good standing; state that the cooperative unconditionally guarantees twenty-five per cent (25%) of the requested facility; reference the cooperative\u2019s members\u2019 contributions as backing; and be professional and concise (3 short paragraphs, no more than about 150 words). Do NOT include the letterhead, date, addresses, salutation or signature block \u2014 only the body paragraphs. Facts: ' + JSON.stringify(facts) + '. Amounts are in Nigerian Naira; format them like \u20A6' + gr.amount.toLocaleString('en-NG') + '.'
+  try { const t = await callClaude(prompt, 500); return t || null } catch (e) { return null }
 }
-function downloadGuaranteeLetter(gr, coop) {
-  const text = guaranteeLetterText(gr, coop)
-  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
-  const url = URL.createObjectURL(blob); const a = document.createElement('a')
-  a.href = url; a.download = 'guarantee-letter-' + gr.grId + '.txt'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)
+function letterFallbackBody(gr, coop) {
+  return 'We confirm that ' + gr.memberName + ' is a registered member of ' + gr.coop + ' in good standing.\n\nIn support of their application under the LASMECO scheme, this cooperative unconditionally guarantees twenty-five per cent (25%) of the requested facility of \u20A6' + gr.amount.toLocaleString('en-NG') + ', being \u20A6' + gr.guarantee.toLocaleString('en-NG') + '. This guarantee is backed by our members\u2019 contributions of \u20A6' + (((coop && coop.contributions) || 0)).toLocaleString('en-NG') + '.\n\nWe accordingly recommend the applicant for the facility and undertake our obligations as a guarantor under the scheme.'
+}
+async function downloadGuaranteeLetter(gr, coop) {
+  toast('Preparing the guarantee letter…')
+  const body = (await generateLetterBody(gr, coop)) || letterFallbackBody(gr, coop)
+  const d = new Date(gr.approvedAt || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+  const esc = (t) => String(t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const paras = body.split(/\n\n+/).map((p) => '<p>' + esc(p).replace(/\n/g, '<br>') + '</p>').join('')
+  const html = '<!doctype html><html><head><meta charset="utf-8"><title>Guarantee Letter ' + esc(gr.grId) + '</title><style>@page{size:A4;margin:22mm}body{font-family:Georgia,"Times New Roman",serif;color:#1a1a1a;line-height:1.6;font-size:12.5pt}.lh{border-bottom:3px double #1C8A4F;padding-bottom:12px;margin-bottom:6px}.lh .nm{font-size:19pt;font-weight:bold;color:#12673a;letter-spacing:.3px}.lh .meta{font-size:9.5pt;color:#555;margin-top:3px}.ref{display:flex;justify-content:space-between;font-size:10pt;color:#333;margin:18px 0 10px}.to{margin:6px 0 2px}.re{font-weight:bold;margin:14px 0}.sig{margin-top:40px}.sig .line{width:230px;border-top:1px solid #333;padding-top:5px;font-size:10.5pt}.foot{margin-top:28px;border-top:1px solid #ddd;padding-top:8px;font-size:8.5pt;color:#888;text-align:center}@media print{.noprint{display:none}}</style></head><body>' +
+    '<div class="lh"><div class="nm">' + esc(coop.name) + '</div><div class="meta">' + [coop.areaOffice ? 'Area Office: ' + esc(coop.areaOffice) : '', coop.regNo ? 'Reg. No: ' + esc(coop.regNo) : (coop.trackingId ? 'Ref: ' + esc(coop.trackingId) : ''), 'A registered cooperative society under the Lagos State MCCTI'].filter(Boolean).join(' &nbsp;&bull;&nbsp; ') + '</div></div>' +
+    '<div class="ref"><span>Ref: ' + esc(gr.grId) + '</span><span>' + d + '</span></div>' +
+    '<div class="to">The Credit Manager,<br>Sterling Bank Plc / Bank of Industry<br><em>Through: The Appointed Sector Accelerator, LASMECO</em></div>' +
+    '<p class="re">RE: LETTER OF COOPERATIVE GUARANTEE &mdash; ' + esc(gr.memberName) + '</p>' +
+    paras +
+    '<div class="sig"><div class="line">Authorised Signatory<br>For: ' + esc(coop.name) + '<br><span style="font-size:9pt;color:#666">' + esc(gr.approvedByName || 'Cooperative Leadership') + '</span></div></div>' +
+    '<div class="foot">Generated via MCCTI CoopEco on ' + d + ' &bull; Ref ' + esc(gr.grId) + ' &bull; This letter is issued under the Lagos State LASMECO scheme.</div>' +
+    '<div class="noprint" style="text-align:center;margin-top:22px"><button onclick="window.print()" style="padding:10px 22px;font-size:13px;background:#1C8A4F;color:#fff;border:none;border-radius:6px;cursor:pointer">Save as PDF / Print</button></div>' +
+    '<script>setTimeout(function(){window.print()},400)</script></body></html>'
+  const w = window.open('', '_blank')
+  if (!w) { toast('Allow pop-ups to download the letter, then try again.', 'error'); return }
+  w.document.write(html); w.document.close()
 }
 function globalGuaranteeUsed(loans) { return loans.filter((l) => ['Disbursed', 'Repaying'].includes(l.status)).reduce((a, l) => a + loanBreakdown(l.amountApproved || 0).sterlingGuarantee, 0) }
 function monthKey(d) { const x = new Date(d); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') }
@@ -3373,24 +3419,38 @@ async function collectPayment({ email, amountNaira, purpose, metadata }) {
    role:leadership) so staff share a queue. */
 function genNotifId() { return 'N' + Date.now() + Math.floor(Math.random() * 10000) }
 async function listNotifs(ctx) { const all = await kvList('notif:'); return all.filter((n) => n.to === ctx.email || n.to === 'role:' + ctx.role).sort((a, b) => (a.at < b.at ? 1 : -1)) }
-async function notify({ to, title, body, event, phone, channel }) {
+async function notify({ to, title, body, event, phone, channel, link }) {
   if (!to) return
   const id = genNotifId()
-  await kvSet('notif:' + id, { id, to, title, body: body || '', event: event || '', at: new Date().toISOString(), read: false })
+  await kvSet('notif:' + id, { id, to, title, body: body || '', event: event || '', link: link || null, at: new Date().toISOString(), read: false })
   if (phone) { try { await fetch('/api/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: phone, channel: channel || 'sms', message: title + (body ? ': ' + body : '') }) }) } catch (e) { /* in-app only */ } }
 }
 async function markNotifRead(id) { const n = await kvGet('notif:' + id); if (n && !n.read) await kvSet('notif:' + id, { ...n, read: true }) }
 async function markAllNotifsRead(ctx) { const list = await listNotifs(ctx); for (const n of list) if (!n.read) await kvSet('notif:' + n.id, { ...n, read: true }) }
-function NotificationCenter({ ctx, onChange }) {
-  const [items, setItems] = useState(null)
+function NotificationCenter({ ctx, onChange, onNavigate }) {
+  const [items, setItems] = useState(null), [open, setOpen] = useState(null)
   const reload = useCallback(() => listNotifs(ctx).then((l) => { setItems(l); onChange && onChange() }), [ctx.email, ctx.role])
   useEffect(() => { reload() }, [reload])
   if (!items) return <p className="muted-line">Loading notifications…</p>
   const unread = items.filter((n) => !n.read).length
+  const openNotif = async (n) => { await markNotifRead(n.id); setOpen(n); reload() }
+  const goTo = (n) => { if (n.link && n.link.section && onNavigate) onNavigate(n.link.section); else if (onNavigate) onNavigate('overview') }
+  if (open) {
+    return (
+      <div className="ws">
+        <button className="back-link" onClick={() => setOpen(null)}>&larr; Back to notifications</button>
+        <div className="returns-box"><h4>{open.title}</h4>
+          <p className="notif-at">{fmtDate(open.at)}</p>
+          {open.body ? <p className="notif-msg">{open.body}</p> : null}
+          {open.link && open.link.section ? <div className="panel-actions"><button className="btn btn-gold btn-sm" onClick={() => goTo(open)}>{open.link.label || 'Go to this'}</button></div> : <p className="chart-note">No further action is needed here.</p>}
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="ws">
       <div className="support-cta"><span>{unread ? unread + ' unread notification' + (unread === 1 ? '' : 's') : 'You\u2019re all caught up.'}</span>{unread ? <button className="btn btn-outline btn-sm" onClick={async () => { await markAllNotifsRead(ctx); reload() }}>Mark all read</button> : null}</div>
-      {items.length ? <div className="notif-list">{items.map((n) => (<div className={cx('notif', !n.read && 'unread')} key={n.id} onClick={async () => { await markNotifRead(n.id); reload() }}><span className="notif-dot" aria-hidden="true" /><div className="notif-body"><strong>{n.title}</strong>{n.body ? <p>{n.body}</p> : null}<span className="notif-at">{fmtDate(n.at)}</span></div></div>))}</div> : <p className="muted-line">No notifications yet.</p>}
+      {items.length ? <div className="notif-list">{items.map((n) => (<div className={cx('notif', !n.read && 'unread')} key={n.id} onClick={() => openNotif(n)}><span className="notif-dot" aria-hidden="true" /><div className="notif-body"><strong>{n.title}</strong>{n.body ? <p>{n.body}</p> : null}<span className="notif-at">{fmtDate(n.at)}{n.link && n.link.section ? ' \u00b7 tap to open' : ''}</span></div></div>))}</div> : <p className="muted-line">No notifications yet.</p>}
     </div>
   )
 }
@@ -3421,8 +3481,15 @@ async function openDocument(d) {
     try { const s = await supa.storage.from('coop-docs').createSignedUrl(d.path, 300); url = (s && s.data && s.data.signedUrl) || '' } catch (e) { /* fall through */ }
     if (!url) { toast('Could not open the document. You may not have access, or it has been removed.', 'error'); return false }
   } else if (d.url) { url = d.url }
+  else if (d.storage === 'demo') { url = demoDocPreview(d) } // sample records have no file; show a representative preview
   else { toast('This document is stored securely; open it from a device with access to the storage bucket.'); return false }
   showPreview(d, url); return true
+}
+// Build a readable placeholder page for sample documents so approvers can still "view" before approving.
+function demoDocPreview(d) {
+  const esc = (t) => String(t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const html = '<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:Georgia,serif;margin:0;background:#f3f5f2;color:#1f2a24}.pg{max-width:640px;margin:28px auto;background:#fff;border:1px solid #dfe5df;border-radius:8px;padding:40px 44px;box-shadow:0 8px 30px rgba(0,0,0,.06)}h1{font-size:19px;color:#1C8A4F;margin:0 0 4px}.sub{color:#5b665e;font-size:12px;margin:0 0 22px;border-bottom:1px solid #eceeec;padding-bottom:14px}.row{display:flex;justify-content:space-between;font-size:13px;padding:7px 0;border-bottom:1px dashed #eee}.row span:first-child{color:#5b665e}.note{margin-top:22px;font-size:12px;color:#8a948c;font-style:italic}.stamp{margin-top:26px;display:inline-block;border:2px solid #1C8A4F;color:#1C8A4F;border-radius:6px;padding:6px 12px;font-size:11px;letter-spacing:.08em;text-transform:uppercase}</style></head><body><div class="pg"><h1>' + esc(d.category) + '</h1><p class="sub">' + esc(d.name) + '</p><div class="row"><span>Uploaded by</span><strong>' + esc(d.uploadedBy || 'Applicant') + '</strong></div><div class="row"><span>File</span><strong>' + esc(d.name) + '</strong></div><div class="row"><span>Type</span><strong>' + esc(d.type || 'application/pdf') + '</strong></div><div class="row"><span>Status</span><strong>' + (d.verified ? 'Verified' : 'Awaiting verification') + '</strong></div><p class="note">This is a sample document generated for demonstration. In live use, the applicant\u2019s actual uploaded file appears here for the approver to review before approving.</p>' + (d.verified ? '<span class="stamp">Verified</span>' : '') + '</div></body></html>'
+  return 'data:text/html;charset=utf-8,' + encodeURIComponent(html)
 }
 async function setDocVerified(coopId, id, verified, ctx) { const d = await kvGet('doc:' + coopId + ':' + id); if (d) await kvSet('doc:' + coopId + ':' + id, { ...d, verified, verifiedBy: ctx.name, verifiedAt: new Date().toISOString() }) }
 async function deleteDocument(coopId, id) { const d = await kvGet('doc:' + coopId + ':' + id); if (d && supa && d.path) { try { await supa.storage.from('coop-docs').remove([d.path]) } catch (e) { /* ignore */ } } await kvDelete('doc:' + coopId + ':' + id) }
@@ -3480,7 +3547,7 @@ function DocumentsPanel({ coopId, ctx, canVerify, canUpload = true, categories, 
       {canUpload && <div className="docs-upload"><select value={cat} onChange={(e) => setCat(e.target.value)}>{cats.map((c) => <option key={c}>{c}</option>)}</select><input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx" onChange={onUpload} disabled={busy} /></div>}
       {busy && <p className="muted-line">Uploading…</p>}
       {err && <p className="auth-err">{err}</p>}
-      {docs.length ? <div className="docs-list">{docs.map((d) => (<div className="doc-row" key={d.id}><div className="doc-meta"><strong>{d.name}</strong><span>{d.category} &middot; {fmtFileSize(d.size)} &middot; {d.uploadedBy} {d.verified ? <span className="chip st-approved">Verified</span> : null}</span></div><div className="doc-actions">{(d.url || (d.storage === 'supabase' && d.path)) ? <button className="link-inline" onClick={() => openDocument(d)}>View</button> : <span className="muted-line sm">Stored</span>}{canVerify && !d.verified ? <button className="link-inline" onClick={async () => { await setDocVerified(coopId, d.id, true, ctx); reload() }}>Verify</button> : null}{(canUpload || canVerify) ? <button className="link-inline danger" onClick={async () => { await deleteDocument(coopId, d.id); reload() }}>Remove</button> : null}</div></div>))}</div> : <p className="muted-line">No documents uploaded yet.</p>}
+      {docs.length ? <div className="docs-list">{docs.map((d) => (<div className="doc-row" key={d.id}><div className="doc-meta"><strong>{d.name}</strong><span>{d.category} &middot; {fmtFileSize(d.size)} &middot; {d.uploadedBy} {d.verified ? <span className="chip st-approved">Verified</span> : null}</span></div><div className="doc-actions"><button className="link-inline" onClick={() => openDocument(d)}>View</button>{canVerify && !d.verified ? <button className="link-inline" onClick={async () => { await setDocVerified(coopId, d.id, true, ctx); reload() }}>Verify</button> : null}{(canUpload || canVerify) ? <button className="link-inline danger" onClick={async () => { await deleteDocument(coopId, d.id); reload() }}>Remove</button> : null}</div></div>))}</div> : <p className="muted-line">No documents uploaded yet.</p>}
       {!hasSupabase ? <p className="panel-note">Demo mode: small files preview in-browser only. Connect Supabase Storage (run supabase_setup.sql to create the private “coop-docs” bucket) to store documents securely; they are then served only via short-lived signed links to signed-in staff.</p> : <p className="panel-note">Documents are stored in a private bucket and opened via short-lived signed links. Only signed-in platform users can view them.</p>}
     </div>
   )
@@ -3779,7 +3846,7 @@ function Dashboard({ session, onSignOut, onHome }) {
   const content = section === 'help'
     ? <SupportConcierge ctx={ctx} />
     : section === 'notifications'
-      ? <NotificationCenter ctx={ctx} onChange={refreshUnread} />
+      ? <NotificationCenter ctx={ctx} onChange={refreshUnread} onNavigate={setSection} />
       : (section === 'privacy' && canPrivacy)
         ? <DataControls ctx={ctx} onDeleted={onSignOut} />
         : (eff.role === 'leadership' && !viewAs)
@@ -3823,12 +3890,13 @@ function DocumentPreview() {
   useEffect(() => { if (!doc) return; const onKey = (e) => { if (e.key === 'Escape') closePreview() }; window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey) }, [doc])
   if (!doc) return null
   const isImg = (doc.type || '').indexOf('image/') === 0 || /\.(png|jpe?g|webp|gif)$/i.test(doc.name || '')
-  const isPdf = (doc.type || '') === 'application/pdf' || /\.pdf$/i.test(doc.name || '')
+  const isHtml = /^data:text\/html/.test(doc.url || '')
+  const isPdf = !isHtml && ((doc.type || '') === 'application/pdf' || /\.pdf$/i.test(doc.name || ''))
   return (
     <div className="modal-overlay" onClick={closePreview}>
       <div className="preview" onClick={(e) => e.stopPropagation()}>
         <div className="preview-bar"><strong>{doc.name}</strong><div className="preview-acts"><a className="link-inline" href={doc.url} target="_blank" rel="noreferrer">Open in new tab</a><button className="preview-x" onClick={closePreview} aria-label="Close preview">&times;</button></div></div>
-        <div className="preview-body">{isImg ? <img src={doc.url} alt={doc.name} /> : isPdf ? <iframe title={doc.name} src={doc.url} /> : <div className="preview-fallback"><p>Preview isn't available for this file type.</p><a className="btn btn-gold btn-sm" href={doc.url} target="_blank" rel="noreferrer" download>Download to view</a></div>}</div>
+        <div className="preview-body">{isImg ? <img src={doc.url} alt={doc.name} /> : (isPdf || isHtml) ? <iframe title={doc.name} src={doc.url} /> : <div className="preview-fallback"><p>Preview isn't available for this file type.</p><a className="btn btn-gold btn-sm" href={doc.url} target="_blank" rel="noreferrer" download>Download to view</a></div>}</div>
       </div>
     </div>
   )
@@ -4238,6 +4306,11 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .gr-head strong{font-size:14px;color:var(--cream)}
 .gr-head span{font-size:12.5px;color:var(--sage-dim)}
 .gr-sub{display:block;font-size:12px;color:var(--sage-dim);margin-top:4px}
+.ai-assess{border:1px solid var(--line-soft);background:var(--ink-2);border-radius:9px;padding:12px;margin:10px 0}
+.ai-assess-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.ai-tag{font-family:var(--mono);font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--plum,#7a5b8a);background:#f0eaf4;border-radius:5px;padding:3px 8px}
+.ai-assess-body p{font-size:13px;color:var(--ink);line-height:1.6;margin:10px 0 4px;white-space:pre-wrap}
+.ai-note{font-size:11px;color:var(--sage-dim);font-style:italic;margin:6px 0 0}
 .spark-axis{display:flex;justify-content:space-between;margin-top:4px}
 .spark-axis span{font-size:10.5px;color:var(--sage-dim);font-family:var(--mono)}
 .accel-rating{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px}

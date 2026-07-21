@@ -640,6 +640,23 @@ Charts reuse the shared primitives (Donut, Bars, MiniArea, CHART_C). The society
 leadership overviews already use these; Sterling and BOI use the loan-stage overview.
 The member overview is the remaining candidate for the same treatment.
 
+## Document view, notifications, AI assessment & PDF letters
+- View before approving: every document row an approver sees has a View button that opens
+  the file in a preview modal. Sample records show a representative preview so the flow is
+  demonstrable without real files.
+- Notifications open as a message with a 'Go to...' button that jumps straight to the
+  relevant screen (e.g. a guarantee approval links the member to LASMECO finance; a new
+  request links the cooperative to its guarantee requests).
+- AI guarantee assessment: in the approval box, 'Assess this member' calls Claude (Sonnet)
+  with the member's tenure, contributions and business facts and returns a balanced,
+  advisory view with a soft suggestion. Leadership-only; never auto-approves; the human
+  decision and written justification remain required.
+- Guarantee letter is now written by AI in professional British English and rendered as a
+  PDF on the cooperative's typeset letterhead (name, area office, ref), via the browser's
+  Save-as-PDF. A fixed fallback letter is used if the AI call is unavailable.
+  Note: the AI features call the Anthropic API and only run in the deployed app, not in a
+  local file preview. Allow pop-ups for the PDF letter.
+
 ## Guarantee eligibility & workflow
 Members can only apply for LASMECO finance when ALL of the following hold:
 - The member has been in business 12+ months AND a cooperative member 6+ months.
