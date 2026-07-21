@@ -706,6 +706,45 @@ function AuditTrail({ trackingId, refreshKey }) {
     </ul>
   )
 }
+function CoopLasmecoApproval({ coop, ctx, onChanged }) {
+  const [docs, setDocs] = useState([]), [loans, setLoans] = useState([]), [busy, setBusy] = useState(false), [ov, setOv] = useState({ amount: '', reason: '' }), [showOv, setShowOv] = useState(false)
+  const reload = useCallback(() => { listDocs('coopaudit:' + coop.trackingId).then(setDocs); listLoans().then(setLoans) }, [coop.trackingId])
+  useEffect(() => { reload() }, [reload])
+  const ro = isReviewer(ctx)
+  const canDecide = !ro && ctx.role === 'leadership'
+  const audit = docs.find((d) => d.category === COOP_AUDIT_DOC)
+  const audited = coopAuditApproved(coop, docs)
+  const aged = coopCanIssueGuarantee(coop)
+  const room = coopGuaranteeRoom(coop, loans)
+  const approveAudit = async () => { setBusy(true); await setDocVerified('coopaudit:' + coop.trackingId, audit.id, true, ctx); setBusy(false); reload(); toast('Audit approved. This cooperative\u2019s members can now apply (once other checks pass).', 'success') }
+  const confirmAge = async () => { setBusy(true); const next = await updateCoop(coop.trackingId, { established12: true, establishedConfirmed: true, establishedDate: coop.establishedDate || new Date(Date.now() - 400 * 864e5).toISOString() }, ctx, 'Established 1+ year confirmed by MCCTI'); setBusy(false); onChanged && onChanged(next); toast('Confirmed. Cooperative may issue 25% guarantees.') }
+  const applyOverride = async () => {
+    const n = Number(ov.amount)
+    if (!n || !ov.reason.trim()) { toast('Enter an override amount and a reason.', 'error'); return }
+    setBusy(true); const next = await updateCoop(coop.trackingId, { guaranteeOverride: n }, ctx, 'Guarantee ceiling override: ' + fmtNaira(n) + ' \u2014 ' + ov.reason.trim()); setBusy(false); setShowOv(false); setOv({ amount: '', reason: '' }); onChanged && onChanged(next); toast('Override applied and logged.')
+  }
+  return (
+    <div className="returns-box"><h4>LASMECO lending readiness (MCCTI)</h4>
+      <div className="kyc-check">
+        <div className={cx('kyc-item', coop.status === 'Approved' && 'ok')}><span className="kyc-mark">{coop.status === 'Approved' ? '\u2713' : '\u25cb'}</span><span className="kyc-label">Cooperative admitted / approved</span></div>
+        <div className={cx('kyc-item', audited && 'ok')}><span className="kyc-mark">{audited ? '\u2713' : '\u25cb'}</span><span className="kyc-label">Independent audit {audit ? (audited ? 'approved' : 'uploaded \u2014 awaiting your approval') : 'not uploaded'}</span></div>
+        <div className={cx('kyc-item', aged && 'ok')}><span className="kyc-mark">{aged ? '\u2713' : '\u25cb'}</span><span className="kyc-label">In existence 1+ year {coop.establishedClaim && !coop.establishedConfirmed ? '\u2014 claimed, awaiting your confirmation' : ''}</span></div>
+      </div>
+      {canDecide && <div className="panel-actions">
+        {audit && !audited && <button className="btn btn-gold btn-sm" disabled={busy} onClick={approveAudit}>Approve audit</button>}
+        {!aged && <button className="btn btn-outline btn-sm" disabled={busy} onClick={confirmAge}>Confirm 1+ year in existence</button>}
+      </div>}
+      <div className="statgrid" style={{ marginTop: '12px' }}>
+        <div className="stat"><span className="stat-fig">{fmtNaira(room.pool)}</span><span className="stat-lab">Contributions pool</span></div>
+        <div className="stat"><span className="stat-fig">{fmtNaira(room.used)}</span><span className="stat-lab">Guarantees committed</span></div>
+        <div className="stat"><span className="stat-fig" style={{ color: 'var(--green)' }}>{fmtNaira(room.available)}</span><span className="stat-lab">Available{room.override ? ' (incl. override ' + fmtNaira(room.override) + ')' : ''}</span></div>
+      </div>
+      {canDecide && <div className="panel-actions"><button className="link-inline" onClick={() => setShowOv(!showOv)}>{showOv ? 'Cancel override' : 'Override guarantee ceiling'}</button></div>}
+      {canDecide && showOv && <div className="returns-box"><p className="chart-note">Use sparingly. An override raises this cooperative’s guarantee ceiling and is logged on the audit trail.</p><div className="form-grid"><label className="field"><span>Additional ceiling (₦)</span><input type="number" value={ov.amount} onChange={(e) => setOv({ ...ov, amount: e.target.value })} /></label><label className="field"><span>Reason</span><input value={ov.reason} onChange={(e) => setOv({ ...ov, reason: e.target.value })} placeholder="Basis for the exception" /></label></div><div className="panel-actions"><button className="btn btn-gold btn-sm" disabled={busy} onClick={applyOverride}>Apply override</button></div></div>}
+      <div className="trail-box" style={{ marginTop: '12px' }}><h5 style={{ margin: '0 0 8px', fontSize: '13px' }}>Independent audit document</h5>{ro && !DEMO_DATA ? <p className="panel-note">Hidden in review access (NDPR).</p> : <DocumentsPanel coopId={'coopaudit:' + coop.trackingId} ctx={ctx} canVerify={canDecide} canUpload={false} categories={[COOP_AUDIT_DOC]} onChange={reload} />}</div>
+    </div>
+  )
+}
 function CoopDetail({ coop, ctx, onClose, onChanged }) {
   const [note, setNote] = useState(''), [busy, setBusy] = useState(false), [c, setC] = useState(coop), [rk, setRk] = useState(0)
   const canExamine = ctx.role === 'officer' || ctx.role === 'leadership'
@@ -767,6 +806,8 @@ function CoopDetail({ coop, ctx, onClose, onChanged }) {
       )}
 
       <CoopTierPanel coop={c} ctx={ctx} onChanged={onChanged} />
+      {(ctx.role === 'leadership' || ctx.role === 'officer' || isReviewer(ctx)) && <CoopLasmecoApproval coop={c} ctx={ctx} onChanged={(next) => { if (next) setC(next); setRk((k) => k + 1); onChanged && onChanged() }} />}
+      {(ctx.role === 'leadership' || isReviewer(ctx)) && <div className="returns-box"><h4>Member guarantee requests</h4><CoopGuaranteeApprovals coop={c} ctx={ctx} /></div>}
       <div className="trail-box"><h4>Documents</h4>{isReviewer(ctx) && !DEMO_DATA ? <p className="panel-note">Documents are hidden in review access because this database holds real data (NDPR).</p> : <DocumentsPanel coopId={c.trackingId} ctx={ctx} canVerify={canExamine} canUpload={canExamine} />}</div>
       <div className="trail-box"><h4>Audit trail</h4><AuditTrail trackingId={c.trackingId} refreshKey={rk} /></div>
     </div>
@@ -1312,7 +1353,7 @@ function LeadershipOverview({ ctx, section, onViewAs }) {
       {section === 'overview' && <ActionQueue />}
       {section === 'overview' && <PortfolioTrend />}
       {section === 'overview' && <AnalyticsDashboard />}
-      {section === 'applications' && (<><p className="muted-line">Review each application's documents, then approve or reject. Societies mirrored from SEKAT are managed in SEKAT.</p><CoopTable coops={pending.length ? pending : coops} onOpen={setSel} /></>)}
+      {section === 'applications' && (<><p className="muted-line">Review each application's documents, then approve or reject. Use search to find any society, including approved ones, to manage guarantee requests and lending readiness. Societies mirrored from SEKAT are managed in SEKAT.</p><CoopTable coops={coops} onOpen={setSel} /></>)}
       {section === 'members' && <MembersAnalytics />}
       {section === 'lasmeco' && <LasmecoOverview ctx={ctx} />}
       {section === 'reports' && <ReportsPanel role="leadership" />}
@@ -1361,6 +1402,8 @@ function SocietyWorkspace({ ctx, section }) {
         <div className="returns-box"><h4>Documents</h4><DocumentsPanel coopId={mine.trackingId} ctx={ctx} canVerify={false} canUpload={mine.source !== 'SEKAT'} /></div>
         <div className="trail-box"><h4>Audit trail</h4><AuditTrail trackingId={mine.trackingId} refreshKey={coops.length} /></div>
       </>)}
+      {section === 'lending' && <CoopLendingReadiness coop={mine} ctx={ctx} onChanged={reload} />}
+      {section === 'guarantees' && <CoopGuaranteeApprovals coop={mine} ctx={ctx} />}
       {section === 'chains' && <ChainsPanel ctx={{ ...ctx, coopName: mine.name }} />}
       {section === 'savings' && (mine.source !== 'SEKAT' ? <div className="returns-box"><h4>Savings &amp; esusu</h4><CoopEsusu coop={mine} ctx={ctx} /></div> : <p className="muted-line">Savings are managed in SEKAT for mirrored societies.</p>)}
     </div>
@@ -1407,7 +1450,7 @@ async function createMember(rec, ctx) {
   const memberId = 'M-' + String(Math.floor(Math.random() * 1000000)).padStart(6, '0'); const now = new Date().toISOString()
   const bvnVerified = rec.bvnVerified != null ? Boolean(rec.bvnVerified) : Boolean(rec.bvn && rec.bvn.length >= 10)
   const ninVerified = rec.ninVerified != null ? Boolean(rec.ninVerified) : Boolean(rec.nin && rec.nin.length >= 10)
-  const record = { memberId, source: 'MCCTI', name: rec.name, coop: rec.coop, sector: rec.sector, phone: rec.phone, gender: rec.gender, kyc: { bvn: rec.bvn ? 'on file' : '', nin: rec.nin ? 'on file' : '', bvnVerified, ninVerified, status: (bvnVerified && ninVerified) ? 'Verified' : (bvnVerified || ninVerified) ? 'Partial' : 'Unverified' }, msme: { monthlyTurnover: Number(rec.monthlyTurnover) || 0, employees: Number(rec.employees) || 0, cashFlow: Number(rec.cashFlow) || 0, customerBase: Number(rec.customerBase) || 0, yearsInOperation: Number(rec.yearsInOperation) || 0 }, createdBy: ctx.email, createdAt: now }
+  const record = { memberId, source: 'MCCTI', name: rec.name, coop: rec.coop, sector: rec.sector, phone: rec.phone, gender: rec.gender, dob: rec.dob || '', address: rec.address || '', memberSince: rec.memberSince || '', businessStart: rec.businessStart || '', memberSinceConfirmed: false, kyc: { bvn: rec.bvn ? 'on file' : '', nin: rec.nin ? 'on file' : '', bvnVerified, ninVerified, status: (bvnVerified && ninVerified) ? 'Verified' : (bvnVerified || ninVerified) ? 'Partial' : 'Unverified' }, msme: { monthlyTurnover: Number(rec.monthlyTurnover) || 0, employees: Number(rec.employees) || 0, cashFlow: Number(rec.cashFlow) || 0, customerBase: Number(rec.customerBase) || 0, yearsInOperation: Number(rec.yearsInOperation) || 0, businessStart: rec.businessStart || '' }, businessMonths: rec.businessStart ? monthsBetween(rec.businessStart, Date.now()) : 0, coopMonths: rec.memberSince ? monthsBetween(rec.memberSince, Date.now()) : 0, createdBy: ctx.email, createdAt: now }
   await kvSet('member:' + memberId, record, ctx.uid)
   await notify({ to: ctx.email, title: 'Welcome to MCCTI CoopEco', body: 'Your member profile is set up. You can now apply for LASMECO finance.', event: 'member', phone: rec.phone })
   return record
@@ -1851,7 +1894,7 @@ function BulkImport({ ctx, onDone }) {
     </div>
   )
 }
-const SEED_MARKERS = ['integration:seed-v10', 'integration:accel-v8', 'integration:loandocs-v4', 'integration:snapshots-v1']
+const SEED_MARKERS = ['integration:seed-v11', 'integration:accel-v8', 'integration:loandocs-v4', 'integration:snapshots-v1']
 /* Wipes the seed markers and re-runs seeding, so corrected sample data lands on a database
    that was seeded by an older build. Only offered while DEMO_DATA is on. */
 async function rebuildDemoData() {
@@ -1863,8 +1906,11 @@ async function removeDemoData() {
   for (const k of SEED_MARKERS) { try { await kvDelete(k) } catch (e) { /* continue */ } }
 }
 function DemoDataPanel({ ctx }) {
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState(false), [dbSeed, setDbSeed] = useState('checking…')
+  useEffect(() => { (async () => { const marks = []; for (const v of ['seed-v10', 'seed-v9', 'seed-v8', 'seed-v7']) { if (await kvGet('integration:' + v)) marks.push(v) } setDbSeed(marks[0] || 'none') })() }, [])
   if (isReviewer(ctx)) return null
+  const CURRENT_SEED = 'seed-v10'
+  const stale = dbSeed !== 'none' && dbSeed !== CURRENT_SEED && dbSeed !== 'checking…'
   const rebuild = async () => {
     if (!(await confirmDialog('Rebuild the sample data? Existing demo records are replaced with a fresh, corrected set. Records created by real users are not touched.', { confirmLabel: 'Rebuild' }))) return
     setBusy(true)
@@ -1878,7 +1924,9 @@ function DemoDataPanel({ ctx }) {
   return (
     <div><h3 className="ws-h">Sample data</h3>
       <div className="returns-box">
-        <div className={cx('kyc-status', DEMO_DATA ? 'pending' : 'ok')}>Sample data is {DEMO_DATA ? 'ON' : 'OFF'} · {hasSupabase ? 'connected to your database' : 'demo mode, no database connected'}{hasSupabase ? (DEMO_DATA ? ' · VITE_DEMO_DATA=true' : ' · VITE_DEMO_DATA is not set') : ''}</div>
+        <div className={cx('kyc-status', DEMO_DATA ? 'pending' : 'ok')}>Sample data is {DEMO_DATA ? 'ON' : 'OFF'} · {hasSupabase ? 'connected to your database' : 'demo mode, no database connected'}{hasSupabase ? (DEMO_DATA ? ' · VITE_DEMO_DATA=true' : ' · VITE_DEMO_DATA is not set') : ''} · sample set: {dbSeed}</div>
+        {stale && DEMO_DATA ? <div className="kyc-status pending" style={{ marginTop: '8px' }}>Your saved sample data ({dbSeed}) is older than this build ({CURRENT_SEED}). Click <strong>Rebuild sample data</strong> below to refresh it — that is what brings the newest demo records (e.g. accelerator ratings and earnings) to life.</div> : null}
+        {stale && !DEMO_DATA ? <div className="kyc-status pending" style={{ marginTop: '8px' }}>Your saved sample data ({dbSeed}) is older than this build ({CURRENT_SEED}), but sample data is OFF so it will not refresh. Set VITE_DEMO_DATA=true in Vercel and redeploy, then use Rebuild sample data.</div> : null}
         {DEMO_DATA ? (<>
           <p className="muted-line">Demo records are seeded once and then left alone. If this database was seeded by an older build, some sample records may be incomplete — for example members with no LASMECO sector, which leaves the Health, Tourism and Digital Economy value chains empty. Rebuilding replaces the demo set with a corrected one.</p>
           <div className="panel-actions"><button className="btn btn-outline btn-sm" disabled={busy} onClick={rebuild}>{busy ? 'Working…' : 'Rebuild sample data'}</button></div>
@@ -1944,7 +1992,7 @@ async function verifyKyc(type, value) {
 }
 function MemberOnboardingForm({ ctx, coops, onDone, onCancel }) {
   const coopNames = Array.from(new Set(coops.map((c) => c.name)))
-  const [f, setF] = useState({ name: ctx.name || '', coop: coopNames[0] || '', sector: SECTORS[0], phone: '', gender: GENDERS[0], bvn: '', nin: '', monthlyTurnover: '', employees: '', cashFlow: '', customerBase: '', yearsInOperation: '', consent: false })
+  const [f, setF] = useState({ name: ctx.name || '', coop: coopNames[0] || '', sector: SECTORS[0], phone: '', gender: GENDERS[0], dob: '', address: '', memberSince: '', businessStart: '', bvn: '', nin: '', monthlyTurnover: '', employees: '', cashFlow: '', customerBase: '', yearsInOperation: '', consent: false })
   const [busy, setBusy] = useState(false), [err, setErr] = useState(''), [done, setDone] = useState(null)
   const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value })
   const submit = async () => {
@@ -1969,6 +2017,10 @@ function MemberOnboardingForm({ ctx, coops, onDone, onCancel }) {
         <label className="field"><span>Enterprise sector</span><select value={f.sector} onChange={set('sector')}>{SECTORS.map((s) => <option key={s}>{s}</option>)}</select></label>
         <label className="field"><span>Phone</span><input value={f.phone} onChange={set('phone')} placeholder="0803..." /></label>
         <label className="field"><span>Gender</span><select value={f.gender} onChange={set('gender')}>{GENDERS.map((g) => <option key={g}>{g}</option>)}</select></label>
+        <label className="field"><span>Date of birth</span><input type="date" value={f.dob} onChange={set('dob')} /></label>
+        <label className="field span2"><span>Residential address</span><input value={f.address} onChange={set('address')} placeholder="House, street, area, LGA" /></label>
+        <label className="field"><span>Member of cooperative since</span><input type="date" value={f.memberSince} onChange={set('memberSince')} /></label>
+        <label className="field"><span>Business started (date)</span><input type="date" value={f.businessStart} onChange={set('businessStart')} /></label>
         <label className="field"><span>BVN (KYC)</span><input value={f.bvn} onChange={set('bvn')} placeholder="11 digits" /></label>
         <label className="field"><span>NIN (KYC)</span><input value={f.nin} onChange={set('nin')} placeholder="11 digits" /></label>
         <label className="field"><span>Monthly turnover (₦)</span><input type="number" value={f.monthlyTurnover} onChange={set('monthlyTurnover')} placeholder="0" /></label>
@@ -1984,11 +2036,131 @@ function MemberOnboardingForm({ ctx, coops, onDone, onCancel }) {
     </div>
   )
 }
+function CoopLendingReadiness({ coop, ctx, onChanged }) {
+  const [docs, setDocs] = useState([]), [loans, setLoans] = useState([]), [busy, setBusy] = useState(false)
+  const reloadDocs = useCallback(() => { listDocs('coopaudit:' + coop.trackingId).then(setDocs); listLoans().then(setLoans) }, [coop.trackingId])
+  useEffect(() => { reloadDocs() }, [reloadDocs])
+  const audited = coopAuditApproved(coop, docs)
+  const admitted = coopAdmission(coop).admitted
+  const aged = coopCanIssueGuarantee(coop)
+  const room = coopGuaranteeRoom(coop, loans)
+  const ro = isReviewer(ctx)
+  const setEstablished = async () => {
+    const yes = await confirmDialog('Confirm this cooperative has been in existence for at least 1 year? MCCTI will verify this before it takes effect.', { confirmLabel: 'Confirm' })
+    if (!yes) return
+    setBusy(true); await updateCoop(coop.trackingId, { established12: true, establishedClaim: true }, ctx, 'Established-1yr claimed'); setBusy(false); onChanged && onChanged(); toast('Recorded. Awaiting MCCTI confirmation.')
+  }
+  return (
+    <div className="ws">
+      <p className="muted-line">Before your members can apply for LASMECO finance, your cooperative must be admitted by MCCTI, have an MCCTI-approved independent audit on file, and have existed for at least one year to issue the 25% guarantee.</p>
+      <div className="returns-box"><h4>Lending readiness</h4>
+        <div className="kyc-check">
+          <div className={cx('kyc-item', admitted && 'ok')}><span className="kyc-mark">{admitted ? '\u2713' : '\u25cb'}</span><span className="kyc-label">Admitted to the LASMECO scheme by MCCTI</span></div>
+          <div className={cx('kyc-item', audited && 'ok')}><span className="kyc-mark">{audited ? '\u2713' : '\u25cb'}</span><span className="kyc-label">Independent audit approved by MCCTI{docs.some((d) => d.category === COOP_AUDIT_DOC && !d.verified) ? ' \u2014 uploaded, awaiting MCCTI approval' : ''}</span></div>
+          <div className={cx('kyc-item', aged && 'ok')}><span className="kyc-mark">{aged ? '\u2713' : '\u25cb'}</span><span className="kyc-label">In existence for at least 1 year</span></div>
+        </div>
+        <div className={cx('kyc-status', (admitted && audited && aged) ? 'ok' : 'pending')}>{(admitted && audited && aged) ? 'Ready \u2014 your members can apply for LASMECO finance.' : 'Not yet ready \u2014 complete the items above.'}</div>
+      </div>
+      <div className="returns-box"><h4>Guarantee capacity</h4>
+        <div className="statgrid">
+          <div className="stat"><span className="stat-fig">{fmtNaira(room.pool)}</span><span className="stat-lab">Members’ contributions (pool)</span></div>
+          <div className="stat"><span className="stat-fig">{fmtNaira(room.used)}</span><span className="stat-lab">Guarantees committed</span></div>
+          <div className="stat"><span className="stat-fig" style={{ color: 'var(--green)' }}>{fmtNaira(room.available)}</span><span className="stat-lab">Available to guarantee</span></div>
+        </div>
+        <p className="panel-note">Your cooperative can guarantee 25% of members\u2019 loans up to the size of its contributions. For example, a {fmtNaira(1000000)} pool can back four {fmtNaira(1000000)} facilities (each needs a {fmtNaira(250000)} guarantee). Completed loans free up capacity.</p>
+      </div>
+      {!aged && !ro && <div className="returns-box"><h4>Confirm year of establishment</h4><p className="muted-line">If your cooperative has existed for at least a year, record it here. MCCTI confirms before it takes effect.</p><div className="panel-actions"><button className="btn btn-outline btn-sm" disabled={busy} onClick={setEstablished}>Confirm 1+ year in existence</button></div></div>}
+      <div className="returns-box"><h4>Independent audit</h4>
+        <p className="muted-line">Upload your latest independent audit (annual). MCCTI reviews and approves it; approval unlocks LASMECO applications for your members.</p>
+        <DocumentsPanel coopId={'coopaudit:' + coop.trackingId} ctx={ctx} canVerify={false} canUpload={!ro && coop.source !== 'SEKAT'} categories={[COOP_AUDIT_DOC]} onChange={reloadDocs} />
+      </div>
+    </div>
+  )
+}
+function CoopGuaranteeApprovals({ coop, ctx }) {
+  const [reqs, setReqs] = useState(null), [loans, setLoans] = useState([]), [busy, setBusy] = useState(''), [evidence, setEvidence] = useState({})
+  const reload = useCallback(() => { listGuaranteeRequests(coop.name).then(setReqs); listLoans().then(setLoans) }, [coop.name])
+  useEffect(() => { reload() }, [reload])
+  const ro = isReviewer(ctx)
+  const canApprove = !ro && (ctx.role === 'society' || ctx.role === 'leadership')
+  if (!reqs) return <p className="muted-line">Loading guarantee requests…</p>
+  const decide = (gr, ok) => async () => {
+    if (ok) {
+      const chk = canCoopGuarantee(coop, gr.amount, loans)
+      if (!chk.fits) { toast('Approving this would exceed your guarantee ceiling (' + fmtNaira(chk.available) + ' available). It cannot be approved until capacity frees up.', 'error'); return }
+      if (!(evidence[gr.grId] || '').trim()) { toast('Add the basis for approval (e.g. member contributions, standing) before approving.', 'error'); return }
+    }
+    setBusy(gr.grId)
+    await saveGuaranteeRequest({ ...gr, status: ok ? 'Approved' : 'Declined', approvedAt: ok ? new Date().toISOString() : undefined, approvedByName: ctx.name, evidence: ok ? evidence[gr.grId] : gr.evidence }, ctx, ok ? 'Guarantee approved' : 'Guarantee declined')
+    try { await notify({ to: gr.requestedBy, title: ok ? 'Guarantee approved' : 'Guarantee request declined', body: ok ? 'Your cooperative approved a 25% guarantee of ' + fmtNaira(gr.guarantee) + '. Download your guarantee letter and upload it with your LASMECO documents.' : 'Your guarantee request was not approved at this time. Please discuss with your cooperative leadership.', event: 'guarantee' }) } catch (e) { /* best-effort */ }
+    setBusy(''); reload()
+    toast(ok ? 'Approved. A guarantee letter is now available to the member.' : 'Request declined.', ok ? 'success' : 'info')
+  }
+  const pending = reqs.filter((g) => g.status === 'Pending')
+  const decided = reqs.filter((g) => g.status !== 'Pending')
+  const room = coopGuaranteeRoom(coop, loans)
+  return (
+    <div className="ws">
+      <p className="muted-line">Members request a 25% guarantee before they can apply for LASMECO finance. Approvals here generate the guarantee letter the member uploads with their application. You have {fmtNaira(room.available)} of guarantee capacity available.</p>
+      <div className="returns-box"><h4>Awaiting approval ({pending.length})</h4>
+        {pending.length ? pending.map((gr) => { const chk = canCoopGuarantee(coop, gr.amount, loans); return (
+          <div className="gr-item" key={gr.grId}>
+            <div className="gr-head"><strong>{gr.memberName}</strong><span>{fmtNaira(gr.amount)} facility · 25% guarantee {fmtNaira(gr.guarantee)}</span></div>
+            {!chk.fits && <div className="kyc-status pending">This exceeds available capacity ({fmtNaira(chk.available)}). Cannot approve until capacity frees up.</div>}
+            {canApprove && chk.fits && <><label className="field"><span>Basis of approval (evidence)</span><textarea rows={2} value={evidence[gr.grId] || ''} onChange={(e) => setEvidence({ ...evidence, [gr.grId]: e.target.value })} placeholder="e.g. Member contributions of N320,000 over 18 months; consistent savings; good standing." /></label>
+            <div className="panel-actions"><button className="btn btn-gold btn-sm" disabled={busy === gr.grId} onClick={decide(gr, true)}>Approve &amp; generate letter</button><button className="btn btn-ghost btn-sm" disabled={busy === gr.grId} onClick={decide(gr, false)}>Decline</button></div></>}
+          </div>) }) : <p className="muted-line">No requests awaiting approval.</p>}
+      </div>
+      {decided.length ? <div className="returns-box"><h4>Decided</h4>{decided.map((gr) => (
+        <div className="gr-item" key={gr.grId}><div className="gr-head"><strong>{gr.memberName}</strong><span className={cx('chip', gr.status === 'Approved' ? 'st-approved' : 'st-review')}>{gr.status}</span></div><span className="gr-sub">{fmtNaira(gr.amount)} · guarantee {fmtNaira(gr.guarantee)}{gr.evidence ? ' · ' + gr.evidence : ''}</span>{gr.status === 'Approved' && <div className="panel-actions"><button className="link-inline" onClick={() => downloadGuaranteeLetter(gr, coop)}>Download letter</button></div>}</div>))}</div> : null}
+    </div>
+  )
+}
+function MemberGuaranteeStatus({ member, coop, loans, ctx }) {
+  const [reqs, setReqs] = useState(null), [amt, setAmt] = useState(''), [busy, setBusy] = useState(false)
+  const reload = useCallback(() => listGuaranteeRequests(member.coop).then((all) => setReqs(all.filter((g) => g.memberId === member.memberId))), [member.coop, member.memberId])
+  useEffect(() => { reload() }, [reload])
+  const request = async () => {
+    const n = Number(amt)
+    if (!n || n <= 0) { toast('Enter the amount you want to apply for.', 'error'); return }
+    if (n > LOAN_MAX) { toast('The maximum LASMECO facility is ' + fmtNaira(LOAN_MAX) + '.', 'error'); return }
+    const chk = canCoopGuarantee(coop, n, loans)
+    if (!chk.fits) {
+      toast('The cooperative you belong to cannot grant you a 25% guarantee at this point due to reaching a maximum ceiling. Discuss with Leadership or try again later.', 'error')
+      return
+    }
+    setBusy(true)
+    await saveGuaranteeRequest({ memberId: member.memberId, memberName: member.name, coop: member.coop, amount: n, guarantee: chk.need, status: 'Pending', requestedBy: ctx.email }, ctx, 'Guarantee requested')
+    try { await notify({ to: 'society@' + (coop.trackingId || 'coop'), title: 'Guarantee request', body: member.name + ' has requested a 25% guarantee for ' + fmtNaira(n) + '.', event: 'guarantee' }) } catch (e) { /* best-effort */ }
+    setBusy(false); setAmt(''); reload()
+    toast('Guarantee request sent to your cooperative leadership for approval.', 'success')
+  }
+  if (!reqs) return null
+  const approved = reqs.find((g) => g.status === 'Approved')
+  const pending = reqs.find((g) => g.status === 'Pending')
+  const room = coopGuaranteeRoom(coop, loans)
+  return (
+    <div className="guarantee-status">
+      <div className="gs-line"><span>Cooperative guarantee capacity</span><strong>{fmtNaira(room.available)} available</strong></div>
+      <p className="chart-note">Your cooperative can guarantee 25% of members\u2019 loans up to its contributions of {fmtNaira(room.pool)}. {fmtNaira(room.used)} is already committed.</p>
+      {approved ? (
+        <div className="gs-approved"><span className="req-tag ok">Guarantee approved</span><p>Your 25% guarantee of {fmtNaira(approved.guarantee)} for a {fmtNaira(approved.amount)} facility has been approved by your cooperative. Download the letter and upload it with your LASMECO documents.</p><button className="btn btn-outline btn-sm" onClick={() => downloadGuaranteeLetter(approved, coop)}>Download guarantee letter</button></div>
+      ) : pending ? (
+        <div className="gs-pending"><span className="req-tag">Awaiting approval</span><p>Your guarantee request for {fmtNaira(pending.amount)} is with your cooperative leadership. You can apply once it is approved and you have the letter.</p></div>
+      ) : (
+        <div className="gs-request"><h5>Request your 25% cooperative guarantee</h5><p className="chart-note">Enter the facility amount you intend to apply for. Your cooperative guarantees 25% of it.</p>
+          <div className="wallet-actions"><input type="number" value={amt} onChange={(e) => setAmt(e.target.value)} placeholder={'Amount up to ' + LOAN_MAX} /><button className="btn btn-gold btn-sm" disabled={busy} onClick={request}>Request guarantee</button></div>
+        </div>
+      )}
+    </div>
+  )
+}
 function MemberWorkspace({ ctx, section }) {
-  const [members, setMembers] = useState(null), [coops, setCoops] = useState([]), [loans, setLoans] = useState([])
+  const [members, setMembers] = useState(null), [coops, setCoops] = useState([]), [loans, setLoans] = useState([]), [auditDocs, setAuditDocs] = useState({})
   const [mode, setMode] = useState('view'), [sel, setSel] = useState(null)
   const reload = useCallback(() => { listMembers().then(setMembers); listCoops().then(setCoops); listLoans().then(setLoans) }, [])
   useEffect(() => { reload() }, [reload])
+  useEffect(() => { (async () => { const me = members && (ctx.focusId ? members.find((m) => m.memberId === ctx.focusId) : members.find((m) => m.createdBy === ctx.email)); if (!me) return; const c = coops.find((x) => x.name === me.coop); if (c) { try { const ds = await listDocs('coopaudit:' + c.trackingId); setAuditDocs((a) => ({ ...a, [c.trackingId]: ds })) } catch (e) { /* ignore */ } } })() }, [members, coops, ctx.focusId, ctx.email])
   if (!members) return <p className="muted-line">Loading…</p>
   const mine = ctx.focusId ? members.find((m) => m.memberId === ctx.focusId) : members.find((m) => m.createdBy === ctx.email)
   const myLoans = mine ? loans.filter((l) => l.memberId === mine.memberId || (l.memberName === mine.name)) : []
@@ -2003,15 +2175,27 @@ function MemberWorkspace({ ctx, section }) {
       {section === 'overview' && <MemberOverview mine={mine} loans={myLoans} />}
       {section === 'wallet' && <div className="returns-box"><h4>Wallet &amp; savings</h4><MemberWallet member={mine} /></div>}
       {section === 'chains' && <ChainsPanel ctx={{ ...ctx, coopName: mine.coop }} />}
-      {section === 'finance' && (<>
+      {section === 'finance' && (() => {
+        const myCoop = coops.find((c) => c.name === mine.coop)
+        const tenure = memberTenureEligible(mine)
+        const ready = coopLendingReady(myCoop, myCoop && auditDocs[myCoop.trackingId])
+        const applyGate = () => {
+          if (!tenure.eligible) { toast('You are not yet eligible to access LASMECO Financing. You need to be ' + tenure.reasons.join(', and ') + '.', 'error'); return }
+          if (!ready.ready) { toast('Your cooperative must first ' + ready.reasons.join(', ') + ' before its members can apply.', 'error'); return }
+          setMode('apply')
+        }
+        return (<>
         <div className="society-card">
           <div className="society-top"><div><h3>{mine.name}</h3><p className="detail-sub">{mine.coop} &middot; {mine.sector}{mine.ref ? ' \u00b7 ' + mine.ref : ''}</p></div><div className="detail-chips"><StatusChip status={mine.kyc?.status || 'Unverified'} kind="cap15" /><SourceBadge source={mine.source} /></div></div>
-          <div className="society-actions"><button className="btn btn-gold btn-sm" onClick={() => setMode('apply')}>Apply for LASMECO finance</button></div>
+          <div className="society-actions"><button className={cx('btn', 'btn-sm', (tenure.eligible && ready.ready) ? 'btn-gold' : 'btn-disabled')} disabled={!tenure.eligible || !ready.ready} onClick={applyGate}>Apply for LASMECO finance</button></div>
+          {!tenure.eligible && <p className="gate-note">You are not yet eligible. You need to be {tenure.reasons.join(', and ')}.</p>}
+          {tenure.eligible && !ready.ready && <p className="gate-note">Your cooperative must first {ready.reasons.join(', ')} before you can apply.</p>}
+          {tenure.eligible && ready.ready && <MemberGuaranteeStatus member={mine} coop={myCoop} loans={loans} ctx={ctx} />}
         </div>
         <div className="returns-box"><h4>Your credit score</h4><CreditScoreCard m={mine} /></div>
         <LoanCalculator />
         <div className="trail-box"><h4>Your LASMECO applications</h4>{myLoans.length ? <LoanTable loans={myLoans} onOpen={setSel} /> : <p className="muted-line">No applications yet. Apply above; there are no upfront fees.</p>}</div>
-      </>)}
+      </>) })()}
     </div>
   )
 }
@@ -2077,6 +2261,7 @@ function facilityLimit(member, type, consistent) {
 }
 const AP_STATUSES = ['Applied', 'In training', 'Shortlisted']
 const PARTNER_STATUSES = ['Coop validated', 'Bank assessment', 'BOI approved']
+const LOAN_MAX = 10000000
 function loanBreakdown(amount) {
   const a = Number(amount) || 0
   return { amount: a, collateral: Math.round(a * 0.10), coopGuarantee: Math.round(a * 0.25), sterlingGuarantee: Math.round(a * 0.50), lien: Math.round(a * 0.15), apFee: 200000, boiFee: Math.round(a * 0.01), netToBorrower: Math.max(0, a - 200000 - Math.round(a * 0.01)), rate: 9 }
@@ -2182,6 +2367,96 @@ function coopGuaranteeLiability(coopName, loans) {
     else if (['Disbursed', 'Repaying'].includes(l.status)) contingent += g
   }
   return { crystallised, contingent }
+}
+/* Guarantee ceiling: a cooperative can only guarantee 25% of members' loans up to the size
+   of its own contributions pool. "Committed" = approved-and-onwards guarantees still live
+   (approved, bank assessment, BOI approved, disbursed, repaying). Completed/Declined/Default
+   release their hold. e.g. contributions of N1,000,000 can back 4 loans of N1,000,000
+   (each needs a N250,000 = 25% guarantee). */
+const GUARANTEE_COMMITTED_STATES = ['Coop approved', 'Bank assessment', 'BOI approved', 'Disbursed', 'Repaying']
+function coopGuaranteePool(coop) { return coop ? (coop.contributions || 0) : 0 }
+function coopGuaranteeCommitted(coopName, loans) {
+  return (loans || []).filter((l) => l.coop === coopName && GUARANTEE_COMMITTED_STATES.indexOf(l.status) > -1)
+    .reduce((a, l) => a + loanBreakdown(l.amountApproved || l.amountRequested || 0).coopGuarantee, 0)
+}
+function coopGuaranteeRoom(coop, loans) {
+  const pool = coopGuaranteePool(coop)
+  const used = coopGuaranteeCommitted(coop && coop.name, loans)
+  const override = (coop && coop.guaranteeOverride) || 0
+  return { pool, used, available: Math.max(0, pool + override - used), override }
+}
+function canCoopGuarantee(coop, amount, loans) {
+  const need = loanBreakdown(amount).coopGuarantee
+  const room = coopGuaranteeRoom(coop, loans)
+  return { need, ...room, fits: need <= room.available }
+}
+// Cooperative may issue guarantees only if it has existed 12+ months (MCCTI-confirmed).
+function coopAgeMonths(coop) {
+  if (!coop) return 0
+  if (coop.establishedConfirmed && coop.establishedDate) return monthsBetween(coop.establishedDate, Date.now())
+  return coop.established12 === true ? 12 : 0
+}
+function coopCanIssueGuarantee(coop) { return coopAgeMonths(coop) >= 12 }
+// Member eligibility: 12+ months in business AND 6+ months in the cooperative.
+function monthsBetween(from, to) { if (!from) return 0; const a = new Date(from), b = new Date(to); return Math.max(0, (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth())) }
+function memberBusinessMonths(m) { return (m && m.msme && m.msme.yearsInOperation ? Math.round(m.msme.yearsInOperation * 12) : (m && m.businessMonths) || 0) }
+function memberCoopMonths(m) { return (m && m.memberSinceConfirmed && m.memberSince) ? monthsBetween(m.memberSince, Date.now()) : ((m && m.coopMonths) || 0) }
+function memberTenureEligible(m) {
+  const biz = memberBusinessMonths(m), coop = memberCoopMonths(m)
+  const reasons = []
+  if (biz < 12) reasons.push('in business for at least 1 year (currently ' + (biz ? biz + ' month' + (biz === 1 ? '' : 's') : 'under 1 year') + ')')
+  if (coop < 6) reasons.push('a cooperative member for at least 6 months (currently ' + (coop ? coop + ' month' + (coop === 1 ? '' : 's') : 'under 6 months') + ')')
+  return { eligible: biz >= 12 && coop >= 6, biz, coop, reasons }
+}
+// Cooperative must be MCCTI-approved AND have an MCCTI-approved independent audit on file.
+const COOP_AUDIT_DOC = 'Independent audit (MCCTI-approved)'
+function coopAuditApproved(coop, auditDocs) { return (auditDocs || []).some((d) => d.category === COOP_AUDIT_DOC && d.verified) }
+function coopLendingReady(coop, auditDocs) {
+  const admitted = coopAdmission(coop).admitted
+  const audited = coopAuditApproved(coop, auditDocs)
+  const aged = coopCanIssueGuarantee(coop)
+  const reasons = []
+  if (!admitted) reasons.push('be admitted to the LASMECO scheme by MCCTI')
+  if (!audited) reasons.push('have an independent audit approved by MCCTI')
+  if (!aged) reasons.push('have existed for at least 1 year to issue a 25% guarantee')
+  return { ready: admitted && audited && aged, admitted, audited, aged, reasons }
+}
+// Guarantee request workflow: member -> cooperative leadership approval -> letter.
+async function listGuaranteeRequests(coopName) { return (await kvList('guarantee:')).filter((g) => !coopName || g.coop === coopName).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)) }
+async function getGuaranteeRequest(id) { return kvGet('guarantee:' + id) }
+async function saveGuaranteeRequest(rec, ctx, action) {
+  const id = rec.grId || 'GR-' + Math.random().toString(36).slice(2, 7).toUpperCase()
+  const next = { ...rec, grId: id, updatedAt: new Date().toISOString(), createdAt: rec.createdAt || new Date().toISOString() }
+  await kvSet('guarantee:' + id, next)
+  if (action && ctx) { try { await addAudit({ trackingId: id, action, by: ctx.name, role: ctx.role, note: rec.memberName || '' }) } catch (e) { /* best-effort */ } }
+  return next
+}
+function guaranteeLetterText(gr, coop) {
+  const ref = gr.grId
+  const d = new Date(gr.approvedAt || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+  return [
+    'LETTER OF COOPERATIVE GUARANTEE',
+    'Ref: ' + ref + '    Date: ' + d,
+    '',
+    'To: Sterling Bank / Bank of Industry, via the appointed sector Accelerator',
+    'Re: LASMECO facility for ' + gr.memberName + ' (' + (gr.memberId || '') + ')',
+    '',
+    'On behalf of ' + gr.coop + ', we confirm that the above-named is a member in good',
+    'standing and that this cooperative undertakes to guarantee twenty-five per cent (25%)',
+    'of the requested facility of ' + fmtNaira(gr.amount) + ', being ' + fmtNaira(gr.guarantee) + '.',
+    '',
+    'This guarantee is supported by the cooperative\u2019s members\u2019 contributions of ' + fmtNaira((coop && coop.contributions) || 0) + '.',
+    'It has been approved by the leadership of the cooperative on the date shown above.',
+    '',
+    'Approved by: ' + (gr.approvedByName || 'Cooperative leadership') + ' (' + gr.coop + ')',
+    gr.evidence ? 'Basis of approval: ' + gr.evidence : '',
+  ].filter((x) => x !== undefined).join('\n')
+}
+function downloadGuaranteeLetter(gr, coop) {
+  const text = guaranteeLetterText(gr, coop)
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob); const a = document.createElement('a')
+  a.href = url; a.download = 'guarantee-letter-' + gr.grId + '.txt'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)
 }
 function globalGuaranteeUsed(loans) { return loans.filter((l) => ['Disbursed', 'Repaying'].includes(l.status)).reduce((a, l) => a + loanBreakdown(l.amountApproved || 0).sterlingGuarantee, 0) }
 function monthKey(d) { const x = new Date(d); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') }
@@ -2291,8 +2566,8 @@ async function clearPriorSeed() {
   await kvDelete('integration:loandocs-v1'); await kvDelete('integration:loandocs-v4'); await kvDelete('integration:snapshots-v1')
 }
 async function seedDemoData() {
-  if (await kvGet('integration:seed-v10')) return false
-  await kvSet('integration:seed-v10', { claimed: true, at: new Date().toISOString() }) // claim first: prevents repeat clear/reseed storms if a later step fails
+  if (await kvGet('integration:seed-v11')) return false
+  await kvSet('integration:seed-v11', { claimed: true, at: new Date().toISOString() }) // claim first: prevents repeat clear/reseed storms if a later step fails
   try { await clearPriorSeed() } catch (e) { /* best-effort cleanup */ }
   const now = Date.now(), day = 86400000
   const isoAgo = (ms) => new Date(now - ms).toISOString()
@@ -2302,7 +2577,7 @@ async function seedDemoData() {
     { name: 'Oshodi Market Women Coop', areaOffice: 'Oshodi', sector: 'Trade', custodian: 'R. Alaba', members: 240, contributions: 7200000, status: 'Approved', cap15: 'Compliant', feeStatus: 'Paid', tier: 'A', nav: 90000000 },
     { name: 'Agege Transport Union Coop', areaOffice: 'Agege', sector: 'Transport', custodian: 'S. Okoro', members: 160, contributions: 5400000, status: 'Under review', cap15: 'Under audit', feeStatus: 'Paid', tier: 'B', nav: 30000000 },
     { name: 'Alimosho Tailors Multipurpose', areaOffice: 'Alimosho', sector: 'Artisan', custodian: 'B. Yusuf', members: 95, contributions: 2100000, status: 'Returned', cap15: 'Returns due', tier: 'C', nav: 8000000 },
-    { name: 'Kosofe Poultry Farmers Coop', areaOffice: 'Kosofe', sector: 'Agriculture', custodian: 'N. Eze', members: 130, contributions: 3900000, status: 'Filed', cap15: 'Under audit', tier: 'C', nav: 6000000 },
+    { name: 'Kosofe Poultry Farmers Coop', areaOffice: 'Kosofe', sector: 'Agriculture', custodian: 'N. Eze', members: 130, contributions: 3900000, status: 'Approved', cap15: 'Compliant', feeStatus: 'Paid', tier: 'C', nav: 6000000, established12: true, establishedConfirmed: true, establishedDate: isoAgo(700 * day), creditClean: true },
     { name: 'Ikeja Hospital Staff Multipurpose Coop', areaOffice: 'Ikeja', sector: 'Services', custodian: 'Dr A. Balogun', members: 175, contributions: 6300000, status: 'Approved', cap15: 'Compliant', feeStatus: 'Paid', tier: 'B', nav: 42000000 },
     { name: 'Eti-Osa Fashion Enterprise Coop', areaOffice: 'Eti-Osa', sector: 'Services', custodian: 'T. Coker', members: 210, contributions: 8800000, status: 'Approved', cap15: 'Compliant', feeStatus: 'Paid', tier: 'A', nav: 120000000 },
   ]
@@ -2330,7 +2605,9 @@ async function seedDemoData() {
   for (let i = 0; i < memberSeeds.length; i++) {
     const s = memberSeeds[i], id = 'M-' + String(100001 + i), email = 'demo.' + s.name.toLowerCase().replace(/[^a-z]+/g, '.') + '@coopeco.ng'
     const status = s.bvn && s.nin ? 'Verified' : (s.bvn || s.nin) ? 'Partial' : 'Unverified'
-    await kvSet('member:' + id, { memberId: id, source: 'MCCTI', name: s.name, coop: s.coop, sector: s.sector, lasmecoSector: s.lasmecoSector, accel: s.accel, phone: s.phone, gender: s.gender, kyc: { bvn: s.bvn ? 'on file' : '', nin: s.nin ? 'on file' : '', bvnVerified: !!s.bvn, ninVerified: !!s.nin, status }, msme: s.msme, createdBy: email, createdAt: isoAgo((10 - i) * day) })
+    const coopM = { 'Grace Umeh': 10, 'Folake Adisa': 30, 'Chidi Okafor': 40, 'Aisha Bello': 4, 'Segun Ade': 60, 'Ngozi Balogun': 26, 'Ibrahim Sule': 18 }[s.name] || 12
+    const bizM = Math.round((s.msme.yearsInOperation || 1) * 12)
+    await kvSet('member:' + id, { memberId: id, source: 'MCCTI', name: s.name, coop: s.coop, sector: s.sector, lasmecoSector: s.lasmecoSector, accel: s.accel, phone: s.phone, gender: s.gender, memberSince: isoAgo(coopM * 30 * day), businessStart: isoAgo(bizM * 30 * day), memberSinceConfirmed: coopM >= 6, coopMonths: coopM, businessMonths: bizM, kyc: { bvn: s.bvn ? 'on file' : '', nin: s.nin ? 'on file' : '', bvnVerified: !!s.bvn, ninVerified: !!s.nin, status }, msme: s.msme, createdBy: email, createdAt: isoAgo((10 - i) * day) })
     memberMap[s.name] = { memberId: id, email, phone: s.phone, coop: s.coop, sector: s.sector, lasmecoSector: s.lasmecoSector, accel: s.accel }
   }
   // 3) Loans across every pipeline stage (with schedules, repayments, arrears, default)
@@ -2396,7 +2673,7 @@ async function seedDemoData() {
   const docCoop = coopMap['Eti-Osa Fashion Enterprise Coop']
   await kvSet('doc:' + docCoop + ':Dseed1', { id: 'Dseed1', coopId: docCoop, name: 'by-laws.pdf', category: 'By-laws', size: 284000, type: 'application/pdf', url: '', path: '', storage: 'demo', uploadedBy: 'T. Coker', uploadedAt: isoAgo(9 * day), verified: true, verifiedBy: 'Area Registrar' })
   await kvSet('doc:' + docCoop + ':Dseed2', { id: 'Dseed2', coopId: docCoop, name: 'registration-certificate.pdf', category: 'Registration certificate', size: 156000, type: 'application/pdf', url: '', path: '', storage: 'demo', uploadedBy: 'T. Coker', uploadedAt: isoAgo(9 * day), verified: false })
-  await kvSet('integration:seed-v10', { done: true, at: new Date().toISOString() })
+  await kvSet('integration:seed-v11', { done: true, at: new Date().toISOString() })
   return true
 }
 const ACCEL_SEEDS = [
@@ -2472,6 +2749,12 @@ async function ensureLoanDocsSeed() {
         await kvSet('doc:' + l.loanId + ':' + id, { id, coopId: l.loanId, name: cats[i].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.pdf', category: cats[i], size: 180000 + i * 24000, type: 'application/pdf', url: '', path: '', storage: 'demo', uploadedBy: l.memberName, uploadedByRole: 'member', uploadedAt: new Date().toISOString(), verified: (l.status !== 'Coop validated') && i < 3 })
       }
     }
+  } catch (e) { /* best-effort */ }
+  // Seed an approved independent audit for Kosofe Poultry so its members can demo LASMECO applications.
+  try {
+    const coops = await listCoops()
+    const kp = coops.find((c) => c.name === 'Kosofe Poultry Farmers Coop')
+    if (kp) { const key = 'coopaudit:' + kp.trackingId; await kvSet('doc:' + key + ':CA1', { id: 'CA1', coopId: key, name: 'independent-audit-2025.pdf', category: COOP_AUDIT_DOC, size: 320000, type: 'application/pdf', url: '', path: '', storage: 'demo', uploadedBy: 'N. Eze', uploadedByRole: 'society', uploadedAt: new Date().toISOString(), verified: true, verifiedBy: 'MCCTI Leadership' }) }
   } catch (e) { /* best-effort */ }
   await kvSet('integration:loandocs-v4', { done: true, at: new Date().toISOString() })
   return true
@@ -2586,8 +2869,9 @@ function LoanApplyForm({ ctx, member, onDone, onCancel }) {
     </div>
   )
 }
-const LASMECO_DOC_REQUIREMENTS = ['Valid ID (NIN slip / passport)', 'BVN confirmation', '12-month bank statements (all accounts)', 'Credit bureau report (business & promoter)', 'Credit clearance letter (no outstanding loans)', 'Cooperative letter of introduction', 'CAC / business registration certificate', 'Operating licences / permits', 'Cash-flow analysis with assumptions', "Promoter's statement of net worth", 'Asset register & vendor invoices (asset finance)', 'Insurance (asset + credit-life)', 'Passport photograph']
+const LASMECO_DOC_REQUIREMENTS = ['Valid ID (NIN slip / passport)', 'BVN confirmation', '12-month bank statements (all accounts)', 'Credit bureau report (business & promoter)', 'Credit clearance letter (no outstanding loans)', 'Cooperative letter of guarantee (25%)', 'Cooperative letter of introduction', 'CAC / business registration certificate', 'Operating licences / permits', 'Cash-flow analysis with assumptions', "Promoter's statement of net worth", 'Asset register & vendor invoices (asset finance)', 'Insurance (asset + credit-life)', 'Passport photograph']
 const CREDIT_CLEARANCE_DOC = 'Credit clearance letter (no outstanding loans)'
+const GUARANTEE_LETTER_DOC = 'Cooperative letter of guarantee (25%)'
 function lasmecoChecklist(loan, member, docs) {
   const has = (c) => docs.find((x) => x.category === c)
   const items = []
@@ -2601,6 +2885,9 @@ function lasmecoChecklist(loan, member, docs) {
   // Mandatory credit-clearance letter from a credit bureau, uploaded by the member.
   const cc = has(CREDIT_CLEARANCE_DOC)
   items.push({ label: CREDIT_CLEARANCE_DOC, ok: !!cc && !!cc.verified, verified: cc ? cc.verified : false, doc: true, mandatory: true })
+  // Mandatory cooperative letter of guarantee (25%), generated on cooperative approval.
+  const gl = has(GUARANTEE_LETTER_DOC)
+  items.push({ label: GUARANTEE_LETTER_DOC, ok: !!gl && !!gl.verified, verified: gl ? gl.verified : false, doc: true, mandatory: true })
   const keyDocs = ['12-month bank statements (all accounts)', 'Credit bureau report (business & promoter)', 'Cooperative letter of introduction', 'Cash-flow analysis with assumptions', 'CAC / business registration certificate']
   keyDocs.forEach((c) => { const d = has(c); items.push({ label: c, ok: !!d, verified: d ? d.verified : false, doc: true }) })
   const outstanding = items.filter((i) => !i.ok)
@@ -2867,7 +3154,7 @@ function AccelDashboard({ accel, loans }) {
         <section className="chart-card"><h4>Approval outcomes</h4>{outcome.length ? <Donut data={outcome} centerTop={r.pct == null ? '\u2014' : r.pct + '%'} centerBottom="approved" /> : <p className="muted-line">No decided outcomes yet.</p>}</section>
         <section className="chart-card"><h4>By sector</h4>{sectors.length ? <Donut data={sectors} centerTop={String(mine.length)} centerBottom="loans" /> : <p className="muted-line">No loans yet.</p>}</section>
       </div>
-      <section className="chart-card"><h4>Disbursement value \u2014 last 6 months</h4>{disbursedValue > 0 ? (<><MiniArea points={monthVals} color={CHART_C.green} /><div className="spark-axis">{months.map((m) => <span key={m.key}>{m.label}</span>)}</div></>) : <p className="muted-line">No disbursements in the last six months.</p>}</section>
+      <section className="chart-card"><h4>Disbursement value — last 6 months</h4>{disbursedValue > 0 ? (<><MiniArea points={monthVals} color={CHART_C.green} /><div className="spark-axis">{months.map((m) => <span key={m.key}>{m.label}</span>)}</div></>) : <p className="muted-line">No disbursements in the last six months.</p>}</section>
     </div>
   )
 }
@@ -2910,10 +3197,10 @@ function AccelEarnings({ accel, loans }) {
           <label className="field"><span>Account name</span><input value={acct.name} onChange={(e2) => setAcct({ ...acct, name: e2.target.value })} placeholder="Registered account name" /></label>
         </div>
         <div className="panel-actions"><button className="btn btn-gold btn-sm" disabled={busy} onClick={submit}>{busy ? 'Processing…' : 'Transfer ' + (Number(amt) ? fmtNaira(Number(amt)) : '')}</button><button className="btn btn-ghost btn-sm" onClick={() => setOpen(false)}>Cancel</button></div>
-        <p className="panel-note">Transfers are recorded here and reduce your available balance. In live operation this routes to the programme\u2019s settlement account for payout.</p>
+        <p className="panel-note">Transfers are recorded here and reduce your available balance. In live operation this routes to the programme’s settlement account for payout.</p>
       </div>}
-      {e.perLoan.length ? <div className="doc-guide" style={{ marginTop: '14px' }}><h5>Fee-earning loans</h5><ul>{e.perLoan.map((x) => (<li key={x.loanId} className="done"><span aria-hidden="true">\u2713</span> {x.member} &middot; {x.coop} &middot; {fmtNaira(x.amount)} ({x.status}) &mdash; fee {fmtNaira(x.fee)}</li>))}</ul></div> : null}
-      {wallet.txns && wallet.txns.length ? <div className="doc-guide" style={{ marginTop: '10px' }}><h5>Transfer history</h5><ul>{wallet.txns.map((t) => (<li key={t.tid}><span aria-hidden="true">\u2192</span> {fmtNaira(t.amount)} to {t.account ? t.account.bank + ' ' + t.account.number : 'account'} &middot; {fmtDate(t.at)}</li>))}</ul></div> : null}
+      {e.perLoan.length ? <div className="doc-guide" style={{ marginTop: '14px' }}><h5>Fee-earning loans</h5><ul>{e.perLoan.map((x) => (<li key={x.loanId} className="done"><span aria-hidden="true">✓</span> {x.member} &middot; {x.coop} &middot; {fmtNaira(x.amount)} ({x.status}) &mdash; fee {fmtNaira(x.fee)}</li>))}</ul></div> : null}
+      {wallet.txns && wallet.txns.length ? <div className="doc-guide" style={{ marginTop: '10px' }}><h5>Transfer history</h5><ul>{wallet.txns.map((t) => (<li key={t.tid}><span aria-hidden="true">→</span> {fmtNaira(t.amount)} to {t.account ? t.account.bank + ' ' + t.account.number : 'account'} &middot; {fmtDate(t.at)}</li>))}</ul></div> : null}
     </div>
   )
 }
@@ -3432,7 +3719,7 @@ function SupportConcierge({ ctx }) {
   )
 }
 const ROLE_NAV = {
-  society: [['overview', 'Overview'], ['cooperative', 'My cooperative'], ['chains', 'Value chains'], ['savings', 'Savings & esusu']],
+  society: [['overview', 'Overview'], ['cooperative', 'My cooperative'], ['lending', 'LASMECO readiness'], ['guarantees', 'Guarantee requests'], ['chains', 'Value chains'], ['savings', 'Savings & esusu']],
   member: [['overview', 'Overview'], ['wallet', 'Wallet & savings'], ['finance', 'LASMECO finance'], ['chains', 'Value chains']],
   officer: [['overview', 'Overview'], ['queue', 'Review queue'], ['all', 'All societies'], ['members', 'Members'], ['lasmeco', 'LASMECO'], ['offices', 'Area offices'], ['risk', 'Risk & fraud'], ['audit', 'Audit log'], ['reports', 'Reports'], ['integrations', 'Integrations']],
   auditor: [['overview', 'Overview'], ['returns', 'Returns to examine'], ['all', 'All societies']],
@@ -3935,6 +4222,22 @@ section.lens,section.modules,section.arc,section.personas,section.quote{max-widt
 .chain-node strong{display:block;font-size:13px;color:var(--cream)}
 .chain-node span{font-size:11.5px;color:var(--sage-dim)}
 .chain-node.firm strong{color:var(--gold-soft)}
+.btn-disabled{background:var(--line);color:var(--sage-dim);cursor:not-allowed;border:1px solid var(--line)}
+.gate-note{font-size:12.5px;color:var(--err);margin:8px 0 0;line-height:1.5}
+.guarantee-status{margin-top:14px;border-top:1px solid var(--line-soft);padding-top:14px}
+.gs-line{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.gs-line strong{color:var(--green);font-family:var(--serif);font-size:16px;white-space:nowrap}
+.gs-request h5,.gs-approved p,.gs-pending p{margin:8px 0}
+.gs-approved{background:var(--green-panel);border-radius:8px;padding:12px 14px;margin-top:10px}
+.gs-pending{background:#fbf3e6;border-radius:8px;padding:12px 14px;margin-top:10px}
+.gs-approved p,.gs-pending p{font-size:13px;color:var(--ink);line-height:1.5}
+.req-tag.ok{background:var(--green)}
+.gr-item{border-top:1px solid var(--line-soft);padding:12px 0}
+.gr-item:first-of-type{border-top:none}
+.gr-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.gr-head strong{font-size:14px;color:var(--cream)}
+.gr-head span{font-size:12.5px;color:var(--sage-dim)}
+.gr-sub{display:block;font-size:12px;color:var(--sage-dim);margin-top:4px}
 .spark-axis{display:flex;justify-content:space-between;margin-top:4px}
 .spark-axis span{font-size:10.5px;color:var(--sage-dim);font-family:var(--mono)}
 .accel-rating{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px}

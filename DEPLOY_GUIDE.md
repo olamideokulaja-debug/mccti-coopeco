@@ -640,6 +640,27 @@ Charts reuse the shared primitives (Donut, Bars, MiniArea, CHART_C). The society
 leadership overviews already use these; Sterling and BOI use the loan-stage overview.
 The member overview is the remaining candidate for the same treatment.
 
+## Guarantee eligibility & workflow
+Members can only apply for LASMECO finance when ALL of the following hold:
+- The member has been in business 12+ months AND a cooperative member 6+ months.
+- Their cooperative is MCCTI-approved, has an MCCTI-approved independent audit (annual),
+  and has existed 1+ year to issue the 25% guarantee.
+If not, the Apply button is disabled with an explanatory toast.
+
+Guarantee ceiling: a cooperative can guarantee 25% of members' loans only up to the size
+of its members' contributions. Committed guarantees (approved-and-onwards) count against
+it; completed loans free capacity. e.g. a N1,000,000 pool backs four N1,000,000 loans.
+A member requesting more than the available ceiling is toasted and blocked.
+
+Workflow: member requests a guarantee -> cooperative leadership (or MCCTI leadership via
+the cooperative record) approves WITH written evidence -> a guarantee letter is generated
+-> the member downloads it and uploads it as a mandatory LASMECO document.
+
+MCCTI can: approve the independent audit, confirm the cooperative's 1-year existence, and
+override a guarantee ceiling with a logged reason. New key prefix guarantee: has an RLS
+policy in supabase_setup.sql (re-run it on live). Registration now collects DOB, address,
+member-since and business-start dates to drive the tenure checks.
+
 ## Accelerator earnings & drawdown
 Accelerators now see, on their Overview and a dedicated Earnings tab: total earned, amount
 transferred out, available balance, and the list of fee-earning loans. The fee is the
