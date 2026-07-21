@@ -15,7 +15,7 @@ export default async function handler(req, res) {
     })
   }
   try {
-    const { messages, system, max_tokens } = req.body || {}
+    const { messages, system, max_tokens, model } = req.body || {}
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -24,15 +24,18 @@ export default async function handler(req, res) {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: model || 'claude-sonnet-4-6',
         max_tokens: max_tokens || 1024,
         system: system || 'You are the MCCTI CoopEco assistant. Be concise and use British English.',
         messages: messages || [],
       }),
     })
     const data = await r.json()
-    return res.status(r.status).json(data)
+    if (!r.ok) {
+      return res.status(r.status).json({ error: (data && data.error && data.error.message) || 'Anthropic returned an error', type: (data && data.error && data.error.type) || 'api_error', status: r.status })
+    }
+    return res.status(200).json(data)
   } catch (e) {
-    return res.status(500).json({ error: 'AI proxy error', detail: String(e) })
+    return res.status(500).json({ error: 'AI proxy could not reach Anthropic', detail: String(e) })
   }
 }

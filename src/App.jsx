@@ -2090,7 +2090,8 @@ function GuaranteeAssessment({ gr, coop, loans, onUse }) {
       setResult(text || ruleGuaranteeAssessment(member, coop, loans, gr)); setSource('ai')
     } catch (e) {
       setResult(ruleGuaranteeAssessment(member, coop, loans, gr)); setSource('rule')
-      if (!e || !e.noKey) toast('Used the built-in assessment (AI service was unavailable).', 'info')
+      if (e && e.noKey) { /* no key configured: silently use built-in */ }
+      else { toast('AI assessment unavailable (' + ((e && e.message) || 'unknown') + '). Showing the built-in assessment instead.', 'info') }
     } finally { setBusy(false) }
   }
   const label = result ? (source === 'ai' ? 'AI assessment' : 'Built-in assessment') : 'Member assessment'
