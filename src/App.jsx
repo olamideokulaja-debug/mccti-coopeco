@@ -1894,7 +1894,7 @@ function BulkImport({ ctx, onDone }) {
     </div>
   )
 }
-const SEED_MARKERS = ['integration:seed-v11', 'integration:accel-v8', 'integration:loandocs-v4', 'integration:snapshots-v1']
+const SEED_MARKERS = ['integration:seed-v12', 'integration:accel-v8', 'integration:loandocs-v4', 'integration:snapshots-v1']
 /* Wipes the seed markers and re-runs seeding, so corrected sample data lands on a database
    that was seeded by an older build. Only offered while DEMO_DATA is on. */
 async function rebuildDemoData() {
@@ -1907,7 +1907,7 @@ async function removeDemoData() {
 }
 function DemoDataPanel({ ctx }) {
   const [busy, setBusy] = useState(false), [dbSeed, setDbSeed] = useState('checking…')
-  const CURRENT_SEED = (SEED_MARKERS.find((m) => m.indexOf('seed-v') > -1) || 'integration:seed-v11').replace('integration:', '')
+  const CURRENT_SEED = (SEED_MARKERS.find((m) => m.indexOf('seed-v') > -1) || 'integration:seed-v12').replace('integration:', '')
   useEffect(() => { (async () => { const marks = []; for (let v = 20; v >= 1; v--) { if (await kvGet('integration:seed-v' + v)) { marks.push('seed-v' + v) } } setDbSeed(marks[0] || 'none') })() }, [])
   if (isReviewer(ctx)) return null
   const stale = dbSeed !== 'none' && dbSeed !== CURRENT_SEED && dbSeed !== 'checking…'
@@ -2161,6 +2161,7 @@ function MemberGuaranteeStatus({ member, coop, loans, ctx }) {
   return (
     <div className="guarantee-status">
       <div className="gs-line"><span>Cooperative guarantee capacity</span><strong>{fmtNaira(room.available)} available</strong></div>
+      {(member.savingsTotal || member.monthlyContribution) ? <p className="chart-note">Your contributions: {fmtNaira(member.savingsTotal || 0)} total{member.monthlyContribution ? ' (' + fmtNaira(member.monthlyContribution) + '/month' : ''}{member.contributionConsistency ? ', ' + member.contributionConsistency + '% consistency)' : (member.monthlyContribution ? ')' : '')}. In your cooperative {memberCoopMonths(member)} months; in business {memberBusinessMonths(member)} months.</p> : null}
       <p className="chart-note">Your cooperative can guarantee 25% of members\u2019 loans up to its contributions of {fmtNaira(room.pool)}. {fmtNaira(room.used)} is already committed.</p>
       {approved ? (
         <div className="gs-approved"><span className="req-tag ok">Guarantee approved</span><p>Your 25% guarantee of {fmtNaira(approved.guarantee)} for a {fmtNaira(approved.amount)} facility has been approved by your cooperative. Download the letter and upload it with your LASMECO documents.</p><button className="btn btn-outline btn-sm" onClick={() => downloadGuaranteeLetter(approved, coop)}>Download guarantee letter</button></div>
@@ -2452,7 +2453,6 @@ async function callClaude(prompt, maxTokens) {
 // Facts assembled for an AI guarantee assessment (all from the member's real record).
 function guaranteeAssessmentFacts(member, coop, loans) {
   const coopMonths = memberCoopMonths(member), bizMonths = memberBusinessMonths(member)
-  const contributions = (member && member.contributions) || (member && member.msme && member.msme.monthlyTurnover ? 0 : 0)
   const room = coopGuaranteeRoom(coop, loans)
   const memberContrib = (member && member.savingsTotal) || (member && member.contributions) || 0
   return {
@@ -2460,7 +2460,10 @@ function guaranteeAssessmentFacts(member, coop, loans) {
     coop: member.coop,
     monthsInCoop: coopMonths, meets6mo: coopMonths >= 6,
     monthsInBusiness: bizMonths, meets1yr: bizMonths >= 12,
-    memberContributions: memberContrib,
+    totalContributionsNGN: memberContrib,
+    monthlyContributionNGN: (member && member.monthlyContribution) || 0,
+    monthsContributed: (member && member.contributionMonthsPaid) || 0,
+    contributionConsistencyPct: (member && member.contributionConsistency) || 0,
     coopPool: room.pool, coopAvailable: room.available,
     monthlyTurnover: (member.msme && member.msme.monthlyTurnover) || 0,
     employees: (member.msme && member.msme.employees) || 0,
@@ -2612,20 +2615,20 @@ async function clearPriorSeed() {
   await kvDelete('integration:loandocs-v1'); await kvDelete('integration:loandocs-v4'); await kvDelete('integration:snapshots-v1')
 }
 async function seedDemoData() {
-  if (await kvGet('integration:seed-v11')) return false
-  await kvSet('integration:seed-v11', { claimed: true, at: new Date().toISOString() }) // claim first: prevents repeat clear/reseed storms if a later step fails
+  if (await kvGet('integration:seed-v12')) return false
+  await kvSet('integration:seed-v12', { claimed: true, at: new Date().toISOString() }) // claim first: prevents repeat clear/reseed storms if a later step fails
   try { await clearPriorSeed() } catch (e) { /* best-effort cleanup */ }
   const now = Date.now(), day = 86400000
   const isoAgo = (ms) => new Date(now - ms).toISOString()
   const monthsAgoISO = (k) => { const d = new Date(now); d.setMonth(d.getMonth() - k); return d.toISOString() }
   // 1) MCCTI cooperatives (varied status / office / compliance)
   const extraCoops = [
-    { name: 'Oshodi Market Women Coop', areaOffice: 'Oshodi', sector: 'Trade', custodian: 'R. Alaba', members: 240, contributions: 7200000, status: 'Approved', cap15: 'Compliant', feeStatus: 'Paid', tier: 'A', nav: 90000000 },
+    { name: 'Oshodi Market Women Coop', areaOffice: 'Oshodi', sector: 'Trade', custodian: 'R. Alaba', members: 240, contributions: 7200000, status: 'Approved', cap15: 'Compliant', feeStatus: 'Paid', tier: 'A', nav: 90000000, established12: true, establishedConfirmed: true, establishedDate: isoAgo(1500 * day) },
     { name: 'Agege Transport Union Coop', areaOffice: 'Agege', sector: 'Transport', custodian: 'S. Okoro', members: 160, contributions: 5400000, status: 'Under review', cap15: 'Under audit', feeStatus: 'Paid', tier: 'B', nav: 30000000 },
     { name: 'Alimosho Tailors Multipurpose', areaOffice: 'Alimosho', sector: 'Artisan', custodian: 'B. Yusuf', members: 95, contributions: 2100000, status: 'Returned', cap15: 'Returns due', tier: 'C', nav: 8000000 },
     { name: 'Kosofe Poultry Farmers Coop', areaOffice: 'Kosofe', sector: 'Agriculture', custodian: 'N. Eze', members: 130, contributions: 3900000, status: 'Approved', cap15: 'Compliant', feeStatus: 'Paid', tier: 'C', nav: 6000000, established12: true, establishedConfirmed: true, establishedDate: isoAgo(700 * day), creditClean: true },
-    { name: 'Ikeja Hospital Staff Multipurpose Coop', areaOffice: 'Ikeja', sector: 'Services', custodian: 'Dr A. Balogun', members: 175, contributions: 6300000, status: 'Approved', cap15: 'Compliant', feeStatus: 'Paid', tier: 'B', nav: 42000000 },
-    { name: 'Eti-Osa Fashion Enterprise Coop', areaOffice: 'Eti-Osa', sector: 'Services', custodian: 'T. Coker', members: 210, contributions: 8800000, status: 'Approved', cap15: 'Compliant', feeStatus: 'Paid', tier: 'A', nav: 120000000 },
+    { name: 'Ikeja Hospital Staff Multipurpose Coop', areaOffice: 'Ikeja', sector: 'Services', custodian: 'Dr A. Balogun', members: 175, contributions: 6300000, status: 'Approved', cap15: 'Compliant', feeStatus: 'Paid', tier: 'B', nav: 42000000, established12: true, establishedConfirmed: true, establishedDate: isoAgo(1100 * day) },
+    { name: 'Eti-Osa Fashion Enterprise Coop', areaOffice: 'Eti-Osa', sector: 'Services', custodian: 'T. Coker', members: 210, contributions: 8800000, status: 'Approved', cap15: 'Compliant', feeStatus: 'Paid', tier: 'A', nav: 120000000, established12: true, establishedConfirmed: true, establishedDate: isoAgo(2000 * day) },
   ]
   const coopMap = {}
   const allCoopSeeds = [...SEED_COOPS, ...extraCoops]
@@ -2653,7 +2656,12 @@ async function seedDemoData() {
     const status = s.bvn && s.nin ? 'Verified' : (s.bvn || s.nin) ? 'Partial' : 'Unverified'
     const coopM = { 'Grace Umeh': 10, 'Folake Adisa': 30, 'Chidi Okafor': 40, 'Aisha Bello': 4, 'Segun Ade': 60, 'Ngozi Balogun': 26, 'Ibrahim Sule': 18 }[s.name] || 12
     const bizM = Math.round((s.msme.yearsInOperation || 1) * 12)
-    await kvSet('member:' + id, { memberId: id, source: 'MCCTI', name: s.name, coop: s.coop, sector: s.sector, lasmecoSector: s.lasmecoSector, accel: s.accel, phone: s.phone, gender: s.gender, memberSince: isoAgo(coopM * 30 * day), businessStart: isoAgo(bizM * 30 * day), memberSinceConfirmed: coopM >= 6, coopMonths: coopM, businessMonths: bizM, kyc: { bvn: s.bvn ? 'on file' : '', nin: s.nin ? 'on file' : '', bvnVerified: !!s.bvn, ninVerified: !!s.nin, status }, msme: s.msme, createdBy: email, createdAt: isoAgo((10 - i) * day) })
+    // Contribution history: a monthly amount over the member's tenure, with a consistency profile.
+    const contribProfile = { 'Grace Umeh': { monthly: 25000, missed: 0 }, 'Folake Adisa': { monthly: 40000, missed: 1 }, 'Chidi Okafor': { monthly: 60000, missed: 0 }, 'Aisha Bello': { monthly: 15000, missed: 2 }, 'Segun Ade': { monthly: 55000, missed: 0 }, 'Ngozi Balogun': { monthly: 80000, missed: 1 }, 'Ibrahim Sule': { monthly: 30000, missed: 3 } }[s.name] || { monthly: 20000, missed: 1 }
+    const paidMonths = Math.max(0, coopM - contribProfile.missed)
+    const savingsTotal = paidMonths * contribProfile.monthly
+    const consistency = coopM > 0 ? Math.round((paidMonths / coopM) * 100) : 0
+    await kvSet('member:' + id, { memberId: id, source: 'MCCTI', name: s.name, coop: s.coop, sector: s.sector, lasmecoSector: s.lasmecoSector, accel: s.accel, phone: s.phone, gender: s.gender, memberSince: isoAgo(coopM * 30 * day), businessStart: isoAgo(bizM * 30 * day), memberSinceConfirmed: coopM >= 6, coopMonths: coopM, businessMonths: bizM, savingsTotal, monthlyContribution: contribProfile.monthly, contributionMonthsPaid: paidMonths, contributionConsistency: consistency, kyc: { bvn: s.bvn ? 'on file' : '', nin: s.nin ? 'on file' : '', bvnVerified: !!s.bvn, ninVerified: !!s.nin, status }, msme: s.msme, createdBy: email, createdAt: isoAgo((10 - i) * day) })
     memberMap[s.name] = { memberId: id, email, phone: s.phone, coop: s.coop, sector: s.sector, lasmecoSector: s.lasmecoSector, accel: s.accel }
   }
   // 3) Loans across every pipeline stage (with schedules, repayments, arrears, default)
@@ -2719,7 +2727,7 @@ async function seedDemoData() {
   const docCoop = coopMap['Eti-Osa Fashion Enterprise Coop']
   await kvSet('doc:' + docCoop + ':Dseed1', { id: 'Dseed1', coopId: docCoop, name: 'by-laws.pdf', category: 'By-laws', size: 284000, type: 'application/pdf', url: '', path: '', storage: 'demo', uploadedBy: 'T. Coker', uploadedAt: isoAgo(9 * day), verified: true, verifiedBy: 'Area Registrar' })
   await kvSet('doc:' + docCoop + ':Dseed2', { id: 'Dseed2', coopId: docCoop, name: 'registration-certificate.pdf', category: 'Registration certificate', size: 156000, type: 'application/pdf', url: '', path: '', storage: 'demo', uploadedBy: 'T. Coker', uploadedAt: isoAgo(9 * day), verified: false })
-  await kvSet('integration:seed-v11', { done: true, at: new Date().toISOString() })
+  await kvSet('integration:seed-v12', { done: true, at: new Date().toISOString() })
   return true
 }
 const ACCEL_SEEDS = [
@@ -2796,11 +2804,16 @@ async function ensureLoanDocsSeed() {
       }
     }
   } catch (e) { /* best-effort */ }
-  // Seed an approved independent audit for Kosofe Poultry so its members can demo LASMECO applications.
+  // Seed approved independent audits so several cooperatives can guarantee their members.
   try {
     const coops = await listCoops()
-    const kp = coops.find((c) => c.name === 'Kosofe Poultry Farmers Coop')
-    if (kp) { const key = 'coopaudit:' + kp.trackingId; await kvSet('doc:' + key + ':CA1', { id: 'CA1', coopId: key, name: 'independent-audit-2025.pdf', category: COOP_AUDIT_DOC, size: 320000, type: 'application/pdf', url: '', path: '', storage: 'demo', uploadedBy: 'N. Eze', uploadedByRole: 'society', uploadedAt: new Date().toISOString(), verified: true, verifiedBy: 'MCCTI Leadership' }) }
+    const auditReady = ['Kosofe Poultry Farmers Coop', 'Oshodi Market Women Coop', 'Ikeja Hospital Staff Multipurpose Coop', 'Eti-Osa Fashion Enterprise Coop']
+    for (const name of auditReady) {
+      const c = coops.find((x) => x.name === name)
+      if (!c) continue
+      const key = 'coopaudit:' + c.trackingId
+      await kvSet('doc:' + key + ':CA1', { id: 'CA1', coopId: key, name: 'independent-audit-2025.pdf', category: COOP_AUDIT_DOC, size: 320000, type: 'application/pdf', url: '', path: '', storage: 'demo', uploadedBy: c.custodian || 'Cooperative Secretary', uploadedByRole: 'society', uploadedAt: new Date().toISOString(), verified: true, verifiedBy: 'MCCTI Leadership' })
+    }
   } catch (e) { /* best-effort */ }
   await kvSet('integration:loandocs-v4', { done: true, at: new Date().toISOString() })
   return true

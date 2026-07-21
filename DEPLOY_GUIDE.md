@@ -657,6 +657,14 @@ The member overview is the remaining candidate for the same treatment.
   Note: the AI features call the Anthropic API and only run in the deployed app, not in a
   local file preview. Allow pop-ups for the PDF letter.
 
+## Richer demo data (contributions & lending-ready cooperatives)
+Seeded members now carry a contribution history (total saved, monthly amount, months paid,
+and a consistency percentage), so the AI guarantee assessment has real figures and can be
+decisive. Four cooperatives are seeded lending-ready (approved + MCCTI-approved audit +
+1-year existence): Kosofe Poultry, Oshodi Market Women, Ikeja Hospital Staff, and Eti-Osa
+Fashion. Eligible test members include Grace Umeh (Kosofe), Folake Adisa & Chidi Okafor
+(Oshodi), and Ngozi Balogun (Ikeja). Seed is now seed-v12 - Rebuild sample data to load it.
+
 ## Guarantee eligibility & workflow
 Members can only apply for LASMECO finance when ALL of the following hold:
 - The member has been in business 12+ months AND a cooperative member 6+ months.
